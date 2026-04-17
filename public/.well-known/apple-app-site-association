@@ -1,0 +1,12 @@
+{                                                                             
+    "applinks": {                                                               
+      "details": [                                                              
+        {                                                   
+          "appIDs": ["29XRVFHL4F.com.unaryx.TravelMug"],                            
+          "components": [                           
+            { "/": "/place/*" }                                                 
+          ]                                                 
+        }  
+      ]                                                                         
+    }                                         
+  }   
