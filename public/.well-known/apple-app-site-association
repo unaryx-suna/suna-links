@@ -1,12 +1,15 @@
-{                                                                             
+{                                                         
     "applinks": {                                                               
-      "details": [                                                              
-        {                                                   
-          "appIDs": ["29XRVFHL4F.com.unaryx.TravelMug"],                            
-          "components": [                           
-            { "/": "/place/*" }                                                 
-          ]                                                 
-        }  
-      ]                                                                         
+      "details": [                                          
+        {
+          "appIDs": ["29XRVFHL4F.com.unaryx.TravelMug"],
+          "components": [                     
+            { "/": "/place/*" }           
+          ]
+        }                                                                       
+      ]
+    },                                                                          
+    "appclips": {                                           
+      "apps": ["29XRVFHL4F.com.unaryx.TravelMug.Clip"]
     }                                         
-  }   
+  }
