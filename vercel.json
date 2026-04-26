@@ -1,11 +1,12 @@
- {                                                                             
-    "headers": [
-      {                                                                         
+{                                                                             
+    "headers": [                                            
+      {
         "source": "/.well-known/apple-app-site-association",
-        "headers": [{ "key": "Content-Type", "value": "application/json" }]     
-      }                                                                         
-    ],                                                                          
-    "rewrites": [
-      { "source": "/place/:path*", "destination": "/place.html" }               
-    ]                                                            
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      }
+    ],
+    "rewrites": [                             
+      { "source": "/place/:path*", "destination": "/place.html" },
+      { "source": "/trip/:path*", "destination": "/trip.html" }
+    ]                                                                           
   }
