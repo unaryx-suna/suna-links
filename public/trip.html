@@ -1,49 +1,46 @@
-<!DOCTYPE html>                                                          
-   2 +<html>                                                                   
-   3 +<head>                                                                   
-   4 +  <meta charset="utf-8">                                                 
-   5 +  <meta name="viewport" content="width=device-width, initial-scale=1">   
-   6 +  <!-- Triggers the App Clip card automatically in iOS Safari -->        
-   7 +  <meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bund
-     +le-id=com.unaryx.TravelMug.Clip">                                        
-   8 +  <title>Suna — Clone this Itinerary</title>                             
-   9 +  <style>                                                                
-  10 +    body {                                                               
-  11 +      margin: 0; background: #111; color: white;                         
-  12 +      font-family: -apple-system, sans-serif;                            
-  13 +      display: flex; flex-direction: column; align-items: center;        
-  14 +      justify-content: center; min-height: 100vh;                        
-  15 +      text-align: center; padding: 24px; box-sizing: border-box;         
-  16 +    }                                                                    
-  17 +    h1 { font-size: 28px; margin-bottom: 8px; }                          
-  18 +    p  { color: #aaa; margin-bottom: 32px; }                             
-  19 +    a  {                                                                 
-  20 +      background: #FFD76A; color: black; padding: 14px 32px;             
-  21 +      border-radius: 50px; text-decoration: none;                        
-  22 +      font-weight: 700; font-size: 16px; display: inline-block;          
-  23 +    }                                                                    
-  24 +  </style>                                                               
-  25 +</head>                                                                  
-  26 +<body>                                                                   
-  27 +  <h1>🗺️  Clone this itinerary on Suna</h1>                               
-  28 +  <p>Get the free app to duplicate this trip to your plans</p>           
-  29 +  <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Sun
-     +a — Free</a>                                                             
-  29 +  <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Sun
-     +a — Free</a>                                                             
-  30 +  <script>                                                               
-  31 +    // Extract trip ID from URL path: /trip/<UUID>                       
-  32 +    var parts = window.location.pathname.split('/').filter(Boolean);     
-  33 +    var tripID = parts[1] || '';                                         
-  34 +    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);            
-  35 +    var btn = document.getElementById('cta');                            
-  36 +                                                                         
-  37 +    if (isIOS && tripID) {                                               
-  38 +      // Universal link — opens the full app if installed,               
-  39 +      // or triggers the App Clip card if not installed.                 
-  40 +      btn.href = 'https://app.unaryx.com/trip/' + tripID;                
-  41 +      btn.textContent = 'Open in Suna';                                  
-  42 +    }                                                                    
-  43 +  </script>                                                              
-  44 +</body>                                                                   
-  45 +</html>
+<!DOCTYPE html>                                                               
+  <html>                                                                        
+  <head>                                                                        
+    <meta charset="utf-8">                                                      
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Triggers the App Clip card automatically in iOS Safari -->             
+    <meta name="apple-itunes-app" content="app-id=6759053765, 
+  app-clip-bundle-id=com.unaryx.TravelMug.Clip">
+    <title>Suna — Clone this Itinerary</title>                                  
+    <style>
+      body {                                                                    
+        margin: 0; background: #111; color: white;          
+        font-family: -apple-system, sans-serif;                                 
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; min-height: 100vh;                             
+        text-align: center; padding: 24px; box-sizing: border-box;
+      }                                                                         
+      h1 { font-size: 28px; margin-bottom: 8px; }           
+      p  { color: #aaa; margin-bottom: 32px; }                                  
+      a  {                                
+        background: #FFD76A; color: black; padding: 14px 32px;                  
+        border-radius: 50px; text-decoration: none;                             
+        font-weight: 700; font-size: 16px; display: inline-block;
+      }                                                                         
+    </style>                                                
+  </head>                                                                       
+  <body>
+    <h1>🗺️  Clone this itinerary on Suna</h1>                                    
+    <p>Get the free app to duplicate this trip to your plans</p>
+    <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Suna —
+  Free</a>                                    
+    <script>                                                                    
+      var parts = window.location.pathname.split('/').filter(Boolean);
+      var tripID = parts[1] || '';                                              
+      var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      var btn = document.getElementById('cta');                                 
+                                                                                
+      if (isIOS && tripID) {                  
+        // Universal link: opens full app if installed, or shows App Clip card  
+  if not                                                    
+        btn.href = 'https://app.unaryx.com/trip/' + tripID;                     
+        btn.textContent = 'Open in Suna';     
+      }                                                                         
+    </script>                                               
+  </body>                                                                       
+  </html>
