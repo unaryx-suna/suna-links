@@ -35,12 +35,25 @@
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
       var btn = document.getElementById('cta');                                 
                                                                                 
-      if (isIOS && tripID) {                  
-        // Universal link: opens full app if installed, or shows App Clip card  
-  if not                                                    
-        btn.href = 'https://app.unaryx.com/trip/' + tripID;                     
-        btn.textContent = 'Open in Suna';     
-      }                                                                         
+      if (isIOS && tripID) {
+        // CUSTOM SCHEME, not the universal link. iOS refuses to route a
+        // universal link to the app when the tap starts on that same domain —
+        // and this page IS app.unaryx.com/trip/<id>, so the old href just
+        // reloaded this page. Universal links still work from Messages or Mail;
+        // they can't work from here.
+        btn.href = 'suna://trip?id=' + encodeURIComponent(tripID);
+        btn.textContent = 'Open in Suna';
+
+        // No app installed means the scheme goes nowhere — fall back to the
+        // App Store, but only if this page is still in front.
+        btn.addEventListener('click', function () {
+          var start = Date.now();
+          setTimeout(function () {
+            if (document.hidden || Date.now() - start > 1600) return;
+            window.location.href = 'https://apps.apple.com/app/id6759053765';
+          }, 1200);
+        });
+      }
     </script>                                               
   </body>                                                                       
   </html>
