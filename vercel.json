@@ -1,12 +1,16 @@
-{                                                                             
-    "headers": [                                            
-      {
-        "source": "/.well-known/apple-app-site-association",
-        "headers": [{ "key": "Content-Type", "value": "application/json" }]
-      }
-    ],
-    "rewrites": [                             
-      { "source": "/place/:path*", "destination": "/place.html" },
-      { "source": "/trip/:path*", "destination": "/trip.html" }
-    ]                                                                           
-  }
+{
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/place/:path*", "destination": "/place.html" },
+    { "source": "/trip/:path*", "destination": "/trip.html" },
+    { "source": "/i/:path*", "destination": "/i.html" }
+  ]
+}
