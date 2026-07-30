@@ -88,12 +88,34 @@
       var slug = parts[1] || '';
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-      // On iOS point the button at the universal link: it opens the installed
-      // app, and otherwise leaves the Smart App Banner to offer the App Clip.
+      // On iOS, open the app through the CUSTOM SCHEME.
+      //
+      // This button used to point at 'https://app.unaryx.com/i/' + slug — the
+      // same URL as this page. iOS deliberately does NOT route a universal link
+      // to the app when the navigation starts on that same domain, so tapping it
+      // only reloaded this page: the itinerary flashed, then the generic copy
+      // came back while it re-fetched. A universal link still works when the
+      // link is tapped from Messages, Mail or Notes; it can never work from
+      // here. The scheme has no such restriction.
+      //
+      // If the app isn't installed the scheme goes nowhere and nothing happens,
+      // so fall back to the App Store — but only if we're still on screen. When
+      // the app DOES open, this page is backgrounded and the redirect must not
+      // fire, or the user comes back to the App Store later.
       if (isIOS && slug) {
         var cta = document.getElementById('cta');
-        cta.href = 'https://app.unaryx.com/i/' + slug;
+        cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug);
         cta.textContent = 'Open in Suna';
+
+        cta.addEventListener('click', function () {
+          var start = Date.now();
+          setTimeout(function () {
+            // Backgrounded, or the timer was starved while the app launched —
+            // either way the app took the tap.
+            if (document.hidden || Date.now() - start > 1600) return;
+            window.location.href = 'https://apps.apple.com/app/id6759053765';
+          }, 1200);
+        });
       }
 
       if (!slug) return;
