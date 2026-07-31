@@ -85,7 +85,11 @@
   <script>
     (function () {
       var parts = window.location.pathname.split('/').filter(Boolean);
-      var slug = parts[1] || '';
+      var raw = parts[1] || '';
+      // Links now read /i/old-kl-on-foot--cz2fcegzfk — the readable part is
+      // decoration and the real slug is whatever follows the last "--". Bare
+      // slugs still work, so links issued before this keep resolving.
+      var slug = raw.indexOf('--') === -1 ? raw : raw.split('--').pop();
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
       // On iOS, open the app through the CUSTOM SCHEME.
