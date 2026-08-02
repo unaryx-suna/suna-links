@@ -31,15 +31,51 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** Absolute, crawler-fetchable URL for a cover stored in the media bucket. */
+/** Absolute, crawler-fetchable URL for a cover in the public cover bucket. */
 function coverURL(path) {
   if (!path) return null;
   if (/^https?:\/\//i.test(path)) return path;
-  // `creator-media` is private, so a signed URL would expire and a crawler
-  // caches for days. Covers are served from the public bucket instead; a
-  // private path yields no image rather than a broken one.
-  return `${SUPABASE_URL}/storage/v1/object/public/creator-media/${path
+  // `itinerary-covers` is PUBLIC (20260819_itinerary_covers_bucket.sql), which
+  // is the only thing that works here: a crawler has no session, and it caches
+  // a preview for days while a signed URL lasts an hour.
+  //
+  // This used to point at `creator-media`, the project's private bucket. The
+  // public endpoint only resolves public buckets, so every URL it produced
+  // answered `NoSuchBucket` and the card rendered an empty box.
+  return `${SUPABASE_URL}/storage/v1/object/public/itinerary-covers/${path
     .split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/**
+ * Verifies the cover actually resolves before we advertise it.
+ *
+ * Covers predating the public bucket are still in `creator-media`, and their
+ * bytes can't be moved server-side. Claiming `summary_large_image` on a URL
+ * that 404s is worse than claiming no image — the post renders a large blank
+ * card. One HEAD is cheap next to the render this response feeds.
+ */
+async function imageResolves(url) {
+  if (!url) return false;
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The canonical URL for this request, without Vercel's rewrite artefacts.
+ *
+ * The `/i/:path*` rewrite appends its captured group to the query string, so
+ * `req.url` arrives as `/i/old-kl--ab12?via=x&path=old-kl--ab12` and og:url was
+ * advertising that `path=` param as part of the canonical address. Rebuilt from
+ * the pathname plus the params the SHARE LINK actually carries.
+ */
+function canonicalURL(origin, rawURL) {
+  const parsed = new URL(rawURL || '/', origin);
+  parsed.searchParams.delete('path');
+  return parsed.toString();
 }
 
 export default async function handler(req, res) {
@@ -87,7 +123,8 @@ export default async function handler(req, res) {
               ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
               : description);
 
-        image = coverURL(it.cover_media_path);
+        const candidate = coverURL(it.cover_media_path);
+        image = (await imageResolves(candidate)) ? candidate : null;
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -99,7 +136,7 @@ export default async function handler(req, res) {
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:type" content="article">`,
-    `<meta property="og:url" content="${escapeHtml(origin + (req.url || ''))}">`,
+    `<meta property="og:url" content="${escapeHtml(canonicalURL(origin, req.url))}">`,
     `<meta property="og:site_name" content="Suna">`,
     `<meta name="description" content="${escapeHtml(description)}">`,
     // A large card only when there is a real image behind it — claiming

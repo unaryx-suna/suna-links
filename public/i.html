@@ -108,7 +108,12 @@
       // fire, or the user comes back to the App Store later.
       if (isIOS && slug) {
         var cta = document.getElementById('cta');
-        cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug);
+        // Carry ?via= across the hand-off. The scheme URL is a fresh URL, so
+        // anything not copied here is dropped — which is how every open through
+        // this button used to arrive at the app with no idea whose share it was.
+        var via = new URLSearchParams(window.location.search).get('via');
+        cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug)
+                 + (via ? '&via=' + encodeURIComponent(via) : '');
         cta.textContent = 'Open in Suna';
 
         cta.addEventListener('click', function () {
