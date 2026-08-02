@@ -57,7 +57,10 @@ function coverURL(path) {
 async function imageResolves(url) {
   if (!url) return false;
   try {
-    const r = await fetch(url, { method: 'HEAD' });
+    // Bounded. Scrapers give a preview a few seconds before giving up entirely,
+    // so an unbounded check would trade a missing image for a missing CARD —
+    // strictly worse than the bug it exists to prevent.
+    const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(2500) });
     return r.ok;
   } catch {
     return false;
