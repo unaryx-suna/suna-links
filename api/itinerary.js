@@ -13,7 +13,7 @@
 // The page still renders client-side for humans — this only fills the <head>
 // before it is served, so nothing about the reader experience changes.
 
-import { recordOpen, clientIP } from './_open-log.js';
+import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, same one the page already ships.
@@ -166,6 +166,26 @@ export default async function handler(req, res) {
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace('</head>', `  ${tags}\n</head>`);
 
+  // Record the open. Started BEFORE the response so the request is already in
+  // flight, then handed to the platform to finish afterwards.
+  //
+  // The original version awaited this after `res.send()` and lost every row:
+  // the invocation is suspended once the response is flushed, so the fetch
+  // never completed. `waitUntil` is what actually keeps it alive; where that
+  // hook is unavailable we block instead, which costs the visitor a little
+  // latency and is strictly better than a counter that quietly records nothing.
+  const params = new URL(req.url || '/', origin).searchParams;
+  const logging = recordOpen({
+    slug,
+    via: params.get('via'),
+    ctx: params.get('ctx'),
+    referrer: req.headers.referer || req.headers.referrer || null,
+    userAgent: req.headers['user-agent'] || null,
+    ip: clientIP(req.headers),
+    requestedAt,
+  });
+  const backgrounded = scheduleBackground(logging);
+
   // Whether logging is even CONFIGURED, stated on the response itself.
   //
   // Booleans only — never a value, never a key name. This exists because the
@@ -175,28 +195,15 @@ export default async function handler(req, res) {
   // to the log stream.
   res.setHeader(
     'x-open-log',
-    `key=${process.env.SUPABASE_SERVICE_ROLE_KEY ? 1 : 0};salt=${process.env.OPEN_LOG_SALT ? 1 : 0}`
+    `key=${process.env.SUPABASE_SERVICE_ROLE_KEY ? 1 : 0}`
+    + `;salt=${process.env.OPEN_LOG_SALT ? 1 : 0}`
+    + `;bg=${backgrounded ? 1 : 0}`
   );
 
-  // `?__diag=1` runs the insert BEFORE the response and reports its outcome in
-  // a header. Only for deliberate probing — a normal visit never takes this
-  // path, so the "nothing blocks the render" rule still holds for real traffic.
-  //
-  // It exists because the two remaining explanations for an empty table need
-  // opposite fixes, and both are invisible from outside: a key that is present
-  // but is not the service role (PostgREST answers 401/403), versus the
-  // post-response await being dropped before the insert lands.
-  const diagParams = new URL(req.url || '/', origin).searchParams;
-  if (diagParams.get('__diag') === '1') {
-    const status = await recordOpen({
-      slug,
-      via: diagParams.get('via'),
-      ctx: diagParams.get('ctx'),
-      referrer: req.headers.referer || req.headers.referrer || null,
-      userAgent: req.headers['user-agent'] || null,
-      ip: clientIP(req.headers),
-      requestedAt,
-    });
+  // Block only when the platform will not carry the write for us, or when
+  // deliberately probing. `?__diag=1` also reports the insert's outcome.
+  if (!backgrounded || params.get('__diag') === '1') {
+    const status = await logging;
     res.setHeader('x-open-log-insert', status || 'unknown');
   }
 
@@ -208,27 +215,3 @@ export default async function handler(req, res) {
     .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
     .send(rendered);
 
-  // AFTER the response. The visitor has their bytes; nothing below can delay
-  // the render, and `recordOpen` swallows its own failures, so nothing below
-  // can break it either.
-  //
-  // Awaited rather than left dangling: Vercel may freeze the instance as soon
-  // as the handler returns, which drops an un-awaited insert. See _open-log.js.
-  //
-  // NOTE ON CACHING: this response is cached at the edge, so a cache HIT never
-  // reaches this function and never records a row. Opens are therefore a floor,
-  // not a ceiling — stated here because the number feeds a creator payment and
-  // the direction of the error matters. If exactness is needed later, the fix
-  // is a separate uncached beacon route, not a shorter cache.
-  const params = new URL(req.url || '/', origin).searchParams;
-  if (params.get('__diag') === '1') return;   // already written above
-  await recordOpen({
-    slug,
-    via: params.get('via'),
-    ctx: params.get('ctx'),
-    referrer: req.headers.referer || req.headers.referrer || null,
-    userAgent: req.headers['user-agent'] || null,
-    ip: clientIP(req.headers),
-    requestedAt,
-  });
-}

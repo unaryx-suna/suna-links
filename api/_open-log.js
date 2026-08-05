@@ -93,6 +93,33 @@ let warnedAboutSalt = false;
 let warnedAboutKey = false;
 
 /**
+ * Hands a promise to the platform so it is allowed to finish after the response.
+ *
+ * Returns false when no such hook exists, and the caller must then await the
+ * work itself. That fallback is the point: awaiting after `res.send()` — which
+ * is what this code did first — LOOKS correct and silently loses the write,
+ * because the invocation can be suspended the moment the bytes are flushed.
+ * Proved on 2026-08-05: `?__diag=1`, which awaits BEFORE sending, returned `ok`
+ * while the identical call after sending recorded nothing at all.
+ *
+ * Read through Vercel's request-context symbol rather than by importing
+ * `@vercel/functions`, so this project stays dependency-free and its build
+ * keeps working the way it does today. If the symbol ever disappears, this
+ * returns false and the caller blocks instead — slower, never lossy — and the
+ * `bg=0` in the `x-open-log` header says so out loud.
+ */
+export function scheduleBackground(promise) {
+  try {
+    const context = globalThis[Symbol.for('@vercel/request-context')]?.get?.();
+    if (typeof context?.waitUntil === 'function') {
+      context.waitUntil(promise);
+      return true;
+    }
+  } catch { /* fall through to the caller's await */ }
+  return false;
+}
+
+/**
  * Writes one row for this request. Never throws. Returns a short status string
  * so a caller can report the outcome — see the `__diag` path in itinerary.js.
  *
