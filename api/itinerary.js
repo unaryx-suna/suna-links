@@ -178,6 +178,28 @@ export default async function handler(req, res) {
     `key=${process.env.SUPABASE_SERVICE_ROLE_KEY ? 1 : 0};salt=${process.env.OPEN_LOG_SALT ? 1 : 0}`
   );
 
+  // `?__diag=1` runs the insert BEFORE the response and reports its outcome in
+  // a header. Only for deliberate probing — a normal visit never takes this
+  // path, so the "nothing blocks the render" rule still holds for real traffic.
+  //
+  // It exists because the two remaining explanations for an empty table need
+  // opposite fixes, and both are invisible from outside: a key that is present
+  // but is not the service role (PostgREST answers 401/403), versus the
+  // post-response await being dropped before the insert lands.
+  const diagParams = new URL(req.url || '/', origin).searchParams;
+  if (diagParams.get('__diag') === '1') {
+    const status = await recordOpen({
+      slug,
+      via: diagParams.get('via'),
+      ctx: diagParams.get('ctx'),
+      referrer: req.headers.referer || req.headers.referrer || null,
+      userAgent: req.headers['user-agent'] || null,
+      ip: clientIP(req.headers),
+      requestedAt,
+    });
+    res.setHeader('x-open-log-insert', status || 'unknown');
+  }
+
   res
     .status(200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -199,6 +221,7 @@ export default async function handler(req, res) {
   // the direction of the error matters. If exactness is needed later, the fix
   // is a separate uncached beacon route, not a shorter cache.
   const params = new URL(req.url || '/', origin).searchParams;
+  if (params.get('__diag') === '1') return;   // already written above
   await recordOpen({
     slug,
     via: params.get('via'),

@@ -93,7 +93,8 @@ let warnedAboutSalt = false;
 let warnedAboutKey = false;
 
 /**
- * Writes one row for this request. Never throws.
+ * Writes one row for this request. Never throws. Returns a short status string
+ * so a caller can report the outcome — see the `__diag` path in itinerary.js.
  *
  * AWAIT THIS, after the response has been sent. It is fire-and-forget from the
  * visitor's point of view — the bytes are already flushed, so nothing here is
@@ -122,7 +123,7 @@ export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requ
           + `Env vars present that look related: ${candidates}`
         );
       }
-      return;
+      return 'no-key';
     }
 
     const salt = process.env.OPEN_LOG_SALT;
@@ -166,10 +167,17 @@ export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requ
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       console.warn(`[open-log] insert rejected: ${response.status} ${detail.slice(0, 200)}`);
+      // Status and PostgREST's error code only — no body text, which can echo
+      // the row back and with it the hash.
+      let code = '';
+      try { code = (JSON.parse(detail).code || '').toString(); } catch { /* not json */ }
+      return `http-${response.status}${code ? `-${code}` : ''}`;
     }
+    return 'ok';
   } catch (error) {
     // Deliberately swallowed and never surfaced to the visitor. A counter that
     // can break a page is worse than a counter with a gap in it.
     console.warn('[open-log] failed to record open:', error?.message || error);
+    return `error-${error?.name || 'unknown'}`;
   }
 }
