@@ -17,7 +17,7 @@
   "rewrites": [
     {
       "source": "/place/:path*",
-      "destination": "/place.html"
+      "destination": "/api/place"
     },
     {
       "source": "/trip/:path*",
@@ -26,6 +26,10 @@
     {
       "source": "/i/:path*",
       "destination": "/api/itinerary"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
     }
   ]
 }

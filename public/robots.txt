@@ -1,0 +1,32 @@
+# Suna — app.unaryx.com
+#
+# Two routes are public pages worth indexing, and both are server-rendered with
+# real metadata (api/itinerary.js, api/place.js). Everything else here is either
+# a function endpoint or a thin interstitial, and indexing those spends crawl
+# budget on pages that can never rank.
+
+User-agent: *
+
+# The public pages.
+Allow: /$
+Allow: /i/
+Allow: /place/
+
+# Function endpoints. `/i/` and `/place/` are rewrites onto these, and a robots
+# rule matches the REQUESTED path, not the rewrite target — so disallowing the
+# raw endpoints does not block the pages above.
+Disallow: /api/
+
+# The open-counter beacon. No content, and a crawler firing it would inflate the
+# very number it exists to measure.
+Disallow: /api/open
+
+# Shared personal trips. These are for the person who received the link, not for
+# search: they are user-specific, thin, and there is nothing to rank on.
+Disallow: /trip/
+
+# Apple's association file. Fetched directly by iOS, never by a search crawler,
+# and not a page.
+Disallow: /.well-known/
+
+Sitemap: https://app.unaryx.com/sitemap.xml

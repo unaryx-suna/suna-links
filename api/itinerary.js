@@ -83,6 +83,40 @@ function canonicalURL(origin, rawURL) {
   return parsed.toString();
 }
 
+/**
+ * The readable half of a share link, mirroring `ItineraryShareLink.swift`.
+ *
+ * `share_slug` holds only the bare ten-character token; the readable prefix is
+ * composed at share time and is a URL concern, never a column. Reproducing it
+ * here lets the canonical point at the same address the app hands out.
+ */
+function readablePrefix(name) {
+  return String(name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/).filter(Boolean).join('-')
+    .slice(0, 60);
+}
+
+/**
+ * ONE address per itinerary, whatever was requested.
+ *
+ * The same itinerary is reachable as `/i/cz2fcegzfk`, as
+ * `/i/old-kl-on-foot--cz2fcegzfk`, and as either of those with a `?via=` per
+ * creator who shared it. Left alone those are N separate URLs competing for one
+ * piece of content, splitting whatever authority it earns. The canonical is
+ * built from the itinerary's own name and slug — never from the request — so
+ * every variant collapses onto the same address.
+ *
+ * `via` is dropped here on purpose. It is attribution, it belongs on og:url
+ * where the shared address matters, and it must not fork the canonical.
+ */
+function canonicalItineraryURL(origin, slug, name) {
+  if (!slug) return `${origin}/`;
+  const prefix = readablePrefix(name);
+  return `${origin}/i/${prefix ? `${prefix}--${slug}` : slug}`;
+}
+
 export default async function handler(req, res) {
   const slug = slugFrom(req.url || '');
   // Stamped before any awaiting happens, so the row records when the visitor
@@ -105,6 +139,9 @@ export default async function handler(req, res) {
   let title = 'An itinerary on Suna';
   let description = 'A route someone actually walked, with their own photos and notes.';
   let image = null;
+  // The itinerary's own name, kept separate from the composed title so the
+  // canonical prefix matches what the app generates rather than "Name — by @x".
+  let rawName = '';
 
   if (slug) {
     try {
@@ -118,6 +155,7 @@ export default async function handler(req, res) {
       const it = Array.isArray(rows) ? rows[0] : null;
       if (it) {
         // "Bangkok for you — a Suna itinerary by @booak55"
+        rawName = it.name || '';
         const parts = [it.name].filter(Boolean);
         if (it.creator_username) parts.push(`by @${it.creator_username}`);
         title = parts.join(' — ') || title;
@@ -139,12 +177,20 @@ export default async function handler(req, res) {
     }
   }
 
+  const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' ? '' : rawName);
+  const shareURL = canonicalURL(origin, req.url);
   const tags = [
     `<title>${escapeHtml(title)}</title>`,
+    // Consolidates the two link forms. `/i/old-kl-on-foot--cz2fcegzfk` and the
+    // bare `/i/cz2fcegzfk` both resolve to this same itinerary, and `?via=` adds
+    // a distinct URL per creator on top of that — without this they compete as
+    // separate pages for one piece of content and split whatever authority it
+    // earns. Points at the address as requested, `path=` artefact stripped.
+    `<link rel="canonical" href="${escapeHtml(canonical)}">`,
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:type" content="article">`,
-    `<meta property="og:url" content="${escapeHtml(canonicalURL(origin, req.url))}">`,
+    `<meta property="og:url" content="${escapeHtml(shareURL)}">`,
     `<meta property="og:site_name" content="Suna">`,
     `<meta name="description" content="${escapeHtml(description)}">`,
     // A large card only when there is a real image behind it — claiming
@@ -164,6 +210,7 @@ export default async function handler(req, res) {
   const rendered = html
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
+    .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
     .replace('</head>', `  ${tags}\n</head>`);
 
   // Record the open. Started BEFORE the response so the request is already in
