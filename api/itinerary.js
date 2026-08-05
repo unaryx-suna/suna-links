@@ -166,6 +166,18 @@ export default async function handler(req, res) {
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace('</head>', `  ${tags}\n</head>`);
 
+  // Whether logging is even CONFIGURED, stated on the response itself.
+  //
+  // Booleans only — never a value, never a key name. This exists because the
+  // failure modes below are all silent by design (a counter must never break a
+  // page), so "no rows appeared" was indistinguishable from "the environment
+  // is not wired up". One `curl -sI` now answers that without needing access
+  // to the log stream.
+  res.setHeader(
+    'x-open-log',
+    `key=${process.env.SUPABASE_SERVICE_ROLE_KEY ? 1 : 0};salt=${process.env.OPEN_LOG_SALT ? 1 : 0}`
+  );
+
   res
     .status(200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
