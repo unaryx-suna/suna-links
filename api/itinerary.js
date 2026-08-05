@@ -215,3 +215,4 @@ export default async function handler(req, res) {
     .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
     .send(rendered);
 
+}
