@@ -130,7 +130,7 @@ export function scheduleBackground(promise) {
  * and the insert is silently dropped. Awaiting after `send` keeps the row
  * without costing the visitor anything.
  */
-export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requestedAt }) {
+export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requestedAt, source }) {
   try {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) {
@@ -172,6 +172,11 @@ export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requ
       ip_hash: hashIP(ip, salt),
       ua_class,
       ua_rule,
+      // 'render' = the page was server-rendered for this request, which happens
+      // only on a cache MISS. 'beacon' = the page ran and called /api/open,
+      // which is never cached. Verified opens are counted from beacons; renders
+      // stay as evidence of scraper and cache-miss traffic.
+      source: source === 'beacon' ? 'beacon' : 'render',
     };
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/link_opens`, {

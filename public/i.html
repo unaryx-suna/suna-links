@@ -129,6 +129,27 @@
 
       if (!slug) return;
 
+      // Count this open.
+      //
+      // The server-rendered HTML is edge-cached, so the function that renders
+      // it does not run for most visitors — this request is never cached, and
+      // is what "verified open" is actually counted from. sendBeacon survives
+      // the page being closed immediately; fetch(keepalive) is the fallback for
+      // browsers without it. Both are fire-and-forget: nothing here blocks or
+      // affects what the reader sees, and a failure is ignored entirely.
+      try {
+        var q = new URLSearchParams(window.location.search);
+        var beacon = '/api/open?slug=' + encodeURIComponent(slug)
+          + (q.get('via') ? '&via=' + encodeURIComponent(q.get('via')) : '')
+          + (q.get('ctx') ? '&ctx=' + encodeURIComponent(q.get('ctx')) : '')
+          + (document.referrer ? '&ref=' + encodeURIComponent(document.referrer) : '');
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(beacon);
+        } else {
+          fetch(beacon, { method: 'POST', keepalive: true }).catch(function () {});
+        }
+      } catch (e) { /* counting must never affect the page */ }
+
       // Fill in the real itinerary from the anonymous-safe view. Only PUBLIC
       // published itineraries are readable, so a followers-only or draft slug
       // simply yields nothing and the generic copy above stands — the page must

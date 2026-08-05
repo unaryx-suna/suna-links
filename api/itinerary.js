@@ -183,6 +183,7 @@ export default async function handler(req, res) {
     userAgent: req.headers['user-agent'] || null,
     ip: clientIP(req.headers),
     requestedAt,
+    source: 'render',
   });
   const backgrounded = scheduleBackground(logging);
 
