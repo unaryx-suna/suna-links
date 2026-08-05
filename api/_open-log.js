@@ -90,6 +90,7 @@ export function hashIP(ip, salt) {
 }
 
 let warnedAboutSalt = false;
+let warnedAboutKey = false;
 
 /**
  * Writes one row for this request. Never throws.
@@ -104,7 +105,25 @@ let warnedAboutSalt = false;
 export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requestedAt }) {
   try {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceKey) return;              // not configured — never a visible failure
+    if (!serviceKey) {
+      // Loud, once per instance. This used to return in silence, which is
+      // indistinguishable in the logs from the code not being deployed at all —
+      // and that is exactly the question you are asking when no rows appear.
+      //
+      // Env var NAMES only. A name is not a secret; a value is.
+      if (!warnedAboutKey) {
+        warnedAboutKey = true;
+        const candidates = Object.keys(process.env)
+          .filter((k) => /SUPABASE|SERVICE|ROLE|SALT/i.test(k))
+          .sort()
+          .join(', ') || '(none)';
+        console.warn(
+          '[open-log] SUPABASE_SERVICE_ROLE_KEY is not set — nothing will be recorded. '
+          + `Env vars present that look related: ${candidates}`
+        );
+      }
+      return;
+    }
 
     const salt = process.env.OPEN_LOG_SALT;
     if (!salt && !warnedAboutSalt) {
@@ -127,7 +146,7 @@ export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requ
       ua_rule,
     };
 
-    await fetch(`${SUPABASE_URL}/rest/v1/link_opens`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/link_opens`, {
       method: 'POST',
       headers: {
         apikey: serviceKey,
@@ -140,6 +159,14 @@ export async function recordOpen({ slug, via, ctx, referrer, userAgent, ip, requ
       // function open; a lost row is better than a stuck instance.
       signal: AbortSignal.timeout(2500),
     });
+
+    // A rejected insert is the other way this goes quiet: RLS is on with no
+    // policies, so anything that is not the service role gets a 401/403 and the
+    // table stays empty. Say so rather than leaving it to be guessed at.
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      console.warn(`[open-log] insert rejected: ${response.status} ${detail.slice(0, 200)}`);
+    }
   } catch (error) {
     // Deliberately swallowed and never surfaced to the visitor. A counter that
     // can break a page is worse than a counter with a gap in it.
