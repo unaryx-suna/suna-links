@@ -19,7 +19,12 @@
  * deletes every cache that is not the current one.
  */
 
-const CACHE_VERSION = 'field-v1';
+// **v2 narrows the worker's scope from `/` to `/field`** (see the registration
+// in `field.html`). The bump is load-bearing rather than hygiene: a device that
+// already registered v1 keeps the old cache — and the old origin-wide scope —
+// until something else evicts it, so the fix would not reach the one phone it
+// was written for.
+const CACHE_VERSION = 'field-v2';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be

@@ -1438,8 +1438,31 @@ async function boot() {
   });
 
   // The service worker is what makes a cold open in a basement work at all.
+  //
+  // **Scope `/field`, not `/`.** `app.unaryx.com` serves every share link in the
+  // product, and at origin scope this worker controlled all of them: its fetch
+  // handler is cache-first for anything it does not explicitly exclude, and the
+  // exclusion tests `pathname.startsWith('/api/')`. `/place/*` and `/i/*` are
+  // Vercel REWRITES onto `/api/place` and `/api/itinerary`, and a service worker
+  // sees the REQUESTED url, not the rewrite target — the same distinction this
+  // project's `robots.txt` spells out in its own comments. So every share-link
+  // page fell into the cache-first branch, and a failed navigation anywhere on
+  // the origin was answered with this tool's sign-in screen.
+  //
+  // Only for someone who has opened `/field` — Brian, and whoever he gives it
+  // to — so it never reached ordinary users. It sat squarely in the way of
+  // debugging a share link on the phone the places are captured with.
+  //
+  // Narrowing is always allowed: a worker served from `/field-sw.js` sits at
+  // directory `/`, so any scope at or below it is legal with no
+  // `Service-Worker-Allowed` header. `/field` prefix-matches `/field` (the
+  // rewrite) and `/field.html` (the real file), so the offline shell is intact.
+  //
+  // Scope limits which PAGES the worker controls, not which requests it sees —
+  // this page's own subresources are still intercepted, so the precache list is
+  // unchanged.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/field-sw.js', { scope: '/' }).catch(() => {});
+    navigator.serviceWorker.register('/field-sw.js', { scope: '/field' }).catch(() => {});
   }
 
   // Safari caps script-writable storage at seven days without interaction for
