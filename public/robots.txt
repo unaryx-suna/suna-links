@@ -25,6 +25,15 @@ Disallow: /api/open
 # search: they are user-specific, thin, and there is nothing to rank on.
 Disallow: /trip/
 
+# The field capture tool. A private tool on a public domain: it renders a
+# sign-in form and nothing else without a Supabase session, the same posture the
+# CMS has, but there is nothing here for anyone to find and a crawler hitting it
+# spends budget on a login screen. The page also carries a `noindex` meta, which
+# is belt and braces — a meta tag is never read on a page a crawler was told not
+# to fetch.
+Disallow: /field
+Disallow: /field.html
+
 # Apple's association file. Fetched directly by iOS, never by a search crawler,
 # and not a page.
 Disallow: /.well-known/

@@ -16,6 +16,10 @@
   ],
   "rewrites": [
     {
+      "source": "/field",
+      "destination": "/field.html"
+    },
+    {
       "source": "/place/:path*",
       "destination": "/api/place"
     },

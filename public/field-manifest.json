@@ -1,0 +1,19 @@
+{
+  "name": "Suna Field Capture",
+  "short_name": "Suna Field",
+  "description": "Add a place to the Suna catalogue while standing in front of it.",
+  "start_url": "/field",
+  "scope": "/field",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/field-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- Private tool on a public domain. robots.txt disallows it too; both, because
+     a meta tag is ignored on a page a crawler was told not to fetch and the
+     disallow is ignored by crawlers that do not read it. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Suna Field">
+<link rel="manifest" href="/field-manifest.json">
+<link rel="apple-touch-icon" href="/field-icon.svg">
+<title>Suna Field Capture</title>
+<style>
+  :root {
+    --ink: #111111;
+    --card: #1b1b1b;
+    --line: #292929;
+    --sand: #F6CB94;
+    --text: #ffffff;
+    --muted: #C2C2C2;
+    --dim: rgba(255,255,255,.55);
+    --danger: #FF6B6B;
+    --ok: #6FCF97;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--ink); color: var(--text); }
+  body {
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 0 16px 120px; }
+  h1 { font-size: 19px; margin: 18px 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 18px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 18px 0 6px; }
+  input[type=text], input[type=email], input[type=tel], textarea, select {
+    width: 100%; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 14px; font-size: 16px; /* 16 or iOS zooms on focus */
+    font-family: inherit;
+  }
+  textarea { min-height: 76px; resize: vertical; }
+  button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 14px 18px; }
+  .primary { background: var(--sand); color: var(--ink); font-weight: 600; width: 100%; }
+  .primary[disabled] { opacity: .45; }
+  .ghost { background: rgba(255,255,255,.10); color: var(--text); }
+  .linkish { background: none; color: var(--sand); padding: 6px 0; text-decoration: underline; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; -webkit-overflow-scrolling: touch; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    white-space: nowrap; background: rgba(255,255,255,.08); color: var(--text);
+    border: 1px solid transparent; border-radius: 999px; padding: 9px 14px; font-size: 14px;
+  }
+  .chip[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .locline {
+    display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; font-size: 13px; line-height: 1.35;
+  }
+  .locline .why { color: var(--dim); font-size: 12px; display: block; margin-top: 2px; }
+  .locline.warn { border-color: rgba(255,107,107,.5); }
+  .pencil { background: none; color: var(--sand); font-size: 17px; padding: 0 2px; }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .thumb { position: relative; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; background: #000; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .x {
+    position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; line-height: 22px;
+    text-align: center; border-radius: 999px; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; padding: 0;
+  }
+  .thumb .cov {
+    position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6);
+    font-size: 9px; text-align: center; padding: 2px 0; color: var(--sand);
+  }
+  .addphoto {
+    width: 72px; height: 72px; border-radius: 12px; border: 1px dashed var(--line);
+    background: none; color: var(--dim); font-size: 12px; padding: 0;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 5; background: var(--ink);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+  }
+  .tabs { display: flex; gap: 6px; }
+  .tab { background: none; color: var(--dim); padding: 8px 10px; font-size: 14px; border-radius: 8px; }
+  .tab[aria-selected="true"] { color: var(--text); background: rgba(255,255,255,.08); font-weight: 600; }
+  .badge { background: var(--sand); color: var(--ink); border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
+  .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
+  .savebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    background: rgba(17,17,17,.96); border-top: 1px solid var(--line);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .savebar .why { display: block; text-align: center; color: var(--dim); font-size: 12px; margin-top: 7px; }
+  .sheet {
+    position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.55);
+    display: flex; align-items: flex-end;
+  }
+  .sheet[hidden] { display: none; }
+  .sheet > div {
+    width: 100%; background: var(--ink); border-radius: 20px 20px 0 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    max-height: 88vh; overflow-y: auto;
+  }
+  .opt {
+    display: block; width: 100%; text-align: left; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 8px; color: var(--text);
+  }
+  .opt small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
+  .note { font-size: 12px; color: var(--dim); margin: 8px 0 0; }
+  .err { color: var(--danger); font-size: 13px; margin: 8px 0 0; }
+  .ok { color: var(--ok); font-size: 13px; }
+  .item { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 10px; background: var(--card); }
+  .item h3 { margin: 0 0 3px; font-size: 15px; }
+  .item p { margin: 0; font-size: 12px; color: var(--dim); }
+  .install {
+    background: rgba(246,203,148,.12); border: 1px solid rgba(246,203,148,.35);
+    border-radius: 12px; padding: 12px 14px; font-size: 13px; margin: 12px 0;
+  }
+  details summary { color: var(--sand); font-size: 14px; padding: 12px 0; cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────────── sign in ─────────────────────────── -->
+<div id="login" class="wrap">
+  <h1>Suna field capture</h1>
+  <p class="sub">Sign in with the account you use for the CMS.</p>
+
+  <div id="login-email-step">
+    <label for="email">Email</label>
+    <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off">
+    <p class="err" id="login-error"></p>
+    <button class="primary" id="btn-otp" style="margin-top:14px">Email me a code</button>
+    <button class="ghost" id="btn-google" style="width:100%;margin-top:10px">Continue with Google</button>
+  </div>
+
+  <div id="login-otp-step" hidden>
+    <label for="otp">Six-digit code sent to <span id="login-email-display"></span></label>
+    <input id="otp" type="tel" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+    <p class="err" id="login-otp-error"></p>
+    <button class="primary" id="btn-verify" style="margin-top:14px">Verify</button>
+    <button class="linkish" id="btn-back">Use a different email</button>
+  </div>
+</div>
+
+<!-- ─────────────────────────── the tool ─────────────────────────── -->
+<div id="app" hidden>
+  <div class="topbar">
+    <div class="tabs">
+      <button class="tab" id="tab-capture" aria-selected="true">Capture</button>
+      <button class="tab" id="tab-finish" aria-selected="false">Finish these</button>
+    </div>
+    <div class="row">
+      <button class="badge zero" id="queue-badge" title="Pending uploads">0</button>
+      <button class="linkish" id="btn-signout" style="font-size:12px">Sign out</button>
+    </div>
+  </div>
+
+  <!-- capture -->
+  <div class="wrap" id="pane-capture">
+    <div class="install" id="install-hint" hidden>
+      Add this to your Home Screen. In a Safari tab the queue can be cleared after
+      seven days without use; installed, it is not.
+      <button class="linkish" id="install-dismiss" style="display:block">Got it</button>
+    </div>
+
+    <p class="err" id="profile-warning" hidden></p>
+
+    <label for="f-name">Name</label>
+    <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
+
+    <label>Category</label>
+    <div class="chips" id="f-categories"></div>
+
+    <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
+    <div class="thumbs" id="f-thumbs">
+      <button class="addphoto" id="btn-camera">📷<br>Camera</button>
+      <button class="addphoto" id="btn-library">🖼<br>Library</button>
+    </div>
+    <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
+    <input id="in-library" type="file" accept="image/*" multiple hidden>
+
+    <label>Location</label>
+    <div class="locline" id="loc-line">
+      <div id="loc-text">Waiting for a fix…</div>
+      <button class="pencil" id="btn-edit-loc" aria-label="Edit location">✎</button>
+    </div>
+
+    <label>City</label>
+    <button class="opt" id="city-chip" style="margin:0">Waiting for a location…</button>
+
+    <label for="f-note">A line about this place</label>
+    <textarea id="f-note" placeholder="What is it, in one line?"></textarea>
+
+    <details>
+      <summary>More</summary>
+      <label for="f-desc">Description</label>
+      <textarea id="f-desc" placeholder="Longer, if you have it. Overrides the line above."></textarea>
+      <label for="f-address">Address</label>
+      <input id="f-address" type="text" autocomplete="off">
+      <label for="f-hours">Opening hours</label>
+      <input id="f-hours" type="text" placeholder="Mon–Sun 09:00–18:00" autocomplete="off">
+      <label for="f-building">Building name</label>
+      <input id="f-building" type="text" autocomplete="off">
+      <label for="f-dishes">Signature dishes <span style="color:var(--dim)">comma separated</span></label>
+      <input id="f-dishes" type="text" autocomplete="off">
+    </details>
+
+    <p class="err" id="dupe-note" hidden></p>
+    <p class="err" id="save-error" hidden></p>
+  </div>
+
+  <!-- finish these -->
+  <div class="wrap" id="pane-finish" hidden>
+    <h1>Finish these</h1>
+    <p class="sub">Your captures that are not live yet. Tap one to complete it.</p>
+    <div id="finish-list"></div>
+  </div>
+
+  <div class="savebar" id="savebar">
+    <button class="primary" id="btn-save">Save place</button>
+    <span class="why" id="save-why"></span>
+  </div>
+</div>
+
+<!-- location editor -->
+<div class="sheet" id="loc-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Where is this place?</h1>
+    <p class="sub" id="loc-sheet-now"></p>
+    <button class="opt" id="opt-gps">Use my current location<small id="opt-gps-sub">Only correct if you are standing here.</small></button>
+    <button class="opt" id="opt-exif" hidden>Use the photo's location<small id="opt-exif-sub"></small></button>
+    <label for="opt-link">Paste a Google or Apple Maps link</label>
+    <input id="opt-link" type="text" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="https://maps.app.goo.gl/…">
+    <button class="ghost" id="opt-link-go" style="width:100%;margin-top:8px">Use this link</button>
+    <label for="opt-coords">Or type coordinates</label>
+    <input id="opt-coords" type="text" inputmode="decimal" autocomplete="off" placeholder="22.2783, 114.1747">
+    <button class="ghost" id="opt-coords-go" style="width:100%;margin-top:8px">Use these coordinates</button>
+    <p class="err" id="loc-sheet-error" hidden></p>
+    <button class="linkish" id="loc-sheet-close" style="margin-top:14px">Close</button>
+  </div>
+</div>
+
+<!-- city picker -->
+<div class="sheet" id="city-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Which city?</h1>
+    <p class="sub">The five nearest to this place's coordinate.</p>
+    <div id="city-options"></div>
+    <button class="linkish" id="city-sheet-close" style="margin-top:8px">Close</button>
+  </div>
+</div>
+
+<!-- duplicate -->
+<div class="sheet" id="dupe-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Already in the catalogue?</h1>
+    <p class="sub">Something with a similar name is within 150m.</p>
+    <div id="dupe-options"></div>
+    <button class="ghost" id="dupe-different" style="width:100%;margin-top:8px">No, this is a different place</button>
+    <button class="linkish" id="dupe-close" style="margin-top:12px">Cancel</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+'use strict';
+
+/* ════════════════════════════════════════════════════════════════════════
+   Suna field capture — docs/briefs/FIELD-CAPTURE-TOOL.md
+
+   One file, no framework, no build step, matching `admin/index.html` and
+   `place.html`. The publishable key and a real Supabase session; the
+   service-role key never comes near this page.
+   ════════════════════════════════════════════════════════════════════════ */
+
+const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/** Past this many queued photos, warn. Safari's quota is not generous and the
+ *  failure mode — a silent write rejection mid-outing — is the worst available. */
+const QUEUE_PHOTO_CAP = 40;
+
+/** The device fix is refused above this. **Source 2 only** (§10): it is
+ *  meaningless for EXIF and for a pasted link, and at a hotel there is no
+ *  device fix worth judging. */
+const GPS_ACCURACY_LIMIT_M = 100;
+
+const $ = (id) => document.getElementById(id);
+
+let session = null;
+let profile = { username: null, is_admin: false };
+let categories = [];           // display_name strings, from public.tags
+let cities = [];               // {id,name,latitude,longitude,country_code}
+
+/* ── the capture in progress ─────────────────────────────────────────── */
+const blank = () => ({
+  id: crypto.randomUUID(),     // §6 — client-side, so a retry upserts itself
+  name: '',
+  category: '',
+  lat: null, lon: null,
+  /** 'exif' | 'gps' | 'link' | 'manual' | null — what the UI names, and what
+   *  maps onto `coordinate_source`. */
+  locFrom: null,
+  locAccuracy: null,           // metres, live fix only
+  locTakenAt: null,            // EXIF DateTimeOriginal, ISO
+  cityId: null, cityName: null, cityDistanceKm: null,
+  note: '', description: '', address: '', hours: '', building: '', dishes: '',
+  /** {photoId, blob, width, height, isCover} — photoId is generated once so a
+   *  retry re-uploads to the SAME path and upserts the SAME media row. */
+  photos: [],
+  /** Set when finishing an existing capture rather than making a new one. */
+  editing: false,
+  /** The stored cover on a re-opened row — counts toward the gate. */
+  hadCover: false,
+  /** The row's existing `submitted_by`, so an admin edit does not steal it. */
+  submittedBy: null,
+  /** Already-uploaded media on a re-opened row: {id, media_url, path}. */
+  stored: [],
+});
+let cap = blank();
+
+/** The most recent EXIF coordinate seen on any photo in this capture, kept so
+ *  "use the photo's location" stays available after the proposal is overridden. */
+let exifCandidate = null;      // {lat, lon, takenAt}
+/** The most recent live fix, same reason. */
+let liveFix = null;            // {lat, lon, accuracy}
+
+/* ════════════════════════════════════════════════════════════════════════
+   1. Sign in — lifted from admin/index.html
+   ════════════════════════════════════════════════════════════════════════ */
+
+$('btn-otp').onclick = async () => {
+  const email = $('email').value.trim();
+  if (!email) { $('login-error').textContent = 'Enter an email.'; return; }
+  $('login-error').textContent = '';
+  try {
+    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (error) throw error;
+    $('login-email-step').hidden = true;
+    $('login-otp-step').hidden = false;
+    $('login-email-display').textContent = email;
+  } catch (e) { $('login-error').textContent = e.message || 'Could not send the code.'; }
+};
+
+$('btn-verify').onclick = async () => {
+  $('login-otp-error').textContent = '';
+  try {
+    const { error } = await db.auth.verifyOtp({
+      email: $('email').value.trim(), token: $('otp').value.trim(), type: 'email',
+    });
+    if (error) throw error;
+  } catch (e) { $('login-otp-error').textContent = e.message || 'Invalid code.'; }
+};
+
+$('btn-google').onclick = async () => {
+  const { error } = await db.auth.signInWithOAuth({
+    provider: 'google', options: { redirectTo: window.location.href },
+  });
+  if (error) $('login-error').textContent = error.message;
+};
+
+$('btn-back').onclick = () => { $('login-otp-step').hidden = true; $('login-email-step').hidden = false; };
+$('btn-signout').onclick = async () => { await db.auth.signOut(); location.reload(); };
+
+/* ════════════════════════════════════════════════════════════════════════
+   2. IndexedDB — the queue, and the offline caches
+   ════════════════════════════════════════════════════════════════════════ */
+
+const DB_NAME = 'suna-field';
+let idb = null;
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('cache')) d.createObjectStore('cache', { keyPath: 'key' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function tx(store, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const t = idb.transaction(store, mode);
+    const r = fn(t.objectStore(store));
+    t.oncomplete = () => resolve(r && r.result !== undefined ? r.result : undefined);
+    t.onerror = () => reject(t.error);
+  });
+}
+const idbPut    = (store, value) => tx(store, 'readwrite', (s) => s.put(value));
+const idbGet    = (store, key)   => tx(store, 'readonly',  (s) => s.get(key));
+const idbAll    = (store)        => tx(store, 'readonly',  (s) => s.getAll());
+const idbDelete = (store, key)   => tx(store, 'readwrite', (s) => s.delete(key));
+
+async function cacheSet(key, value) { await idbPut('cache', { key, value, at: Date.now() }); }
+async function cacheGet(key) { const r = await idbGet('cache', key); return r || null; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   3. EXIF — read the ORIGINAL bytes, before the canvas re-encode strips it
+   ════════════════════════════════════════════════════════════════════════
+
+   §7. Both halves matter and the first is the easy one to lose: reading GPS and
+   DateTimeOriginal is what makes uploading this evening's photos produce
+   verified coordinates at all. Stripping happens for free when the canvas
+   re-encodes — no camera serials or unrelated coordinates ride into a file we
+   serve publicly.
+
+   Hand-rolled APP1 parsing rather than a library: it is sixty lines and a
+   dependency here would have to be cached by the service worker too.
+
+   Missing EXIF is NORMAL — Messages strips it, and so does a re-save by most
+   apps. Fall through quietly. */
+
+async function readExif(file) {
+  try {
+    const buf = await file.slice(0, 256 * 1024).arrayBuffer();
+    const view = new DataView(buf);
+    if (view.byteLength < 4) return null;
+
+    // HEIC from the iOS library is not a JPEG, so the APP1 walk below finds
+    // nothing. Safari still decodes it to canvas fine; the coordinate simply
+    // has to come from somewhere else.
+    if (view.getUint16(0, false) !== 0xFFD8) return null;
+
+    let offset = 2;
+    while (offset < view.byteLength - 4) {
+      if (view.getUint8(offset) !== 0xFF) break;
+      const marker = view.getUint8(offset + 1);
+      const size = view.getUint16(offset + 2, false);
+      if (marker === 0xE1) {
+        // "Exif\0\0"
+        if (view.getUint32(offset + 4, false) !== 0x45786966) return null;
+        return parseTiff(view, offset + 10);
+      }
+      offset += 2 + size;
+    }
+  } catch { /* a malformed header is not an error worth showing */ }
+  return null;
+}
+
+function parseTiff(view, start) {
+  const little = view.getUint16(start, false) === 0x4949;
+  if (view.getUint16(start + 2, little) !== 0x002A) return null;
+
+  const ifd0 = start + view.getUint32(start + 4, little);
+  let gpsIFD = null, exifIFD = null;
+
+  const count0 = view.getUint16(ifd0, little);
+  for (let i = 0; i < count0; i++) {
+    const e = ifd0 + 2 + i * 12;
+    const tag = view.getUint16(e, little);
+    if (tag === 0x8825) gpsIFD  = start + view.getUint32(e + 8, little);
+    if (tag === 0x8769) exifIFD = start + view.getUint32(e + 8, little);
+  }
+
+  let takenAt = null;
+  if (exifIFD) {
+    const n = view.getUint16(exifIFD, little);
+    for (let i = 0; i < n; i++) {
+      const e = exifIFD + 2 + i * 12;
+      if (view.getUint16(e, little) === 0x9003) {   // DateTimeOriginal
+        const len = view.getUint32(e + 4, little);
+        const at = start + view.getUint32(e + 8, little);
+        let s = '';
+        for (let k = 0; k < len - 1; k++) s += String.fromCharCode(view.getUint8(at + k));
+        // "2026:09:18 14:20:31" → ISO. Local time with no zone in EXIF, so it
+        // is read as local, which is what "when I was standing there" means.
+        const m = s.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if (m) {
+          const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+          if (!isNaN(d)) takenAt = d.toISOString();
+        }
+      }
+    }
+  }
+
+  if (!gpsIFD) return takenAt ? { lat: null, lon: null, takenAt } : null;
+
+  const rat = (at) => view.getUint32(at, little) / (view.getUint32(at + 4, little) || 1);
+  const dms = (at) => rat(at) + rat(at + 8) / 60 + rat(at + 16) / 3600;
+
+  let lat = null, lon = null, latRef = 'N', lonRef = 'E';
+  const n = view.getUint16(gpsIFD, little);
+  for (let i = 0; i < n; i++) {
+    const e = gpsIFD + 2 + i * 12;
+    const tag = view.getUint16(e, little);
+    const at = start + view.getUint32(e + 8, little);
+    if (tag === 0x0001) latRef = String.fromCharCode(view.getUint8(e + 8));
+    if (tag === 0x0003) lonRef = String.fromCharCode(view.getUint8(e + 8));
+    if (tag === 0x0002) lat = dms(at);
+    if (tag === 0x0004) lon = dms(at);
+  }
+  if (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) {
+    return takenAt ? { lat: null, lon: null, takenAt } : null;
+  }
+  if (latRef === 'S') lat = -lat;
+  if (lonRef === 'W') lon = -lon;
+  // 0,0 is null island, which is a missing fix rather than a place.
+  if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
+    return takenAt ? { lat: null, lon: null, takenAt } : null;
+  }
+  return { lat, lon, takenAt };
+}
+
+/* ── canvas re-encode ─────────────────────────────────────────────────── */
+
+/** Longest edge 2000px, JPEG q0.82. A 3–6MB phone photo lands around
+ *  300–600KB, well inside the 20MB bucket cap. The re-encode is also what
+ *  strips EXIF — read it first (above), never after. */
+function reencode(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 2000;
+      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob((blob) => blob ? resolve({ blob, width: w, height: h })
+                              : reject(new Error('could not encode')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read that image')); };
+    img.src = url;
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   4. Coordinates — §4.2
+
+   Precedence: EXIF → live GPS → pasted link. **EXIF first, not GPS first.**
+   At the hotel both are available and the device fix is the wrong one; ordering
+   it this way makes the hotel case correct by default rather than by
+   remembering to override.
+
+   And it is an opening PROPOSAL, never a lock. Every coordinate is editable in
+   every state, including the two verified ones — some photos have no EXIF and
+   some EXIF is simply wrong (a viewpoint records where you stood, not what you
+   were looking at).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/** What goes in `coordinate_source`. Only presence earns `_verified`. */
+function coordinateSource() {
+  return (cap.locFrom === 'exif' || cap.locFrom === 'gps')
+    ? 'manual_entry_verified'
+    : 'manual_entry_unverified';
+}
+
+/** The one line under the name. Never ambiguous, and the ✎ is in every state. */
+function renderLocation() {
+  const line = $('loc-line'), text = $('loc-text');
+  line.classList.remove('warn');
+  if (cap.lat == null) {
+    line.classList.add('warn');
+    text.innerHTML = '⚠ No location yet<span class="why">Take a photo, paste a map link, or wait for GPS.</span>';
+  } else {
+    const co = cap.lat.toFixed(5) + ', ' + cap.lon.toFixed(5);
+    if (cap.locFrom === 'exif') {
+      const when = cap.locTakenAt ? new Date(cap.locTakenAt).toLocaleString() : 'unknown time';
+      text.innerHTML = '📍 From photo · ' + co + '<span class="why">Taken ' + when + '</span>';
+    } else if (cap.locFrom === 'gps') {
+      text.innerHTML = '📍 Live GPS · ' + co
+        + '<span class="why">±' + Math.round(cap.locAccuracy || 0) + 'm</span>';
+    } else if (cap.locFrom === 'link') {
+      text.innerHTML = '📍 From link · ' + co + '<span class="why">Not verified</span>';
+    } else {
+      text.innerHTML = '📍 Edited by hand · ' + co + '<span class="why">Not verified</span>';
+    }
+  }
+  renderCity();
+  renderSaveState();
+}
+
+/** Any hand edit drops the row to source 3 and says so AT THAT MOMENT, so the
+ *  downgrade is visible rather than discovered in SQL later. */
+function setLocation(lat, lon, from, extra = {}) {
+  cap.lat = lat; cap.lon = lon; cap.locFrom = from;
+  cap.locAccuracy = extra.accuracy != null ? extra.accuracy : null;
+  // A photo's timestamp is kept even when the coordinate is overridden: it is
+  // still when the place was seen, which is what `last_verified_at` answers.
+  if (from === 'exif') cap.locTakenAt = extra.takenAt || null;
+  // The city is derived from the PLACE's coordinate (§5), so it is recomputed
+  // whenever that changes and never from the device's.
+  pickNearestCity();
+  renderLocation();
+  scheduleDuplicateCheck();
+}
+
+/* ── live GPS ─────────────────────────────────────────────────────────── */
+
+/** Watched, not polled once: the fix improves over the first few seconds and
+ *  the tool should never propose the first, worst one. */
+function watchGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition((pos) => {
+    liveFix = {
+      lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy,
+    };
+    $('opt-gps-sub').textContent = 'Accurate to about ' + Math.round(liveFix.accuracy) + 'm. '
+      + 'Only correct if you are standing here.';
+    // **Never pre-fill from the device fix without it having been seen and
+    // accepted** (§4.2) — EXCEPT as the fallback proposal when nothing else has
+    // supplied one, which is the "standing at the place" posture the tool opens
+    // in. An EXIF coordinate already in hand is never overwritten.
+    if (cap.lat == null && liveFix.accuracy <= GPS_ACCURACY_LIMIT_M) {
+      setLocation(liveFix.lat, liveFix.lon, 'gps', { accuracy: liveFix.accuracy });
+    } else if (cap.lat == null) {
+      $('loc-text').innerHTML = '⚠ Waiting for a better fix'
+        + '<span class="why">±' + Math.round(liveFix.accuracy) + 'm is too coarse to place a pin.</span>';
+    }
+  }, () => { /* denied or unavailable — the other two sources still work */ },
+     { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+}
+
+/* ── pasted links and typed coordinates ───────────────────────────────── */
+
+/** Parsing a URL is not an API call and costs nothing. No geocoder, ever. */
+function parseCoordsFromText(text) {
+  const s = (text || '').trim();
+  if (!s) return null;
+
+  const pats = [
+    /@(-?\d+\.\d+),(-?\d+\.\d+)/,              // google /@lat,lng,17z
+    /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,      // google ?q=lat,lng
+    /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,          // google place data
+    /[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/,        // apple ?ll=
+    /[?&]sll=(-?\d+\.\d+),(-?\d+\.\d+)/,       // apple &sll=
+    /[?&]daddr=(-?\d+\.\d+),(-?\d+\.\d+)/,     // apple directions
+    /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/,  // bare "lat, lng"
+  ];
+  for (const p of pats) {
+    const m = s.match(p);
+    if (m) {
+      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+      if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+        return { lat, lon };
+      }
+    }
+  }
+  return null;
+}
+
+/** Short links hide the coordinate behind a redirect the browser cannot read
+ *  cross-origin, so `/api/resolve-link` follows it. Allowlisted hosts, no key. */
+async function resolveShortLink(url) {
+  const r = await fetch('/api/resolve-link?url=' + encodeURIComponent(url));
+  if (!r.ok) throw new Error('Could not follow that link.');
+  const j = await r.json();
+  return j.url || '';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   5. City — nearest to the PLACE's coordinate, never the device's
+   ════════════════════════════════════════════════════════════════════════ */
+
+function haversineKm(a, b, c, d) {
+  const R = 6371, toRad = (x) => x * Math.PI / 180;
+  const dLat = toRad(c - a), dLon = toRad(d - b);
+  const s = Math.sin(dLat / 2) ** 2
+          + Math.cos(toRad(a)) * Math.cos(toRad(c)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function nearestCities(lat, lon, n = 5) {
+  return cities
+    .map((c) => ({ ...c, km: haversineKm(lat, lon, c.latitude, c.longitude) }))
+    .sort((x, y) => x.km - y.km)
+    .slice(0, n);
+}
+
+/** Derived from §4.2's coordinate, so it cannot be computed until one exists —
+ *  shown as pending until then rather than guessed from the device. At a hotel
+ *  in another city, guessing would file a day trip under where he slept. */
+function pickNearestCity() {
+  if (cap.lat == null || !cities.length) { cap.cityId = null; cap.cityName = null; return; }
+  const best = nearestCities(cap.lat, cap.lon, 1)[0];
+  if (!best) return;
+  cap.cityId = best.id; cap.cityName = best.name; cap.cityDistanceKm = best.km;
+}
+
+function renderCity() {
+  const el = $('city-chip');
+  if (cap.lat == null) { el.textContent = 'Waiting for a location…'; return; }
+  if (!cap.cityId) { el.textContent = 'No city found — tap to choose'; return; }
+  el.innerHTML = cap.cityName + ' ▾<small>' + cap.cityDistanceKm.toFixed(1)
+    + ' km from the pin · tap to change</small>';
+}
+
+$('city-chip').onclick = () => {
+  if (cap.lat == null) return;
+  const opts = nearestCities(cap.lat, cap.lon, 5);
+  $('city-options').innerHTML = '';
+  opts.forEach((c) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = c.name + '<small>' + c.km.toFixed(1) + ' km · ' + (c.country_code || '') + '</small>';
+    b.onclick = () => {
+      cap.cityId = c.id; cap.cityName = c.name; cap.cityDistanceKm = c.km;
+      $('city-sheet').hidden = true; renderCity(); renderSaveState();
+    };
+    $('city-options').appendChild(b);
+  });
+  $('city-sheet').hidden = false;
+};
+$('city-sheet-close').onclick = () => { $('city-sheet').hidden = true; };
+
+/* ════════════════════════════════════════════════════════════════════════
+   6. The location editor — reachable in EVERY state, including verified ones
+   ════════════════════════════════════════════════════════════════════════ */
+
+$('btn-edit-loc').onclick = () => {
+  $('loc-sheet-error').hidden = true;
+  $('loc-sheet-now').textContent = cap.lat == null
+    ? 'Nothing set yet.'
+    : 'Now: ' + cap.lat.toFixed(6) + ', ' + cap.lon.toFixed(6);
+  // Current value pre-filled and editable, per §4.2.
+  $('opt-coords').value = cap.lat == null ? '' : cap.lat.toFixed(6) + ', ' + cap.lon.toFixed(6);
+  $('opt-link').value = '';
+  $('opt-exif').hidden = !exifCandidate;
+  if (exifCandidate) {
+    $('opt-exif-sub').textContent = exifCandidate.takenAt
+      ? 'Taken ' + new Date(exifCandidate.takenAt).toLocaleString()
+      : 'From the photo you added.';
+  }
+  $('loc-sheet').hidden = false;
+};
+$('loc-sheet-close').onclick = () => { $('loc-sheet').hidden = true; };
+
+$('opt-gps').onclick = () => {
+  if (!liveFix) { locSheetError('No fix yet. Give it a few seconds outdoors.'); return; }
+  if (liveFix.accuracy > GPS_ACCURACY_LIMIT_M) {
+    locSheetError('The fix is only accurate to ' + Math.round(liveFix.accuracy)
+      + 'm. That puts a pin in the wrong street.');
+    return;
+  }
+  // **Re-accepting a live fix while standing there returns it to verified** —
+  // that is a fresh verification, not an edit (§4.2).
+  setLocation(liveFix.lat, liveFix.lon, 'gps', { accuracy: liveFix.accuracy });
+  $('loc-sheet').hidden = true;
+};
+
+$('opt-exif').onclick = () => {
+  if (!exifCandidate) return;
+  setLocation(exifCandidate.lat, exifCandidate.lon, 'exif', { takenAt: exifCandidate.takenAt });
+  $('loc-sheet').hidden = true;
+};
+
+$('opt-link-go').onclick = async () => {
+  const raw = $('opt-link').value.trim();
+  if (!raw) return;
+  $('loc-sheet-error').hidden = true;
+  let found = parseCoordsFromText(raw);
+  if (!found) {
+    try {
+      const followed = await resolveShortLink(raw);
+      found = parseCoordsFromText(followed);
+    } catch (e) { locSheetError(e.message); return; }
+  }
+  // **Refuse a link that yields no coordinate.** Never fall back to the device
+  // fix — silently substituting the hotel for a place is the exact failure the
+  // source ordering exists to prevent (§4.2).
+  if (!found) {
+    locSheetError('No coordinate in that link. Open the place in Maps, share it, and paste that link — or type the coordinates below.');
+    return;
+  }
+  setLocation(found.lat, found.lon, 'link');
+  $('loc-sheet').hidden = true;
+};
+
+$('opt-coords-go').onclick = () => {
+  const found = parseCoordsFromText($('opt-coords').value);
+  if (!found) { locSheetError('Type them as "22.2783, 114.1747".'); return; }
+  // Typing numbers by hand is an edit, even over an EXIF coordinate: it is no
+  // longer what the camera recorded, so it stops being verified.
+  setLocation(found.lat, found.lon, 'manual');
+  $('loc-sheet').hidden = true;
+};
+
+function locSheetError(msg) { $('loc-sheet-error').textContent = msg; $('loc-sheet-error').hidden = false; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   7. Photos
+   ════════════════════════════════════════════════════════════════════════ */
+
+$('btn-camera').onclick  = () => $('in-camera').click();
+$('btn-library').onclick = () => $('in-library').click();
+$('in-camera').onchange  = (e) => addPhotos(e.target.files);
+$('in-library').onchange = (e) => addPhotos(e.target.files);
+
+async function addPhotos(files) {
+  for (const file of Array.from(files || [])) {
+    try {
+      // **EXIF from the ORIGINAL bytes, before the canvas touches it.**
+      const exif = await readExif(file);
+      const { blob, width, height } = await reencode(file);
+      const photoId = crypto.randomUUID();
+      cap.photos.push({ photoId, blob, width, height });
+
+      if (exif && exif.lat != null) {
+        exifCandidate = { lat: exif.lat, lon: exif.lon, takenAt: exif.takenAt || null };
+        // EXIF outranks a live fix (§4.2). It replaces a GPS proposal, and it
+        // replaces nothing the user chose by hand — a deliberate edit stands.
+        if (cap.lat == null || cap.locFrom === 'gps') {
+          setLocation(exif.lat, exif.lon, 'exif', { takenAt: exif.takenAt });
+        }
+      } else if (exif && exif.takenAt && !cap.locTakenAt) {
+        // No GPS but a timestamp: still worth having for `last_verified_at`.
+        cap.locTakenAt = exif.takenAt;
+      }
+    } catch (e) {
+      showSaveError(e.message || 'Could not read that photo.');
+    }
+  }
+  renderThumbs();
+  renderSaveState();
+}
+
+/** The photos already in `user-landmark-photos` for this place, so they can be
+ *  removed from the tool. That is HOW TO TEST 10, and it is also the only way
+ *  to prove the upload path is right: the delete policy is
+ *  `(storage.foldername(name))[1] = auth.uid()`, so a photo stored under the
+ *  wrong path uploads fine and silently refuses to delete. */
+async function loadStoredMedia(landmarkId) {
+  cap.stored = [];
+  if (!navigator.onLine) return;
+  const { data } = await db.from('landmark_media')
+    .select('id,media_url').eq('landmark_id', landmarkId).eq('user_id', session.user.id);
+  cap.stored = (data || []).map((m) => ({
+    id: m.id,
+    media_url: m.media_url,
+    // The object path is everything after the public-URL prefix.
+    path: (m.media_url || '').split('/user-landmark-photos/')[1] || null,
+  }));
+}
+
+async function deleteStored(entry) {
+  try {
+    if (entry.path) {
+      const { error } = await db.storage.from('user-landmark-photos').remove([entry.path]);
+      // A refusal here is the uid-path bug, and it must be loud rather than
+      // leaving an orphaned object behind a deleted row.
+      if (error) throw new Error('storage: ' + error.message);
+    }
+    const { error: rErr } = await db.from('landmark_media').delete().eq('id', entry.id);
+    if (rErr) throw new Error('landmark_media: ' + rErr.message);
+    cap.stored = cap.stored.filter((e) => e.id !== entry.id);
+    renderThumbs();
+  } catch (e) {
+    showSaveError(e.message || 'Could not delete that photo.');
+  }
+}
+
+function renderThumbs() {
+  const box = $('f-thumbs');
+  box.querySelectorAll('.thumb').forEach((n) => n.remove());
+
+  // Already uploaded, on a re-opened row. Shown first, because they are the
+  // ones that exist for everyone else.
+  (cap.stored || []).forEach((entry) => {
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    const img = document.createElement('img');
+    img.src = entry.media_url;
+    d.appendChild(img);
+    const tag = document.createElement('div');
+    tag.className = 'cov'; tag.textContent = 'UPLOADED';
+    d.appendChild(tag);
+    const x = document.createElement('button');
+    x.className = 'x'; x.textContent = '×';
+    x.onclick = () => deleteStored(entry);
+    d.appendChild(x);
+    box.insertBefore(d, $('btn-camera'));
+  });
+
+  cap.photos.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(p.blob);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    d.appendChild(img);
+    if (i === 0) {
+      const c = document.createElement('div');
+      c.className = 'cov'; c.textContent = 'COVER';
+      d.appendChild(c);
+    }
+    const x = document.createElement('button');
+    x.className = 'x'; x.textContent = '×';
+    x.onclick = () => { cap.photos.splice(i, 1); renderThumbs(); renderSaveState(); };
+    d.appendChild(x);
+    box.insertBefore(d, $('btn-camera'));
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   8. Duplicates — keyed off the PLACE's coordinate (§9)
+   ════════════════════════════════════════════════════════════════════════ */
+
+let dupeTimer = null;
+function scheduleDuplicateCheck() {
+  clearTimeout(dupeTimer);
+  dupeTimer = setTimeout(runDuplicateCheck, 700);
+}
+
+let dupeCandidates = [];
+let dupeDismissed = false;
+
+async function runDuplicateCheck() {
+  $('dupe-note').hidden = true;
+  dupeCandidates = [];
+  if (cap.lat == null || !navigator.onLine || cap.editing) return;
+  try {
+    // ±0.002° ≈ 220m. A bounding box, because no PostGIS RPC is exposed to the
+    // publishable key and a box is enough to catch a re-capture.
+    const { data, error } = await db.from('landmarks')
+      .select('id,name,latitude,longitude,cover_image_url')
+      .gte('latitude',  cap.lat - 0.002).lte('latitude',  cap.lat + 0.002)
+      .gte('longitude', cap.lon - 0.002).lte('longitude', cap.lon + 0.002)
+      .limit(20);
+    if (error) return;
+    const typed = cap.name.trim().toLowerCase();
+    dupeCandidates = (data || [])
+      .map((r) => ({ ...r, km: haversineKm(cap.lat, cap.lon, r.latitude, r.longitude) }))
+      .filter((r) => r.km <= 0.15)
+      .filter((r) => !typed || nameLooksSame(typed, (r.name || '').toLowerCase()))
+      .sort((a, b) => a.km - b.km);
+    if (dupeCandidates.length && !dupeDismissed) {
+      $('dupe-note').textContent = dupeCandidates.length
+        + ' place' + (dupeCandidates.length === 1 ? '' : 's') + ' within 150m look similar. Tap Save to review.';
+      $('dupe-note').hidden = false;
+    }
+  } catch { /* offline or refused — §9 says skip rather than block a capture */ }
+}
+
+/** Close enough to be worth asking about, not close enough to decide. */
+function nameLooksSame(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 4 && b.includes(a)) return true;
+  if (b.length >= 4 && a.includes(b)) return true;
+  const ta = new Set(a.split(/\s+/).filter((w) => w.length >= 4));
+  const tb = new Set(b.split(/\s+/).filter((w) => w.length >= 4));
+  for (const w of ta) if (tb.has(w)) return true;
+  return false;
+}
+
+function showDuplicateSheet() {
+  $('dupe-options').innerHTML = '';
+  dupeCandidates.slice(0, 6).forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = (r.name || 'Unnamed') + '<small>' + Math.round(r.km * 1000) + 'm away · '
+      + (r.cover_image_url ? 'has a cover' : 'no cover — worth a photo') + '</small>';
+    b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
+    $('dupe-options').appendChild(b);
+  });
+  $('dupe-sheet').hidden = false;
+}
+$('dupe-close').onclick = () => { $('dupe-sheet').hidden = true; };
+$('dupe-different').onclick = () => { dupeDismissed = true; $('dupe-sheet').hidden = true; $('dupe-note').hidden = true; doSave(); };
+
+/* ════════════════════════════════════════════════════════════════════════
+   9. The completeness gate, and the row — §8 and §4
+
+   Complete → live. Short of it → `is_hidden: true`, `approval_status:
+   'pending'`, and it turns up under "Finish these". Both columns, because they
+   gate two different paths: `TravelPlanSyncManager` filters `is_hidden`, and
+   `landmarks_near` filters `is_hidden AND approval_status AND city_id IS NOT
+   NULL`. The city is in the gate because of that third condition.
+   ════════════════════════════════════════════════════════════════════════ */
+
+function isComplete() {
+  return !!cap.name.trim()
+      && cap.lat != null && cap.lon != null
+      && !!cap.category
+      && !!cap.cityId
+      // A re-opened row's stored cover counts. Otherwise finishing a capture
+      // from "Finish these" would demand a second photograph of a place he is
+      // no longer standing in.
+      && (cap.photos.length >= 1 || cap.hadCover === true);
+}
+
+/** Never a dead button: the reason is on screen. */
+function renderSaveState() {
+  const why = [];
+  if (!cap.name.trim()) why.push('a name');
+  if (cap.lat == null) why.push(liveFix ? 'a location' : 'a location (waiting for GPS)');
+  if (!cap.category) why.push('a category');
+  if (!cap.cityId && cap.lat != null) why.push('a city');
+  if (!cap.photos.length && cap.hadCover !== true) why.push('a photo');
+
+  const btn = $('btn-save');
+  // A capture short of live is still worth keeping — that is the whole point of
+  // "Finish these" (§8). But **`landmarks.category` is NOT NULL with no
+  // default** (read off the live schema, 19 Sep), so a category is a save-time
+  // requirement rather than only a completeness one. The alternative — writing
+  // 'Other' as a placeholder — would be indistinguishable later from someone
+  // deciding the place really is Other, and the chips are one tap away.
+  const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category;
+  btn.disabled = !canSave;
+  btn.textContent = isComplete() ? 'Save place' : 'Save as incomplete';
+  $('save-why').textContent = !canSave
+    ? ('Needs ' + why.slice(0, 2).join(' and '))
+    : (isComplete() ? 'Goes live straight away' : ('Will need ' + why.join(', ') + ' to go live'));
+}
+
+function buildRow() {
+  const nowISO = new Date().toISOString();
+  const complete = isComplete();
+  return {
+    id: cap.id,
+    name: cap.name.trim(),
+    category: cap.category || null,
+    latitude: cap.lat,
+    longitude: cap.lon,
+    city_id: cap.cityId,
+    description: (cap.description.trim() || cap.note.trim() || null),
+    address: cap.address.trim() || null,
+    // **`operating_hours` jsonb, not an `opening_hours` text column** — there
+    // is no such column, and the shape is the one the CMS writes and
+    // `Utilities/OpeningHours.swift` parses. `hours_source` is CHECKed against
+    // google|user|admin, so a typed line is `user`.
+    operating_hours: cap.hours.trim() ? { weekdayDescriptions: [cap.hours.trim()] } : null,
+    hours_source: cap.hours.trim() ? 'user' : null,
+    building_name: cap.building.trim() || null,
+    // **NOT NULL with a `'{}'` default** — an empty array, never null.
+    signature_dishes: cap.dishes.trim()
+      ? cap.dishes.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    photographer_name: profile.username || null,
+    // REQUIRED — it is half the UPDATE policy, so a null here means he cannot
+    // edit his own capture from a non-admin session. Preserved rather than
+    // overwritten when an admin opens somebody else's row: re-stamping it would
+    // quietly transfer authorship.
+    submitted_by: cap.submittedBy || session.user.id,
+    coordinate_source: coordinateSource(),
+    // **ALWAYS set, all three sources.** It is `audit-place-coordinates`'
+    // don't-touch flag (`.is("coordinate_verified_at", null)` selects its work),
+    // not a truth claim. Leaving it null on a hand-placed pin would put exactly
+    // the coordinate just corrected first in line to be replaced by the Places
+    // API this tool exists to escape. `coordinate_source` carries the truth.
+    coordinate_verified_at: nowISO,
+    // When the PLACE was seen, which is the staleness question. The photo's own
+    // time when EXIF gave one — more honest than now().
+    last_verified_at: cap.locTakenAt || nowISO,
+    // **`user`, not `catalogue`.** Nine automated writers exclude user-origin
+    // rows; `catalogue` walks past every one of them and a capture would have
+    // its description replaced within the hour and a `google_place_id` written
+    // into it within the week. `docs/briefs/CRON-WRITE-AUDIT.md`.
+    origin: 'user',
+    place_kind: 'place',
+    approval_status: complete ? 'approved' : 'pending',
+    is_hidden: !complete,
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   10. Save — queue first, upload when there is a connection
+   ════════════════════════════════════════════════════════════════════════ */
+
+$('btn-save').onclick = () => {
+  if (dupeCandidates.length && !dupeDismissed && !cap.editing) { showDuplicateSheet(); return; }
+  doSave();
+};
+
+async function doSave() {
+  $('save-error').hidden = true;
+  try {
+    const pending = await idbAll('queue');
+    const queuedPhotos = pending.reduce((n, r) => n + (r.photos ? r.photos.length : 0), 0);
+    if (queuedPhotos + cap.photos.length > QUEUE_PHOTO_CAP) {
+      showSaveError('The queue is holding ' + queuedPhotos + ' photos. Get online and let it drain before adding more.');
+      return;
+    }
+
+    await idbPut('queue', {
+      id: cap.id,
+      row: buildRow(),
+      // Blobs survive a reload; `sessionStorage` and memory would not.
+      photos: cap.photos.map((p) => ({
+        photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
+      })),
+      state: 'pending', attempts: 0, lastError: null, at: Date.now(),
+    });
+
+    resetForm();
+    await refreshQueueBadge();
+    drainQueue();
+  } catch (e) {
+    showSaveError(e.message || 'Could not save that locally.');
+  }
+}
+
+function showSaveError(msg) { $('save-error').textContent = msg; $('save-error').hidden = false; }
+
+/** The form resets and the GPS watch stays alive, so the next place is one tap
+ *  away (§10). A new `id` is minted here, not at upload. */
+function resetForm() {
+  cap = blank();
+  exifCandidate = null;
+  dupeCandidates = []; dupeDismissed = false;
+  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-hours', 'f-building', 'f-dishes']
+    .forEach((id) => { $(id).value = ''; });
+  document.querySelectorAll('#f-categories .chip')
+    .forEach((c) => c.setAttribute('aria-pressed', 'false'));
+  renderThumbs();
+  $('dupe-note').hidden = true;
+  // A live fix already in hand is the standing-here posture, so propose it
+  // again rather than making him wait for the watch to tick.
+  if (liveFix && liveFix.accuracy <= GPS_ACCURACY_LIMIT_M) {
+    setLocation(liveFix.lat, liveFix.lon, 'gps', { accuracy: liveFix.accuracy });
+  } else {
+    renderLocation();
+  }
+}
+
+/* ── the uploader ─────────────────────────────────────────────────────── */
+
+let draining = false;
+
+async function drainQueue() {
+  if (draining || !navigator.onLine || !session) return;
+  draining = true;
+  try {
+    const items = await idbAll('queue');
+    for (const item of items) {
+      if (item.state === 'failed') continue;
+      try {
+        await uploadOne(item);
+        await idbDelete('queue', item.id);
+      } catch (e) {
+        item.attempts = (item.attempts || 0) + 1;
+        item.lastError = e.message || String(e);
+        // Five, then surface it rather than retrying forever. Never silently
+        // dropped: he stood somewhere to make it.
+        item.state = item.attempts >= 5 ? 'failed' : 'pending';
+        await idbPut('queue', item);
+      }
+    }
+  } finally {
+    draining = false;
+    await refreshQueueBadge();
+    if ($('pane-finish').hidden === false) loadFinishList();
+  }
+}
+
+async function uploadOne(item) {
+  const row = { ...item.row };
+  const photos = item.photos || [];
+  const uid = session.user.id;
+
+  // **Cover first**, because the row carries its URL. `landmark-covers` at
+  // `<landmark_id>/cover.jpg` — that bucket's policies key on the bucket, not
+  // on a uid path segment.
+  if (photos.length) {
+    const coverPath = row.id + '/cover.jpg';
+    const { error: cErr } = await db.storage.from('landmark-covers')
+      .upload(coverPath, photos[0].blob, { contentType: 'image/jpeg', upsert: true });
+    if (cErr) throw new Error('cover upload: ' + cErr.message);
+    row.cover_image_url = db.storage.from('landmark-covers').getPublicUrl(coverPath).data.publicUrl;
+  }
+
+  // **Upsert on the client-generated id.** A queued save that actually
+  // succeeded before the connection dropped, and gets retried, updates its own
+  // row instead of creating a second one (§6).
+  const { error: rowErr } = await db.from('landmarks').upsert(row, { onConflict: 'id' });
+  if (rowErr) throw new Error('landmarks: ' + rowErr.message);
+
+  // The rest go to the media strip. **The uid MUST be the first path segment**
+  // — the delete policy is `(storage.foldername(name))[1] = auth.uid()`, so a
+  // wrong path uploads fine and can never be removed.
+  //
+  // These are our own photographs, so the "Places image bytes must not be
+  // persisted" rule is not in play here. Said out loud because the next person
+  // reading an upload path in this codebase will wonder.
+  for (let i = 1; i < photos.length; i++) {
+    const p = photos[i];
+    if (!profile.username) break;             // `landmark_media.username` is NOT NULL
+    const path = uid + '/' + row.id + '/' + p.photoId + '.jpg';
+    const { error: uErr } = await db.storage.from('user-landmark-photos')
+      .upload(path, p.blob, { contentType: 'image/jpeg', upsert: true });
+    if (uErr) throw new Error('photo upload: ' + uErr.message);
+    const url = db.storage.from('user-landmark-photos').getPublicUrl(path).data.publicUrl;
+    const { error: mErr } = await db.from('landmark_media').upsert({
+      id: p.photoId,                          // same id on a retry — idempotent
+      landmark_id: row.id,
+      user_id: uid,
+      username: profile.username,
+      media_url: url,
+      media_type: 'image',
+      is_private: false,
+      width: p.width,
+      height: p.height,
+    }, { onConflict: 'id' });
+    if (mErr) throw new Error('landmark_media: ' + mErr.message);
+  }
+}
+
+async function refreshQueueBadge() {
+  const items = await idbAll('queue');
+  const badge = $('queue-badge');
+  const failed = items.filter((i) => i.state === 'failed').length;
+  badge.textContent = items.length ? String(items.length) : '0';
+  badge.className = 'badge' + (items.length ? '' : ' zero');
+  badge.title = failed ? (failed + ' need attention') : 'Pending uploads — tap to retry';
+}
+$('queue-badge').onclick = async () => {
+  // A manual retry also un-fails, because the reason is usually "there was no
+  // signal", and refusing to try again would strand a capture forever.
+  const items = await idbAll('queue');
+  for (const i of items) { if (i.state === 'failed') { i.state = 'pending'; i.attempts = 0; await idbPut('queue', i); } }
+  drainQueue();
+};
+
+window.addEventListener('online', drainQueue);
+
+/* ════════════════════════════════════════════════════════════════════════
+   11. Finish these — the second half of the normal workflow, not a tidy-up
+   ════════════════════════════════════════════════════════════════════════ */
+
+$('tab-capture').onclick = () => switchTab('capture');
+$('tab-finish').onclick  = () => switchTab('finish');
+
+function switchTab(which) {
+  const cpt = which === 'capture';
+  $('tab-capture').setAttribute('aria-selected', String(cpt));
+  $('tab-finish').setAttribute('aria-selected', String(!cpt));
+  $('pane-capture').hidden = !cpt;
+  $('pane-finish').hidden = cpt;
+  $('savebar').hidden = !cpt;
+  if (!cpt) loadFinishList();
+}
+
+async function loadFinishList() {
+  const list = $('finish-list');
+  list.innerHTML = '<p class="sub">Loading…</p>';
+
+  // Anything still in the queue is also unfinished business, and it is the only
+  // copy that exists — show it first rather than making it invisible until it
+  // uploads.
+  const queued = await idbAll('queue');
+  let rows = [];
+  if (navigator.onLine) {
+    // `is_admin` decides only whether rows submitted by someone else may show.
+    // It does not gate capture.
+    let q = db.from('landmarks')
+      .select('id,name,category,latitude,longitude,city_id,cover_image_url,coordinate_source,is_hidden')
+      .eq('is_hidden', true).order('name').limit(100);
+    if (!profile.is_admin) q = q.eq('submitted_by', session.user.id);
+    const { data } = await q;
+    rows = data || [];
+  }
+
+  if (!queued.length && !rows.length) {
+    list.innerHTML = '<p class="sub">Nothing waiting. Every capture is live.</p>';
+    return;
+  }
+
+  list.innerHTML = '';
+  queued.forEach((q) => {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = '<h3>' + escapeHtml(q.row.name || 'Unnamed') + '</h3>'
+      + '<p>' + (q.state === 'failed'
+          ? ('Needs attention — ' + escapeHtml(q.lastError || 'upload failed'))
+          : 'Waiting to upload · ' + (q.photos ? q.photos.length : 0) + ' photo(s)') + '</p>';
+    list.appendChild(d);
+  });
+
+  rows.forEach((r) => {
+    const missing = [];
+    if (!r.category) missing.push('category');
+    if (!r.city_id) missing.push('city');
+    if (!r.cover_image_url) missing.push('photo');
+    if (r.latitude == null) missing.push('location');
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
+      + '<p>' + (missing.length ? ('Needs ' + missing.join(', ')) : 'Ready — reopen and save to go live') + '</p>';
+    d.onclick = () => openExisting(r.id);
+    list.appendChild(d);
+  });
+}
+
+/** Reopening loads the row back into the form. Saving re-runs the gate and, if
+ *  it now passes, flips `is_hidden` to false — that is the whole review
+ *  workflow, and it happens on the bus home. */
+async function openExisting(id) {
+  const { data, error } = await db.from('landmarks').select('*').eq('id', id).maybeSingle();
+  // `select('*')` so `submitted_by`, `cover_image_url` and the More fields all
+  // come back — this is one row on demand, not a list.
+  if (error || !data) { showSaveError('Could not open that place.'); return; }
+  cap = blank();
+  cap.id = data.id;
+  cap.editing = true;
+  cap.name = data.name || '';
+  cap.category = data.category || '';
+  cap.lat = data.latitude; cap.lon = data.longitude;
+  // The label follows the STORED source, so a pin corrected a week ago still
+  // reads "Edited by hand" rather than silently claiming to be verified.
+  cap.locFrom = data.coordinate_source === 'manual_entry_verified' ? 'exif' : 'manual';
+  cap.locTakenAt = data.last_verified_at || null;
+  cap.cityId = data.city_id || null;
+  cap.description = data.description || '';
+  cap.address = data.address || '';
+  cap.hours = data.opening_hours || '';
+  cap.building = data.building_name || '';
+  cap.dishes = Array.isArray(data.signature_dishes) ? data.signature_dishes.join(', ') : '';
+
+  $('f-name').value = cap.name;
+  $('f-desc').value = cap.description;
+  $('f-address').value = cap.address;
+  $('f-hours').value = cap.hours;
+  $('f-building').value = cap.building;
+  $('f-dishes').value = cap.dishes;
+  document.querySelectorAll('#f-categories .chip').forEach((c) =>
+    c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
+
+  if (cap.cityId) {
+    const c = cities.find((x) => x.id === cap.cityId);
+    if (c) { cap.cityName = c.name; cap.cityDistanceKm = cap.lat == null ? 0 : haversineKm(cap.lat, cap.lon, c.latitude, c.longitude); }
+  } else { pickNearestCity(); }
+
+  // An existing cover is not re-downloaded into the queue — the gate counts a
+  // stored one. `photos` stays empty unless new ones are added.
+  cap.photos = [];
+  cap.hadCover = !!data.cover_image_url;
+  cap.submittedBy = data.submitted_by || null;
+  await loadStoredMedia(id);
+  renderThumbs();
+  renderLocation();
+  switchTab('capture');
+  window.scrollTo(0, 0);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   12. Boot
+   ════════════════════════════════════════════════════════════════════════ */
+
+['f-name','f-note','f-desc','f-address','f-hours','f-building','f-dishes'].forEach((id) => {
+  $(id).addEventListener('input', () => {
+    const key = { 'f-name':'name','f-note':'note','f-desc':'description','f-address':'address',
+                  'f-hours':'hours','f-building':'building','f-dishes':'dishes' }[id];
+    cap[key] = $(id).value;
+    if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
+    renderSaveState();
+  });
+});
+
+/** **From `public.tags`, never a hard-coded list** (prompt 6c). A BEFORE INSERT
+ *  trigger validates `category` against `display_name` where
+ *  `dimension='category' AND status='active'` and raises `check_violation`
+ *  otherwise — so a baked-in list drifts into save-time failures the moment a
+ *  category is retired. Four deprecated values are still on live rows and would
+ *  fail today. Cached for offline. */
+async function loadCategories() {
+  const cached = await cacheGet('categories');
+  if (cached) { categories = cached.value; renderCategories(); }
+  if (!navigator.onLine) return;
+  const { data } = await db.from('tags')
+    .select('display_name').eq('dimension', 'category').eq('status', 'active')
+    .order('display_name');
+  if (data && data.length) {
+    categories = data.map((t) => t.display_name);
+    await cacheSet('categories', categories);
+    renderCategories();
+  }
+}
+
+function renderCategories() {
+  const box = $('f-categories');
+  box.innerHTML = '';
+  categories.forEach((name) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = name;
+    b.setAttribute('aria-pressed', String(cap.category === name));
+    b.onclick = () => {
+      cap.category = cap.category === name ? '' : name;
+      box.querySelectorAll('.chip').forEach((c) =>
+        c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
+      renderSaveState();
+    };
+    box.appendChild(b);
+  });
+}
+
+/** 650 rows, ~30KB. Cached and refreshed when older than seven days AND online. */
+async function loadCities() {
+  const cached = await cacheGet('cities');
+  if (cached) cities = cached.value;
+  const stale = !cached || (Date.now() - cached.at) > 7 * 864e5;
+  if (navigator.onLine && stale) {
+    const { data } = await db.from('cities').select('id,name,latitude,longitude,country_code').limit(2000);
+    if (data && data.length) { cities = data; await cacheSet('cities', cities); }
+  }
+}
+
+async function loadProfile() {
+  const { data } = await db.from('profiles')
+    .select('username,is_admin').eq('id', session.user.id).maybeSingle();
+  profile.username = (data && data.username) || null;
+  profile.is_admin = !!(data && data.is_admin);
+  if (!profile.username) {
+    // `landmark_media.username` is NOT NULL, so a photo cannot be attached
+    // without one. Say so here rather than failing at upload time.
+    $('profile-warning').textContent =
+      'This account has no username, so extra photos cannot be attached. The cover still works. Set a username in the app or the CMS.';
+    $('profile-warning').hidden = false;
+  }
+}
+
+async function boot() {
+  idb = await openIDB();
+
+  const { data: { session: s } } = await db.auth.getSession();
+  if (s) await showApp(s);
+  db.auth.onAuthStateChange(async (_ev, next) => {
+    if (next && !session) await showApp(next);
+    if (!next) { session = null; $('app').hidden = true; $('login').hidden = false; }
+  });
+
+  // The service worker is what makes a cold open in a basement work at all.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/field-sw.js', { scope: '/' }).catch(() => {});
+  }
+
+  // Safari caps script-writable storage at seven days without interaction for
+  // an ordinary tab, so an uninstalled tool can lose a queue between outings.
+  // Standalone is exempt.
+  const standalone = window.navigator.standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches;
+  if (!standalone && !localStorage.getItem('field-install-dismissed')) {
+    $('install-hint').hidden = false;
+  }
+  $('install-dismiss').onclick = () => {
+    localStorage.setItem('field-install-dismissed', '1');
+    $('install-hint').hidden = true;
+  };
+}
+
+async function showApp(s) {
+  session = s;
+  $('login').hidden = true;
+  $('app').hidden = false;
+  await Promise.all([loadProfile(), loadCategories(), loadCities()]);
+  renderCategories();
+  renderLocation();
+  renderSaveState();
+  await refreshQueueBadge();
+  watchGPS();
+  drainQueue();
+}
+
+boot();
+</script>
+</body>
+</html>
