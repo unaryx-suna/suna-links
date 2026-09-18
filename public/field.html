@@ -123,6 +123,24 @@
     border-radius: 12px; padding: 12px 14px; font-size: 13px; margin: 12px 0;
   }
   details summary { color: var(--sand); font-size: 14px; padding: 12px 0; cursor: pointer; }
+  /* Opening hours grid */
+  .hrow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .hrow:last-child { border-bottom: 0; }
+  .hday { width: 58px; flex: none; padding-top: 6px; }
+  .hday label { margin: 0; font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+  .hday input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--sand); margin: 0; }
+  .hbody { flex: 1; min-width: 0; }
+  .hperiod { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  /* `color-scheme: dark` so the native wheel is readable on brandInk. */
+  .hperiod input[type=time] {
+    color-scheme: dark; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 9px; font-size: 15px; font-family: inherit; width: auto; flex: none;
+  }
+  .hperiod .dash { color: var(--dim); font-size: 13px; }
+  .hperiod .drop { background: none; color: var(--dim); font-size: 16px; padding: 0 4px; }
+  .hinherit, .hclosed { font-size: 13px; color: var(--dim); padding-top: 7px; }
+  .hinherit button, .hadd { background: none; color: var(--sand); font-size: 13px; padding: 2px 0; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -156,6 +174,10 @@
     <div class="tabs">
       <button class="tab" id="tab-capture" aria-selected="true">Capture</button>
       <button class="tab" id="tab-finish" aria-selected="false">Finish these</button>
+      <!-- §2 — hidden entirely for a non-admin. Every write on it is
+           `is_admin()`-gated, and a tab that can only produce errors is worse
+           than no tab. -->
+      <button class="tab" id="tab-country" aria-selected="false" hidden>Country</button>
     </div>
     <div class="row">
       <button class="badge zero" id="queue-badge" title="Pending uploads">0</button>
@@ -196,6 +218,14 @@
     <label>City</label>
     <button class="opt" id="city-chip" style="margin:0">Waiting for a location…</button>
 
+    <!-- §2 — the star lives on the CAPTURE form, not the country tab: it is a
+         property of this place, and the id has to exist before it can be
+         appended to `countries.featured_landmark_ids`. -->
+    <button class="opt" id="f-featured" style="margin:18px 0 0" aria-pressed="false">
+      ☆ Feature this place on its country screen
+      <small>Fills the Top Places block. Added after the place uploads.</small>
+    </button>
+
     <label for="f-note">A line about this place</label>
     <textarea id="f-note" placeholder="What is it, in one line?"></textarea>
 
@@ -205,8 +235,13 @@
       <textarea id="f-desc" placeholder="Longer, if you have it. Overrides the line above."></textarea>
       <label for="f-address">Address</label>
       <input id="f-address" type="text" autocomplete="off">
-      <label for="f-hours">Opening hours</label>
-      <input id="f-hours" type="text" placeholder="Mon–Sun 09:00–18:00" autocomplete="off">
+      <label>Opening hours</label>
+      <p class="note" style="margin:0 0 8px">Set one day. The rest follow until you change one.</p>
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <button class="ghost" id="hours-24" style="flex:1;padding:9px 12px;font-size:13px">Open 24 hours</button>
+        <button class="ghost" id="hours-clear" style="flex:1;padding:9px 12px;font-size:13px">Clear all</button>
+      </div>
+      <div id="hours-grid"></div>
       <label for="f-building">Building name</label>
       <input id="f-building" type="text" autocomplete="off">
       <label for="f-dishes">Signature dishes <span style="color:var(--dim)">comma separated</span></label>
@@ -222,6 +257,63 @@
     <h1>Finish these</h1>
     <p class="sub">Your captures that are not live yet. Tap one to complete it.</p>
     <div id="finish-list"></div>
+  </div>
+
+  <!-- country -->
+  <div class="wrap" id="pane-country" hidden>
+    <h1>Welcome to …</h1>
+    <p class="sub">229 countries are selectable. Two have a hero image, two have
+      apps, two have a food. This is the first screen of a trip.</p>
+
+    <label>Country</label>
+    <button class="opt" id="country-chip" style="margin:0">Waiting for a location…</button>
+
+    <label>Hero photo</label>
+    <div class="thumbs" id="country-hero-thumbs">
+      <button class="addphoto" id="btn-country-hero">📷<br>Hero</button>
+    </div>
+    <input id="in-country-hero" type="file" accept="image/*" hidden>
+
+    <label for="c-subtitle">Subtitle</label>
+    <textarea id="c-subtitle" placeholder="One line about this country, in the app's voice."></textarea>
+
+    <label>Food to try</label>
+    <div class="card" style="margin-bottom:10px">
+      <div class="thumbs" id="country-food-thumbs">
+        <button class="addphoto" id="btn-country-food">📷<br>Dish</button>
+      </div>
+      <input id="in-country-food" type="file" accept="image/*" hidden>
+      <input id="c-food-name" type="text" placeholder="What is it called?" style="margin-top:10px">
+      <input id="c-food-note" type="text" placeholder="One line — where, or why" style="margin-top:8px">
+      <button class="primary" id="btn-add-food" style="margin-top:10px">Add this food</button>
+    </div>
+
+    <label>Essential apps</label>
+    <div id="country-apps-list"></div>
+    <button class="ghost" id="btn-add-app" style="width:100%">Add an app from the library</button>
+
+    <p class="err" id="country-error" hidden></p>
+    <p class="note" id="country-note"></p>
+  </div>
+
+  <!-- app picker -->
+  <div class="sheet" id="app-sheet" hidden>
+    <div>
+      <h1 style="margin-top:0">Which app?</h1>
+      <p class="sub" id="app-sheet-sub">From the shared library.</p>
+      <div id="app-options"></div>
+      <button class="linkish" id="app-sheet-close" style="margin-top:8px">Close</button>
+    </div>
+  </div>
+
+  <!-- country picker -->
+  <div class="sheet" id="country-sheet" hidden>
+    <div>
+      <h1 style="margin-top:0">Which country?</h1>
+      <p class="sub">The five nearest to this place's coordinate.</p>
+      <div id="country-options"></div>
+      <button class="linkish" id="country-sheet-close" style="margin-top:8px">Close</button>
+    </div>
   </div>
 
   <div class="savebar" id="savebar">
@@ -313,7 +405,13 @@ const blank = () => ({
   locAccuracy: null,           // metres, live fix only
   locTakenAt: null,            // EXIF DateTimeOriginal, ISO
   cityId: null, cityName: null, cityDistanceKm: null,
-  note: '', description: '', address: '', hours: '', building: '', dishes: '',
+  note: '', description: '', address: '', building: '', dishes: '',
+  /** §1 — `{ [day 0-6]: { open: boolean, periods: [{from:'09:00', to:'18:00'}] } }`.
+   *  **Day 0 is Sunday**, matching `periods[].day`; `weekdayDescriptions` is
+   *  Monday-first and is a different index entirely. A day ABSENT from this map
+   *  inherits the nearest earlier explicit open day — that is where the speed
+   *  is, and it is why open-all-week is two pickers rather than fourteen. */
+  hours: {},
   /** {photoId, blob, width, height, isCover} — photoId is generated once so a
    *  retry re-uploads to the SAME path and upserts the SAME media row. */
   photos: [],
@@ -325,6 +423,10 @@ const blank = () => ({
   submittedBy: null,
   /** Already-uploaded media on a re-opened row: {id, media_url, path}. */
   stored: [],
+  /** §2 — append this place to its country's `featured_landmark_ids` after the
+   *  landmark row uploads. The id must exist first, which is why this is a flag
+   *  carried through the queue rather than a write made at save time. */
+  featured: false,
 });
 let cap = blank();
 
@@ -540,6 +642,223 @@ function reencode(file) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   3b. Opening hours — a grid that writes real periods (FIELD-ROUND-2 §1)
+
+   Three conventions, read off live prod rows rather than guessed. Getting any
+   of them wrong corrupts every row this writes:
+
+     1. `periods[].day` 0 = SUNDAY. `weekdayDescriptions` is MONDAY-first.
+        Different indexes; confusing them shifts every day by one.
+     2. A closed day has NO period. There is no "closed" flag; absence is the
+        signal, verified against a row whose description reads "Monday: Closed".
+     3. An overnight close lands on the NEXT day:
+        19:30 → 00:00 writes `close:{day:(open.day+1)%7, hour:0, minute:0}`.
+
+   Roughly one place in six already has split hours, so lunch-and-dinner is the
+   normal case here, not an edge.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/** Sunday-first, matching `periods[].day`. */
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** The order the editor and `weekdayDescriptions` both use. */
+const MON_FIRST = [1, 2, 3, 4, 5, 6, 0];
+
+/** The day whose hours `day` inherits, or null when it is explicit or first. */
+function inheritedFrom(day) {
+  const entry = cap.hours[day];
+  if (entry && entry.open === false) return null;              // explicitly closed
+  if (entry && entry.periods && entry.periods.length) return null;  // explicit
+  const idx = MON_FIRST.indexOf(day);
+  for (let i = idx - 1; i >= 0; i--) {
+    const d = MON_FIRST[i];
+    const e = cap.hours[d];
+    if (e && e.open !== false && e.periods && e.periods.length) return d;
+  }
+  return null;
+}
+
+/** The periods a day actually contributes, following inheritance. */
+function effectivePeriods(day) {
+  const entry = cap.hours[day];
+  if (entry && entry.open === false) return [];
+  if (entry && entry.periods && entry.periods.length) return entry.periods;
+  const src = inheritedFrom(day);
+  return src == null ? [] : (cap.hours[src].periods || []);
+}
+
+function hhmm(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || '');
+  return m ? { hour: +m[1], minute: +m[2] } : null;
+}
+
+/** "9:00 AM", "12:30 PM" — the form the existing rows use. */
+function ampm(t) {
+  const p = hhmm(t);
+  if (!p) return '';
+  const suffix = p.hour < 12 ? 'AM' : 'PM';
+  const h = p.hour % 12 === 0 ? 12 : p.hour % 12;
+  return h + ':' + String(p.minute).padStart(2, '0') + ' ' + suffix;
+}
+
+/** Both keys, or null when nothing was set. */
+function buildOperatingHours() {
+  const periods = [];
+  const descriptions = [];
+  let any = false;
+
+  for (const day of MON_FIRST) {
+    const ps = effectivePeriods(day);
+    const label = DAY_NAMES[day] + ': ';
+    if (!ps.length) {
+      // Only counts as "set" if the user explicitly closed it — otherwise a
+      // form nobody touched would claim the place is shut all week.
+      if (cap.hours[day] && cap.hours[day].open === false) any = true;
+      descriptions.push(label + 'Closed');
+      continue;
+    }
+    any = true;
+    const parts = [];
+    for (const p of ps) {
+      const o = hhmm(p.from), c = hhmm(p.to);
+      if (!o || !c) continue;
+      // Midnight or an earlier clock time means it closes the next day.
+      const overnight = (c.hour * 60 + c.minute) <= (o.hour * 60 + o.minute);
+      periods.push({
+        open:  { day, hour: o.hour, minute: o.minute },
+        close: { day: overnight ? (day + 1) % 7 : day, hour: c.hour, minute: c.minute },
+      });
+      parts.push(ampm(p.from) + ' – ' + ampm(p.to));
+    }
+    descriptions.push(label + parts.join(', '));
+  }
+
+  if (!any || !periods.length) {
+    // "Closed all week" with no open period is not a claim this tool lets you
+    // make by accident — it reads as untouched.
+    return periods.length ? { periods, weekdayDescriptions: descriptions } : null;
+  }
+  return { periods, weekdayDescriptions: descriptions };
+}
+
+/** The inverse, for re-opening a row from "Finish these". */
+function hoursFromOperating(operating) {
+  const out = {};
+  const ps = operating && Array.isArray(operating.periods) ? operating.periods : [];
+  if (!ps.length) return out;
+  for (const d of MON_FIRST) out[d] = { open: false, periods: [] };
+  for (const p of ps) {
+    const day = p && p.open ? p.open.day : null;
+    if (day == null || !out[day]) continue;
+    const pad = (n) => String(n).padStart(2, '0');
+    out[day].open = true;
+    out[day].periods.push({
+      from: pad(p.open.hour) + ':' + pad(p.open.minute),
+      to:   pad(p.close ? p.close.hour : 0) + ':' + pad(p.close ? p.close.minute : 0),
+    });
+  }
+  return out;
+}
+
+function renderHours() {
+  const box = $('hours-grid');
+  if (!box) return;
+  box.innerHTML = '';
+
+  for (const day of MON_FIRST) {
+    const entry = cap.hours[day];
+    const closed = !!(entry && entry.open === false);
+    const src = inheritedFrom(day);
+    const own = entry && entry.periods ? entry.periods : [];
+
+    const row = document.createElement('div');
+    row.className = 'hrow';
+
+    const left = document.createElement('div');
+    left.className = 'hday';
+    const lbl = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !closed;
+    // **The checkbox IS open/closed.** That was the ask — a checkbox, not a
+    // form. Unticking contributes no period, which is how the data says closed.
+    cb.onchange = () => {
+      if (cb.checked) {
+        cap.hours[day] = { open: true, periods: own.length ? own : [] };
+      } else {
+        cap.hours[day] = { open: false, periods: [] };
+      }
+      renderHours();
+    };
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(DAY_SHORT[day]));
+    left.appendChild(lbl);
+    row.appendChild(left);
+
+    const body = document.createElement('div');
+    body.className = 'hbody';
+
+    if (closed) {
+      const c = document.createElement('div');
+      c.className = 'hclosed';
+      c.textContent = 'Closed';
+      body.appendChild(c);
+    } else if (!own.length && src != null) {
+      // Inherit is where the speed is: open-all-week is two pickers.
+      const line = document.createElement('div');
+      line.className = 'hinherit';
+      line.appendChild(document.createTextNode('↳ same as ' + DAY_SHORT[src] + ' · '));
+      const b = document.createElement('button');
+      b.textContent = 'set its own';
+      b.onclick = () => {
+        // Copying the inherited times in is what breaks the link.
+        cap.hours[day] = {
+          open: true,
+          periods: (cap.hours[src].periods || []).map((p) => ({ ...p })),
+        };
+        renderHours();
+      };
+      line.appendChild(b);
+      body.appendChild(line);
+    } else {
+      const periods = own.length ? own : [{ from: '09:00', to: '18:00' }];
+      if (!own.length) cap.hours[day] = { open: true, periods };
+      periods.forEach((p, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'hperiod';
+        const from = document.createElement('input');
+        from.type = 'time'; from.value = p.from;
+        from.onchange = () => { p.from = from.value; };
+        const dash = document.createElement('span');
+        dash.className = 'dash'; dash.textContent = '–';
+        const to = document.createElement('input');
+        to.type = 'time'; to.value = p.to;
+        to.onchange = () => { p.to = to.value; };
+        wrap.appendChild(from); wrap.appendChild(dash); wrap.appendChild(to);
+        if (periods.length > 1) {
+          const x = document.createElement('button');
+          x.className = 'drop'; x.textContent = '×';
+          x.onclick = () => { periods.splice(i, 1); renderHours(); };
+          wrap.appendChild(x);
+        }
+        body.appendChild(wrap);
+      });
+      // Capped at two: lunch and dinner is the case this exists for.
+      if (periods.length < 2) {
+        const add = document.createElement('button');
+        add.className = 'hadd';
+        add.textContent = '+ second period (lunch & dinner)';
+        add.onclick = () => { periods.push({ from: '17:00', to: '23:00' }); renderHours(); };
+        body.appendChild(add);
+      }
+    }
+
+    row.appendChild(body);
+    box.appendChild(row);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    4. Coordinates — §4.2
 
    Precedence: EXIF → live GPS → pasted link. **EXIF first, not GPS first.**
@@ -728,6 +1047,13 @@ $('city-chip').onclick = () => {
   $('city-sheet').hidden = false;
 };
 $('city-sheet-close').onclick = () => { $('city-sheet').hidden = true; };
+
+// 00:00 → 00:00 on every day: the shape the existing 24-hour rows use.
+$('hours-24').onclick = () => {
+  for (const d of MON_FIRST) cap.hours[d] = { open: true, periods: [{ from: '00:00', to: '00:00' }] };
+  renderHours();
+};
+$('hours-clear').onclick = () => { cap.hours = {}; renderHours(); };
 
 /* ════════════════════════════════════════════════════════════════════════
    6. The location editor — reachable in EVERY state, including verified ones
@@ -1107,8 +1433,16 @@ function buildRow() {
     // is no such column, and the shape is the one the CMS writes and
     // `Utilities/OpeningHours.swift` parses. `hours_source` is CHECKed against
     // google|user|admin, so a typed line is `user`.
-    operating_hours: cap.hours.trim() ? { weekdayDescriptions: [cap.hours.trim()] } : null,
-    hours_source: cap.hours.trim() ? 'user' : null,
+    // §1 — BOTH keys, every time. `periods` is the computable half; nothing
+    // downstream can answer "open now" or "closes in 40 minutes" from a
+    // sentence, which is why every place captured before this has a blank hours
+    // line. `weekdayDescriptions` is GENERATED, never typed, in the same form
+    // the Google rows use so a field capture reads identically to one of those.
+    //
+    // Untouched stays null. An empty `periods` array is NOT written: absence
+    // and "closed all week" are different claims.
+    operating_hours: buildOperatingHours(),
+    hours_source: buildOperatingHours() ? 'admin' : null,
     building_name: cap.building.trim() || null,
     // **NOT NULL with a `'{}'` default** — an empty array, never null.
     signature_dishes: cap.dishes.trim()
@@ -1166,6 +1500,11 @@ async function doSave() {
       photos: cap.photos.map((p) => ({
         photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
       })),
+      kind: 'place',
+      featured: cap.featured,
+      // Resolved at SAVE time from the place's coordinate, not at upload time —
+      // by then `cap` has been reset for the next capture.
+      countryCode: countryCodeForCapture(),
       state: 'pending', attempts: 0, lastError: null, at: Date.now(),
     });
 
@@ -1179,17 +1518,28 @@ async function doSave() {
 
 function showSaveError(msg) { $('save-error').textContent = msg; $('save-error').hidden = false; }
 
+/** The country of the PLACE, from its own coordinate — never the device's. */
+function countryCodeForCapture() {
+  if (cap.lat == null || !cities.length) return null;
+  const nearest = nearestCities(cap.lat, cap.lon, 1)[0];
+  return nearest && nearest.country_code ? nearest.country_code.toUpperCase() : null;
+}
+
 /** The form resets and the GPS watch stays alive, so the next place is one tap
  *  away (§10). A new `id` is minted here, not at upload. */
 function resetForm() {
   cap = blank();
   exifCandidate = null;
   dupeCandidates = []; dupeDismissed = false;
-  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-hours', 'f-building', 'f-dishes']
+  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-building', 'f-dishes']
     .forEach((id) => { $(id).value = ''; });
   document.querySelectorAll('#f-categories .chip')
     .forEach((c) => c.setAttribute('aria-pressed', 'false'));
+  $('f-featured').setAttribute('aria-pressed', 'false');
+  $('f-featured').innerHTML = '☆ Feature this place on its country screen'
+    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   renderThumbs();
+  renderHours();
   $('dupe-note').hidden = true;
   // A live fix already in hand is the standing-here posture, so propose it
   // again rather than making him wait for the watch to tick.
@@ -1231,6 +1581,11 @@ async function drainQueue() {
 }
 
 async function uploadOne(item) {
+  // §2 — the queue carries country work too. Everything around it is unchanged:
+  // same badge, same five-attempt cap, same `online` retry, same first-failure
+  // error reporting.
+  if (item.kind && item.kind !== 'place') return uploadCountryWork(item);
+
   const row = { ...item.row };
   const photos = item.photos || [];
   const uid = session.user.id;
@@ -1280,6 +1635,96 @@ async function uploadOne(item) {
     }, { onConflict: 'id' });
     if (mErr) throw new Error('landmark_media: ' + mErr.message);
   }
+
+  // §2 — the featured star. **After** the landmark row, because the id has to
+  // exist before it can be referenced. Append, never replace, and never a
+  // duplicate: this column is a list of every featured place in the country,
+  // not just this one.
+  //
+  // Non-fatal. The place is saved; failing to star it must not re-queue the
+  // whole capture and upload the photographs again.
+  if (item.featured) {
+    try {
+      const code = (item.countryCode || '').toUpperCase();
+      if (code) {
+        const { data } = await db.from('countries')
+          .select('featured_landmark_ids').eq('code', code).maybeSingle();
+        const ids = (data && data.featured_landmark_ids) || [];
+        if (!ids.includes(row.id)) {
+          await db.from('countries')
+            .update({ featured_landmark_ids: [...ids, row.id] }).eq('code', code);
+        }
+      }
+    } catch (e) {
+      AppLoggerNoop(e);
+    }
+  }
+}
+
+/** The queue is the only place that would swallow this, so it is named rather
+ *  than an empty catch — a featured star that silently did not take is exactly
+ *  the kind of thing nobody notices. */
+function AppLoggerNoop(e) { console.warn('featured append failed', e); }
+
+/** Hero, food, subtitle and app attach — the four country writes. */
+async function uploadCountryWork(item) {
+  const c = item.country || {};
+  const code = c.code;
+  if (!code) throw new Error('queued country work with no country');
+
+  if (item.kind === 'country_hero') {
+    // **Fixed path, upsert.** One object per country, so a retry overwrites
+    // itself and replacing the hero never leaves a second file behind.
+    const path = code + '/hero.jpg';
+    const { error } = await db.storage.from('country-media')
+      .upload(path, c.blob, { contentType: 'image/jpeg', upsert: true });
+    if (error) throw new Error('hero upload: ' + error.message);
+    const url = db.storage.from('country-media').getPublicUrl(path).data.publicUrl;
+    // Cache-bust, because the path never changes: without it the app keeps
+    // showing the previous hero from its image cache.
+    const { error: uErr } = await db.from('countries')
+      .update({ hero_image_url: url + '?v=' + Date.now() }).eq('code', code);
+    if (uErr) throw new Error('countries: ' + uErr.message);
+    return;
+  }
+
+  if (item.kind === 'country_food') {
+    // The client uuid is BOTH the row id and the filename, so a retry lands on
+    // the same object and upserts the same row rather than making a twin.
+    const id = item.id;
+    let imageURL = null;
+    if (c.blob) {
+      const path = code + '/foods/' + id + '.jpg';
+      const { error } = await db.storage.from('country-media')
+        .upload(path, c.blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw new Error('food upload: ' + error.message);
+      imageURL = db.storage.from('country-media').getPublicUrl(path).data.publicUrl;
+    }
+    const { count } = await db.from('country_foods')
+      .select('id', { count: 'exact', head: true })
+      .eq('country_code', code).eq('is_active', true);
+    const { error: iErr } = await db.from('country_foods').upsert({
+      id, country_code: code, name: c.name, note: c.note,
+      image_url: imageURL, sort_order: count || 0, is_active: true,
+    }, { onConflict: 'id' });
+    if (iErr) throw new Error('country_foods: ' + iErr.message);
+    return;
+  }
+
+  if (item.kind === 'country_subtitle') {
+    const { error } = await db.from('countries')
+      .update({ description: c.description }).eq('code', code);
+    if (error) throw new Error('countries: ' + error.message);
+    return;
+  }
+
+  if (item.kind === 'country_app') {
+    const { error } = await db.from('country_apps').insert(c.row);
+    if (error) throw new Error('country_apps: ' + error.message);
+    return;
+  }
+
+  throw new Error('unknown queued kind: ' + item.kind);
 }
 
 async function refreshQueueBadge() {
@@ -1306,15 +1751,17 @@ window.addEventListener('online', drainQueue);
 
 $('tab-capture').onclick = () => switchTab('capture');
 $('tab-finish').onclick  = () => switchTab('finish');
+$('tab-country').onclick = () => switchTab('country');
 
 function switchTab(which) {
-  const cpt = which === 'capture';
-  $('tab-capture').setAttribute('aria-selected', String(cpt));
-  $('tab-finish').setAttribute('aria-selected', String(!cpt));
-  $('pane-capture').hidden = !cpt;
-  $('pane-finish').hidden = cpt;
-  $('savebar').hidden = !cpt;
-  if (!cpt) loadFinishList();
+  for (const t of ['capture', 'finish', 'country']) {
+    $('tab-' + t).setAttribute('aria-selected', String(t === which));
+    $('pane-' + t).hidden = t !== which;
+  }
+  // The save bar belongs to the capture form only.
+  $('savebar').hidden = which !== 'capture';
+  if (which === 'finish') loadFinishList();
+  if (which === 'country') renderCountryTab();
 }
 
 async function loadFinishList() {
@@ -1346,6 +1793,18 @@ async function loadFinishList() {
   queued.forEach((q) => {
     const d = document.createElement('div');
     d.className = 'item';
+    // A country item has no `row` — name it for what it is rather than
+    // rendering "Unnamed" and looking like a broken capture.
+    if (q.kind && q.kind !== 'place') {
+      const what = { country_hero: 'Country hero photo', country_food: 'Country food',
+                     country_subtitle: 'Country subtitle', country_app: 'Country app' }[q.kind] || q.kind;
+      d.innerHTML = '<h3>' + escapeHtml(what) + ' · ' + escapeHtml((q.country && q.country.code) || '') + '</h3>'
+        + '<p>' + (q.state === 'failed'
+            ? 'Failed · ' + escapeHtml(q.lastError || 'upload failed')
+            : q.lastError ? 'Retrying · ' + escapeHtml(q.lastError) : 'Waiting to upload') + '</p>';
+      list.appendChild(d);
+      return;
+    }
     // **Say why on the FIRST failure, not the fifth.**
     //
     // `drainQueue` records `lastError` on every failure, but this only rendered
@@ -1398,14 +1857,13 @@ async function openExisting(id) {
   cap.cityId = data.city_id || null;
   cap.description = data.description || '';
   cap.address = data.address || '';
-  cap.hours = data.opening_hours || '';
+  cap.hours = hoursFromOperating(data.operating_hours);
   cap.building = data.building_name || '';
   cap.dishes = Array.isArray(data.signature_dishes) ? data.signature_dishes.join(', ') : '';
 
   $('f-name').value = cap.name;
   $('f-desc').value = cap.description;
   $('f-address').value = cap.address;
-  $('f-hours').value = cap.hours;
   $('f-building').value = cap.building;
   $('f-dishes').value = cap.dishes;
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
@@ -1423,6 +1881,7 @@ async function openExisting(id) {
   cap.submittedBy = data.submitted_by || null;
   await loadStoredMedia(id);
   renderThumbs();
+  renderHours();
   renderLocation();
   switchTab('capture');
   window.scrollTo(0, 0);
@@ -1434,13 +1893,293 @@ function escapeHtml(s) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   11b. The country screen — FIELD-ROUND-2 §2
+
+   229 countries are selectable; two have a hero, two have apps, two have a
+   food. It is the first screen of a trip and it is empty.
+
+   **Admin only, and hidden rather than disabled.** Every write here is
+   `is_admin()`-gated at the policy, so for anyone else this tab could only
+   produce errors — and a tab that only produces errors is worse than no tab.
+
+   **The country comes from the PLACE coordinate, never the device.** The cached
+   `cities` list already carries `country_code`, so the nearest city gives the
+   country for free. Confirmable, with a picker: at a land border, or planning
+   tomorrow from tonight's hotel, nearest is not always intended.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/** The country the tab is editing: { code, name }. */
+let country = null;
+/** Photos staged on the tab before they are queued. */
+let heroBlob = null, foodBlob = null;
+/** `country_apps` already attached, so the list can show them. */
+let countryApps = [];
+
+function nearestCountries(lat, lon, n = 5) {
+  const seen = new Set();
+  return nearestCities(lat, lon, 80)
+    .filter((c) => {
+      const code = (c.country_code || '').toUpperCase();
+      if (!code || seen.has(code)) return false;
+      seen.add(code);
+      return true;
+    })
+    .slice(0, n);
+}
+
+/** Derived from the capture's coordinate, like the city (§5). */
+function pickCountry() {
+  if (cap.lat == null || !cities.length) return;
+  const best = nearestCountries(cap.lat, cap.lon, 1)[0];
+  if (!best) return;
+  const code = (best.country_code || '').toUpperCase();
+  if (!code) return;
+  if (!country || country.code !== code) country = { code, name: code };
+}
+
+async function renderCountryTab() {
+  pickCountry();
+  $('country-error').hidden = true;
+
+  const chip = $('country-chip');
+  if (!country) {
+    chip.textContent = 'Capture a place first — the country comes from its coordinate';
+    $('country-note').textContent = '';
+    return;
+  }
+
+  // The name and the current subtitle, straight from the row.
+  if (navigator.onLine) {
+    const { data } = await db.from('countries')
+      .select('code,name,description,hero_image_url')
+      .eq('code', country.code).maybeSingle();
+    if (data) {
+      country.name = data.name || country.code;
+      $('c-subtitle').value = data.description || '';
+      $('country-note').textContent = data.hero_image_url
+        ? 'Hero image set.' : 'No hero image yet.';
+    }
+  }
+  chip.innerHTML = country.name + ' ▾<small>From the place\u2019s coordinate · tap to change</small>';
+  document.querySelector('#pane-country h1').textContent = 'Welcome to ' + country.name;
+  await loadCountryApps();
+}
+
+$('country-chip').onclick = () => {
+  if (cap.lat == null || !cities.length) return;
+  const opts = nearestCountries(cap.lat, cap.lon, 5);
+  $('country-options').innerHTML = '';
+  opts.forEach((c) => {
+    const code = (c.country_code || '').toUpperCase();
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = code + '<small>nearest city ' + escapeHtml(c.name) + ' · ' + c.km.toFixed(0) + ' km</small>';
+    b.onclick = () => {
+      country = { code, name: code };
+      $('country-sheet').hidden = true;
+      renderCountryTab();
+    };
+    $('country-options').appendChild(b);
+  });
+  $('country-sheet').hidden = false;
+};
+$('country-sheet-close').onclick = () => { $('country-sheet').hidden = true; };
+
+/* ── hero ─────────────────────────────────────────────────────────────── */
+
+$('btn-country-hero').onclick = () => $('in-country-hero').click();
+$('in-country-hero').onchange = async (e) => {
+  const file = (e.target.files || [])[0];
+  if (!file || !country) return;
+  try {
+    const { blob } = await reencode(file);     // same downscale as a place cover
+    heroBlob = blob;
+    // **A fixed path per country makes a retry idempotent**, and replacing the
+    // hero is just another upload to the same key — no second object.
+    await queueCountryWork({
+      kind: 'country_hero',
+      code: country.code,
+      blob,
+    });
+    countryNote('Hero queued.');
+    renderCountryThumb('country-hero-thumbs', 'btn-country-hero', blob);
+  } catch (err) { countryError(err.message || 'Could not read that photo.'); }
+};
+
+/* ── food ─────────────────────────────────────────────────────────────── */
+
+$('btn-country-food').onclick = () => $('in-country-food').click();
+$('in-country-food').onchange = async (e) => {
+  const file = (e.target.files || [])[0];
+  if (!file) return;
+  try {
+    const { blob } = await reencode(file);
+    foodBlob = blob;
+    renderCountryThumb('country-food-thumbs', 'btn-country-food', blob);
+  } catch (err) { countryError(err.message || 'Could not read that photo.'); }
+};
+
+$('btn-add-food').onclick = async () => {
+  if (!country) { countryError('Pick a country first.'); return; }
+  const name = $('c-food-name').value.trim();
+  if (!name) { countryError('A dish needs a name.'); return; }
+  await queueCountryWork({
+    kind: 'country_food',
+    code: country.code,
+    blob: foodBlob,
+    name,
+    note: $('c-food-note').value.trim() || null,
+  });
+  foodBlob = null;
+  $('c-food-name').value = ''; $('c-food-note').value = '';
+  renderCountryThumb('country-food-thumbs', 'btn-country-food', null);
+  countryNote('Food queued.');
+};
+
+function renderCountryThumb(boxID, keepID, blob) {
+  const box = $(boxID);
+  box.querySelectorAll('.thumb').forEach((n) => n.remove());
+  if (!blob) return;
+  const d = document.createElement('div');
+  d.className = 'thumb';
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(blob);
+  img.onload = () => URL.revokeObjectURL(img.src);
+  d.appendChild(img);
+  box.insertBefore(d, $(keepID));
+}
+
+/* ── subtitle ─────────────────────────────────────────────────────────── */
+
+// Saved on blur. A blob-free write, so it is attempted immediately and only
+// queued if it fails — losing a typed line to a dropped connection is the thing
+// to avoid, not the round trip.
+$('c-subtitle').addEventListener('blur', async () => {
+  if (!country) return;
+  const description = $('c-subtitle').value.trim() || null;
+  try {
+    const { error } = await db.from('countries')
+      .update({ description }).eq('code', country.code);
+    if (error) throw new Error(error.message);
+    countryNote('Subtitle saved.');
+  } catch (err) {
+    await queueCountryWork({ kind: 'country_subtitle', code: country.code, description });
+    countryNote('Subtitle queued — it will save when you are back online.');
+  }
+});
+
+/* ── apps, from the library only ──────────────────────────────────────── */
+
+async function loadCountryApps() {
+  const list = $('country-apps-list');
+  list.innerHTML = '';
+  if (!country || !navigator.onLine) return;
+  const { data } = await db.from('country_apps')
+    .select('id,name,purpose,is_active')
+    .eq('country_code', country.code).eq('is_active', true)
+    .order('sort_order');
+  countryApps = data || [];
+  countryApps.forEach((a) => {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = '<h3>' + escapeHtml(a.name) + '</h3><p>'
+      + escapeHtml(a.purpose || 'no purpose set') + '</p>';
+    list.appendChild(d);
+  });
+}
+
+$('btn-add-app').onclick = async () => {
+  if (!country) { countryError('Pick a country first.'); return; }
+  const { data } = await db.from('app_catalog')
+    .select('id,name,icon_url,app_store_url,default_purpose').order('name');
+  const box = $('app-options');
+  box.innerHTML = '';
+  const attached = new Set(countryApps.map((a) => a.name));
+  const offer = (data || []).filter((a) => !attached.has(a.name));
+  if (!offer.length) {
+    // **No dead "add new".** Adding an app to the library needs an icon, which
+    // a phone cannot get without a lookup service — that stays desk work in the
+    // CMS (Brian, 19 Sep). Say so rather than offering a control that cannot
+    // work here.
+    $('app-sheet-sub').textContent =
+      'Nothing left in the library for this country. New apps are added in the CMS — they need an icon, which this tool cannot fetch.';
+  } else {
+    $('app-sheet-sub').textContent = 'From the shared library.';
+    offer.forEach((a) => {
+      const b = document.createElement('button');
+      b.className = 'opt';
+      b.innerHTML = escapeHtml(a.name) + '<small>'
+        + escapeHtml(a.default_purpose || 'no default purpose') + '</small>';
+      b.onclick = () => attachApp(a);
+      box.appendChild(b);
+    });
+  }
+  $('app-sheet').hidden = false;
+};
+$('app-sheet-close').onclick = () => { $('app-sheet').hidden = true; };
+
+async function attachApp(catalogRow) {
+  // One editable field: the purpose, prefilled from the catalogue's default.
+  const purpose = prompt('Why does a traveller here need ' + catalogRow.name + '?',
+                         catalogRow.default_purpose || '');
+  if (purpose === null) return;
+  $('app-sheet').hidden = true;
+  const row = {
+    country_code: country.code,
+    name: catalogRow.name,
+    icon_url: catalogRow.icon_url,
+    app_store_url: catalogRow.app_store_url,
+    catalog_id: catalogRow.id,
+    purpose: purpose.trim() || catalogRow.default_purpose || null,
+    sort_order: countryApps.length,
+    is_active: true,
+  };
+  try {
+    const { error } = await db.from('country_apps').insert(row);
+    if (error) throw new Error(error.message);
+    countryNote('App attached.');
+    await loadCountryApps();
+  } catch (err) {
+    await queueCountryWork({ kind: 'country_app', code: country.code, row });
+    countryNote('App queued — it will attach when you are back online.');
+  }
+}
+
+function countryError(msg) { $('country-error').textContent = msg; $('country-error').hidden = false; }
+function countryNote(msg) { $('country-note').textContent = msg; $('country-error').hidden = true; }
+
+/** Country work goes through the SAME IndexedDB queue as a capture — the badge,
+ *  the five-attempt cap, the `online` retry and first-failure error reporting
+ *  all apply unchanged. Hero and food carry blobs and must survive a reload. */
+async function queueCountryWork(item) {
+  await idbPut('queue', {
+    id: crypto.randomUUID(),
+    kind: item.kind,
+    country: item,
+    state: 'pending', attempts: 0, lastError: null, at: Date.now(),
+  });
+  await refreshQueueBadge();
+  drainQueue();
+}
+
+/* ── the featured star, on the capture form ───────────────────────────── */
+
+$('f-featured').onclick = () => {
+  cap.featured = !cap.featured;
+  $('f-featured').setAttribute('aria-pressed', String(cap.featured));
+  $('f-featured').innerHTML = (cap.featured ? '★' : '☆')
+    + ' Feature this place on its country screen'
+    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+};
+
+/* ════════════════════════════════════════════════════════════════════════
    12. Boot
    ════════════════════════════════════════════════════════════════════════ */
 
-['f-name','f-note','f-desc','f-address','f-hours','f-building','f-dishes'].forEach((id) => {
+['f-name','f-note','f-desc','f-address','f-building','f-dishes'].forEach((id) => {
   $(id).addEventListener('input', () => {
     const key = { 'f-name':'name','f-note':'note','f-desc':'description','f-address':'address',
-                  'f-hours':'hours','f-building':'building','f-dishes':'dishes' }[id];
+                  'f-building':'building','f-dishes':'dishes' }[id];
     cap[key] = $(id).value;
     if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
     renderSaveState();
@@ -1500,6 +2239,10 @@ async function loadProfile() {
     .select('username,is_admin').eq('id', session.user.id).maybeSingle();
   profile.username = (data && data.username) || null;
   profile.is_admin = !!(data && data.is_admin);
+  // §2 — hidden entirely for a non-admin. `countries`, `country_apps` and
+  // `country_foods` are all `is_admin()` for writes, so for anyone else this
+  // tab could only produce errors.
+  $('tab-country').hidden = !profile.is_admin;
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -1567,6 +2310,7 @@ async function showApp(s) {
   $('app').hidden = false;
   await Promise.all([loadProfile(), loadCategories(), loadCities()]);
   renderCategories();
+  renderHours();
   renderLocation();
   renderSaveState();
   await refreshQueueBadge();
