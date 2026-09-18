@@ -633,13 +633,24 @@ function parseCoordsFromText(text) {
   const s = (text || '').trim();
   if (!s) return null;
 
+  // **The ORDER IS THE LOGIC**: the place's own pin, then explicit
+  // coordinates, then camera positions last. This returns on first match.
+  //
+  // It used to try `@lat,lng` first, and that was an accuracy bug rather than a
+  // style question. In a Google Maps URL `@lat,lng,17z` is the map VIEWPORT
+  // CENTRE — where the camera was pointing — while `!3d/!4d` is the PLACE's
+  // pin. They differ whenever the user panned or zoomed before sharing, which
+  // is most of the time. So a link carrying both silently took the camera
+  // position and pinned near the place rather than on it, and a coordinate that
+  // is close but wrong is the one nobody ever re-checks.
   const pats = [
-    /@(-?\d+\.\d+),(-?\d+\.\d+)/,              // google /@lat,lng,17z
-    /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,      // google ?q=lat,lng
-    /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,          // google place data
-    /[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/,        // apple ?ll=
-    /[?&]sll=(-?\d+\.\d+),(-?\d+\.\d+)/,       // apple &sll=
-    /[?&]daddr=(-?\d+\.\d+),(-?\d+\.\d+)/,     // apple directions
+    /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,            // google: the PLACE pin — first
+    /[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/,          // apple ?ll=
+    /[?&]coordinate=(-?\d+\.\d+),(-?\d+\.\d+)/,  // apple, iOS 18 share format
+    /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,       // explicit lat,lng in q
+    /[?&]daddr=(-?\d+\.\d+),(-?\d+\.\d+)/,       // apple directions
+    /[?&]sll=(-?\d+\.\d+),(-?\d+\.\d+)/,         // apple: search centre, not the pin
+    /@(-?\d+\.\d+),(-?\d+\.\d+)/,                // google: VIEWPORT centre — last resort
     /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/,  // bare "lat, lng"
   ];
   for (const p of pats) {
@@ -763,23 +774,85 @@ $('opt-link-go').onclick = async () => {
   const raw = $('opt-link').value.trim();
   if (!raw) return;
   $('loc-sheet-error').hidden = true;
+
   let found = parseCoordsFromText(raw);
+  let resolvedURL = raw;
   if (!found) {
     try {
-      const followed = await resolveShortLink(raw);
-      found = parseCoordsFromText(followed);
+      resolvedURL = await resolveShortLink(raw);
+      found = parseCoordsFromText(resolvedURL);
     } catch (e) { locSheetError(e.message); return; }
   }
-  // **Refuse a link that yields no coordinate.** Never fall back to the device
-  // fix — silently substituting the hotel for a place is the exact failure the
-  // source ordering exists to prevent (§4.2).
+
+  // **Take the name even when there is no coordinate.**
+  //
+  // The Google Maps iOS app shares `?q=<name+address>&ftid=<hex:hex>` with no
+  // coordinate anywhere in it — the redirect follower works, the link genuinely
+  // has none. But it carries the full name, and typing
+  // "A Choén - Bò Nướng Than Hoa cơ sở 3 - Đội Cấn" with its diacritics on a
+  // phone is the single most miserable thing this tool can ask for.
+  //
+  // `ftid` is Google's feature id; turning it into a coordinate means calling
+  // Google, which is the dependency this tool exists to end — and an
+  // `origin='user'` row may not hold a `google_place_id` anyway
+  // (`landmarks_user_rows_have_no_google_id`). So: no ftid lookup, ever.
+  const harvested = harvestNameFromLink(resolvedURL);
+  if (harvested) {
+    // Never overwrite something already typed.
+    if (!cap.name.trim() && harvested.name) {
+      cap.name = harvested.name;
+      $('f-name').value = harvested.name;
+    }
+    if (!cap.address.trim() && harvested.address) {
+      cap.address = harvested.address;
+      $('f-address').value = harvested.address;
+    }
+  }
+
+  // **Still refuse to set a location.** §4.2's rule is unchanged: never fall
+  // back to the device fix, because at a hotel that silently pins the hotel.
   if (!found) {
-    locSheetError('No coordinate in that link. Open the place in Maps, share it, and paste that link — or type the coordinates below.');
+    locSheetError(
+      (harvested && harvested.name)
+        ? 'Got the name from that link — it has no location in it. Take a photo, or type the coordinates below.'
+        // Name the two routes that DO work, rather than only the one that just
+        // failed. Apple Maps share links carry the coordinate; a long-press on
+        // the pin in either app gives numbers the box below already parses.
+        : 'That link has no location in it. Sharing from Apple Maps carries one, or long-press the pin in either app and paste the numbers below.');
+    if (harvested && harvested.name) renderSaveState();
     return;
   }
+
   setLocation(found.lat, found.lon, 'link');
   $('loc-sheet').hidden = true;
+  renderSaveState();
 };
+
+/// The name and address a Maps link carries, when it carries no coordinate.
+///
+/// Google's iOS share puts "<name>, <address>" in `q=`; Apple uses `q=` or
+/// `name=` with the address in `address=`. Split on the FIRST comma: the head is
+/// the place, the tail is where it is.
+function harvestNameFromLink(url) {
+  let q = null, addr = null;
+  try {
+    const u = new URL(url);
+    q = u.searchParams.get('q') || u.searchParams.get('name');
+    addr = u.searchParams.get('address');
+  } catch { return null; }
+  if (!q) return null;
+
+  // A `q=` that is itself a coordinate is not a name.
+  if (parseCoordsFromText(q)) return null;
+
+  const decoded = q.replace(/\+/g, ' ').trim();
+  if (!decoded) return null;
+
+  const comma = decoded.indexOf(',');
+  const name = comma > 0 ? decoded.slice(0, comma).trim() : decoded;
+  const rest = comma > 0 ? decoded.slice(comma + 1).trim() : '';
+  return { name, address: addr ? addr.trim() : rest };
+}
 
 $('opt-coords-go').onclick = () => {
   const found = parseCoordsFromText($('opt-coords').value);
@@ -1273,10 +1346,19 @@ async function loadFinishList() {
   queued.forEach((q) => {
     const d = document.createElement('div');
     d.className = 'item';
+    // **Say why on the FIRST failure, not the fifth.**
+    //
+    // `drainQueue` records `lastError` on every failure, but this only rendered
+    // it once `state === 'failed'` — which takes five attempts. Until then it
+    // read "Waiting to upload", so a hard 400 was indistinguishable from a
+    // pending upload. That is why two storage policies looked like a hang.
+    const status = q.state === 'failed'
+      ? 'Failed · ' + escapeHtml(q.lastError || 'upload failed')
+      : q.lastError
+        ? 'Retrying · ' + escapeHtml(q.lastError)
+        : 'Waiting to upload · ' + (q.photos ? q.photos.length : 0) + ' photo(s)';
     d.innerHTML = '<h3>' + escapeHtml(q.row.name || 'Unnamed') + '</h3>'
-      + '<p>' + (q.state === 'failed'
-          ? ('Needs attention — ' + escapeHtml(q.lastError || 'upload failed'))
-          : 'Waiting to upload · ' + (q.photos ? q.photos.length : 0) + ' photo(s)') + '</p>';
+      + '<p>' + status + '</p>';
     list.appendChild(d);
   });
 
