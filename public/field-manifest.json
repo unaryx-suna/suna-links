@@ -1,7 +1,7 @@
 {
-  "name": "Suna Field Capture",
-  "short_name": "Suna Field",
-  "description": "Add a place to the Suna catalogue while standing in front of it.",
+  "name": "Suna Panel",
+  "short_name": "Suna Panel",
+  "description": "Add places, hours, hints and country content to Suna from a phone.",
   "start_url": "/field",
   "scope": "/field",
   "display": "standalone",

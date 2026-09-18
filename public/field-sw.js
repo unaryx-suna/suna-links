@@ -24,7 +24,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v3';
+const CACHE_VERSION = 'field-v4';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be

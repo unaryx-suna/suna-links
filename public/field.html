@@ -10,10 +10,10 @@
 <meta name="theme-color" content="#111111">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Suna Field">
+<meta name="apple-mobile-web-app-title" content="Suna Panel">
 <link rel="manifest" href="/field-manifest.json">
 <link rel="apple-touch-icon" href="/field-icon.svg">
-<title>Suna Field Capture</title>
+<title>Suna Panel</title>
 <style>
   :root {
     --ink: #111111;
@@ -148,7 +148,7 @@
 
 <!-- ─────────────────────────── sign in ─────────────────────────── -->
 <div id="login" class="wrap">
-  <h1>Suna field capture</h1>
+  <h1>Suna Panel</h1>
   <p class="sub">Sign in with the account you use for the CMS.</p>
 
   <div id="login-email-step">
@@ -244,8 +244,19 @@
       <div id="hours-grid"></div>
       <label for="f-building">Building name</label>
       <input id="f-building" type="text" autocomplete="off">
-      <label for="f-dishes">Signature dishes <span style="color:var(--dim)">comma separated</span></label>
-      <input id="f-dishes" type="text" autocomplete="off">
+      <label>Suna Tips &amp; Hints</label>
+      <p class="note" style="margin:0 0 8px">
+        Six kinds, and "what to order" is only one of them. "Skip" has never been
+        used once and is the thing a local knows best.
+      </p>
+      <div class="chips" id="hint-kinds"></div>
+      <textarea id="hint-body" placeholder="One short line — 3 to 200 characters."></textarea>
+      <div class="row" style="justify-content:space-between;margin-top:6px">
+        <span class="note" id="hint-count" style="margin:0">0/200</span>
+        <button class="ghost" id="btn-add-hint" style="padding:9px 16px;font-size:13px">Add hint</button>
+      </div>
+      <p class="err" id="hint-error" hidden></p>
+      <div id="hint-list" style="margin-top:10px"></div>
     </details>
 
     <p class="err" id="dupe-note" hidden></p>
@@ -366,7 +377,9 @@
 'use strict';
 
 /* ════════════════════════════════════════════════════════════════════════
-   Suna field capture — docs/briefs/FIELD-CAPTURE-TOOL.md
+   Suna Panel — docs/briefs/FIELD-CAPTURE-TOOL.md
+   (named "field capture" until 19 Sep; the route stays `/field` because
+    changing it orphans the install on Brian's home screen)
 
    One file, no framework, no build step, matching `admin/index.html` and
    `place.html`. The publishable key and a real Supabase session; the
@@ -1445,8 +1458,11 @@ function buildRow() {
     hours_source: buildOperatingHours() ? 'admin' : null,
     building_name: cap.building.trim() || null,
     // **NOT NULL with a `'{}'` default** — an empty array, never null.
-    signature_dishes: cap.dishes.trim()
-      ? cap.dishes.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    // **`signature_dishes` stays on the table and keeps its data**, but the
+    // panel no longer writes it: "what to order" is ONE of six hint kinds, and
+    // an `order` hint says more and renders under "Suna Tips & Hints". NOT NULL
+    // with a `'{}'` default, so an empty array is what "untouched" looks like.
+    signature_dishes: [],
     photographer_name: profile.username || null,
     // REQUIRED — it is half the UPDATE policy, so a null here means he cannot
     // edit his own capture from a non-admin session. Preserved rather than
@@ -1531,7 +1547,7 @@ function resetForm() {
   cap = blank();
   exifCandidate = null;
   dupeCandidates = []; dupeDismissed = false;
-  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-building', 'f-dishes']
+  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-building']
     .forEach((id) => { $(id).value = ''; });
   document.querySelectorAll('#f-categories .chip')
     .forEach((c) => c.setAttribute('aria-pressed', 'false'));
@@ -1540,6 +1556,11 @@ function resetForm() {
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   renderThumbs();
   renderHours();
+  renderHintKinds();
+  $('hint-body').value = '';
+  $('hint-count').textContent = '0/200';
+  $('hint-list').innerHTML = '';
+  $('hint-error').hidden = true;
   $('dupe-note').hidden = true;
   // A live fix already in hand is the standing-here posture, so propose it
   // again rather than making him wait for the watch to tick.
@@ -1724,6 +1745,14 @@ async function uploadCountryWork(item) {
     return;
   }
 
+  if (item.kind === 'place_hint') {
+    // Queued when the place was not on the server yet — a hint has a FK to
+    // `landmarks`, so it can only land after its capture has.
+    const { error } = await db.from('place_hints').insert(c.row);
+    if (error) throw new Error('place_hints: ' + error.message);
+    return;
+  }
+
   throw new Error('unknown queued kind: ' + item.kind);
 }
 
@@ -1797,7 +1826,8 @@ async function loadFinishList() {
     // rendering "Unnamed" and looking like a broken capture.
     if (q.kind && q.kind !== 'place') {
       const what = { country_hero: 'Country hero photo', country_food: 'Country food',
-                     country_subtitle: 'Country subtitle', country_app: 'Country app' }[q.kind] || q.kind;
+                     country_subtitle: 'Country subtitle', country_app: 'Country app',
+                     place_hint: 'Tip or hint' }[q.kind] || q.kind;
       d.innerHTML = '<h3>' + escapeHtml(what) + ' · ' + escapeHtml((q.country && q.country.code) || '') + '</h3>'
         + '<p>' + (q.state === 'failed'
             ? 'Failed · ' + escapeHtml(q.lastError || 'upload failed')
@@ -1865,7 +1895,6 @@ async function openExisting(id) {
   $('f-desc').value = cap.description;
   $('f-address').value = cap.address;
   $('f-building').value = cap.building;
-  $('f-dishes').value = cap.dishes;
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
     c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
 
@@ -1882,6 +1911,8 @@ async function openExisting(id) {
   await loadStoredMedia(id);
   renderThumbs();
   renderHours();
+  renderHintKinds();
+  await loadPlaceHints();
   renderLocation();
   switchTab('capture');
   window.scrollTo(0, 0);
@@ -1891,6 +1922,131 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   11a. Suna Tips & Hints — PLACE-PROSE-AND-HINTS.md §2
+
+   The panel used to offer one field, "Signature dishes". `place_hints.kind` has
+   SIX values and `order` — what to order — is one of them, so that field covered
+   a sixth of what a hint can say. `skip` has never been used once across 131
+   rows, and is arguably the most useful thing a local knows.
+
+   **Labelled in plain words, never the enum.** The user is writing a sentence,
+   not picking a database value.
+
+   `body` is CHECKed at 3–200 characters. The counter and the guard below are
+   there so the CHECK is never the thing that tells the user — a constraint
+   violation surfacing as a save failure is the worst way to learn about a limit.
+   ════════════════════════════════════════════════════════════════════════ */
+
+const HINT_KINDS = [
+  { kind: 'order',     label: 'What to order' },
+  { kind: 'do',        label: 'What to do' },
+  { kind: 'see',       label: 'What to see' },
+  { kind: 'time',      label: 'When to come' },
+  { kind: 'practical', label: 'Worth knowing' },
+  { kind: 'skip',      label: 'What to skip' },
+];
+const HINT_MAX = 200, HINT_MIN = 3;
+
+let hintKind = 'order';
+/** Hints already on the open place, listed under the composer. */
+let placeHints = [];
+
+function renderHintKinds() {
+  const box = $('hint-kinds');
+  box.innerHTML = '';
+  HINT_KINDS.forEach((k) => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = k.label;
+    b.setAttribute('aria-pressed', String(hintKind === k.kind));
+    b.onclick = () => {
+      hintKind = k.kind;
+      box.querySelectorAll('.chip').forEach((c) =>
+        c.setAttribute('aria-pressed', String(c.textContent === k.label)));
+    };
+    box.appendChild(b);
+  });
+}
+
+$('hint-body').addEventListener('input', () => {
+  const v = $('hint-body').value;
+  // Truncate rather than reject: the CHECK must never be what tells the user.
+  if (v.length > HINT_MAX) $('hint-body').value = v.slice(0, HINT_MAX);
+  const n = $('hint-body').value.length;
+  $('hint-count').textContent = n + '/' + HINT_MAX;
+  $('hint-count').style.color = n >= HINT_MAX ? 'var(--danger)' : 'var(--dim)';
+});
+
+$('btn-add-hint').onclick = async () => {
+  $('hint-error').hidden = true;
+  const body = $('hint-body').value.trim();
+  if (body.length < HINT_MIN) {
+    hintError('A hint needs at least ' + HINT_MIN + ' characters.');
+    return;
+  }
+  if (!cap.id) { hintError('Capture the place first.'); return; }
+  if (!session) { hintError('Signed out.'); return; }
+
+  const row = {
+    place_id: cap.id,
+    kind: hintKind,
+    body,
+    author_id: session.user.id,
+    // **`authored`, not `community`** — all 131 hints in prod are authored, and
+    // `attribution` renders differently by tier. The admin insert policy
+    // (`place_hints_insert_authored`) is what permits this; without it the
+    // insert is refused and the fallback below files it as community, which
+    // still works.
+    source_tier: profile.is_admin ? 'authored' : 'community',
+  };
+  try {
+    const { error } = await db.from('place_hints').insert(row);
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    // The place may not be on the server yet — a hint on a queued capture has
+    // nothing to point at. Queue it with the same machinery as everything else.
+    await queueCountryWork({ kind: 'place_hint', code: null, row });
+    hintNote('Hint queued.');
+    $('hint-body').value = ''; $('hint-count').textContent = '0/' + HINT_MAX;
+    return;
+  }
+  $('hint-body').value = '';
+  $('hint-count').textContent = '0/' + HINT_MAX;
+  await loadPlaceHints();
+};
+
+async function loadPlaceHints() {
+  const list = $('hint-list');
+  list.innerHTML = '';
+  placeHints = [];
+  if (!cap.id || !navigator.onLine) return;
+  const { data } = await db.from('place_hints')
+    .select('id,kind,body').eq('place_id', cap.id).order('kind');
+  placeHints = data || [];
+  placeHints.forEach((h) => {
+    const label = (HINT_KINDS.find((k) => k.kind === h.kind) || {}).label || h.kind;
+    const d = document.createElement('div');
+    d.className = 'item';
+    const t = document.createElement('h3'); t.textContent = label;
+    const p = document.createElement('p'); p.textContent = h.body;
+    const x = document.createElement('button');
+    x.className = 'linkish'; x.textContent = 'Delete';
+    x.style.fontSize = '12px';
+    x.onclick = async () => {
+      // `place_hints_delete_own` allows this for the author.
+      const { error } = await db.from('place_hints').delete().eq('id', h.id);
+      if (error) { hintError(error.message); return; }
+      await loadPlaceHints();
+    };
+    d.appendChild(t); d.appendChild(p); d.appendChild(x);
+    list.appendChild(d);
+  });
+}
+
+function hintError(msg) { $('hint-error').textContent = msg; $('hint-error').hidden = false; }
+function hintNote(msg) { $('hint-error').textContent = msg; $('hint-error').hidden = false; }
 
 /* ════════════════════════════════════════════════════════════════════════
    11b. The country screen — FIELD-ROUND-2 §2
@@ -2176,10 +2332,10 @@ $('f-featured').onclick = () => {
    12. Boot
    ════════════════════════════════════════════════════════════════════════ */
 
-['f-name','f-note','f-desc','f-address','f-building','f-dishes'].forEach((id) => {
+['f-name','f-note','f-desc','f-address','f-building'].forEach((id) => {
   $(id).addEventListener('input', () => {
     const key = { 'f-name':'name','f-note':'note','f-desc':'description','f-address':'address',
-                  'f-building':'building','f-dishes':'dishes' }[id];
+                  'f-building':'building' }[id];
     cap[key] = $(id).value;
     if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
     renderSaveState();
@@ -2311,6 +2467,7 @@ async function showApp(s) {
   await Promise.all([loadProfile(), loadCategories(), loadCities()]);
   renderCategories();
   renderHours();
+  renderHintKinds();
   renderLocation();
   renderSaveState();
   await refreshQueueBadge();
