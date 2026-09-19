@@ -2661,6 +2661,10 @@ function switchTab(which) {
   refreshQueueBadge();
 }
 
+/** How many hidden rows the list will fetch. 171 exist today; the point of the
+ *  headroom is that the catalogue backlog is meant to be visible in full. */
+const FINISH_LIMIT = 1000;
+
 async function loadFinishList() {
   const list = $('finish-list');
   list.innerHTML = '<p class="sub">Loading…</p>';
@@ -2690,14 +2694,29 @@ async function loadFinishList() {
     // It does not gate capture.
     let q = db.from('landmarks')
       .select('id,name,category,latitude,longitude,city_id,cover_image_url,coordinate_source,is_hidden,origin,submitted_by')
-      .eq('is_hidden', true).order('name').limit(200);
+      // **A cap that silently drops rows is a narrowing by another name.** This
+      // was 100 against 171 hidden rows, so a third of the backlog was already
+      // invisible; 200 left 29 of headroom. It is 1000 now, and if it ever
+      // fills, the list says so instead of just ending.
+      .eq('is_hidden', true).order('name').limit(FINISH_LIMIT);
+    // Only about whose rows a NON-admin may see. It does not narrow the
+    // catalogue for an admin, and must not.
     if (!profile.is_admin) q = q.eq('submitted_by', session.user.id);
     const { data } = await q;
     rows = data || [];
   }
 
-  const mine = rows.filter((r) => r.submitted_by === session.user.id);
-  const catalogue = rows.filter((r) => r.submitted_by !== session.user.id);
+  // **Split on `origin`, not on `submitted_by`.** `origin` is the provenance
+  // field — it is the whole subject of this fix — and `submitted_by` is not a
+  // synonym for it. Measured: three hidden rows are `origin='catalogue'` and
+  // already carry a `submitted_by`, and `buildRow` stamps
+  // `cap.submittedBy || session.user.id`, so every one of the 168 catalogue
+  // rows with a null `submitted_by` gets HIS id the first time he adds a photo
+  // to it. Keyed on `submitted_by`, the catalogue backlog would have leaked
+  // into "Your captures" one row at a time as he worked through it — the same
+  // mislabel this brief is about, pointing the other way.
+  const mine = rows.filter((r) => r.origin === 'user');
+  const catalogue = rows.filter((r) => r.origin !== 'user');
 
   if (!rows.length) {
     const waiting = (await idbAll('queue')).length;
@@ -2714,6 +2733,14 @@ async function loadFinishList() {
     null,
     'Suna’s own rows, not your captures. Opening one adds to it — it stays a '
     + 'catalogue place.');
+
+  if (rows.length >= FINISH_LIMIT) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Showing the first ' + FINISH_LIMIT
+      + '. There are more — clear some and they will appear.';
+    list.appendChild(p);
+  }
 
   function section(title, group, emptyLine, lead) {
     if (!group.length && !emptyLine) return;
