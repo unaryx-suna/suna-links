@@ -641,7 +641,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v17';
+const BUILD = 'field-v18';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -692,6 +692,13 @@ const blank = () => ({
   photos: [],
   /** Set when finishing an existing capture rather than making a new one. */
   editing: false,
+  /** **Does this row already exist on the server?**
+   *
+   *  Not the same question as `editing`, which `openQueued` also sets for a
+   *  queued NEW capture so the duplicate check is not re-run on it. The relaxed
+   *  one-photo save gate hangs off THIS flag: an existing row carries its name,
+   *  coordinate and category already, and a new one carries nothing. */
+  onServer: false,
   /** The stored cover on a re-opened row — counts toward the gate. */
   hadCover: false,
   /** What the row's visibility and approval already were, so a save that only
@@ -1602,6 +1609,11 @@ function initMapkit() {
     await new Promise((resolve, reject) => {
       try {
         mapkit.init({
+          // §2 — without this MapKit answers in whatever language it infers,
+          // which was returning Korean, Vietnamese and Arabic names into the
+          // picker. Where a place has no English name MapKit returns the local
+          // one, which is correct and is kept rather than transliterated.
+          language: 'en',
           authorizationCallback: (done) => {
             // Called again when MapKit decides the token is stale; `mapkitAuth`
             // re-mints only when it actually has expired.
@@ -2231,42 +2243,92 @@ async function openIdentify(whereLine) {
   // stands in front of a place is that he is adding its first photograph — not
   // creating a row. This list is the anti-duplication answer, and putting it
   // above Apple's is what makes the fast path the right one.
+  //
+  // **§3 — strictly by distance, and transit goes to the bottom.** Within 150m
+  // of a station the station outranked the cafe he was standing in, and
+  // photographs landed on Travel Hubs. Nothing is removed — a station is
+  // sometimes the place — it just stops being the first thing under his thumb.
+  // **Nothing is ever pre-selected.** Every row is a tap he makes.
   const box = $('identify-suna');
+  const abox = $('identify-apple');
   box.innerHTML = '';
-  if (suna.length) {
+  abox.innerHTML = '';
+
+  const sunaMain = suna.filter((r) => !isTransit(null, r.category));
+  const sunaDemoted = suna.filter((r) => isTransit(null, r.category));
+  const appleMain = apple.filter((p) => !isTransit(p.poi, null));
+  const appleDemoted = apple.filter((p) => isTransit(p.poi, null));
+
+  if (sunaMain.length) {
     box.appendChild(headline('Already in Suna'));
-    suna.forEach((r) => {
-      const b = document.createElement('button');
-      b.className = 'opt known';
-      b.innerHTML = escapeHtml(r.name || 'Unnamed')
-        + '<small>' + Math.round(r.km * 1000) + ' m away · '
-        + (r.cover_image_url ? 'has a cover' : '<b>no cover yet</b>')
-        + '</small>';
-      b.onclick = () => pickExistingPlace(r.id);
-      box.appendChild(b);
-    });
+    sunaMain.forEach((r) => box.appendChild(sunaRow(r)));
+  }
+  if (appleMain.length) {
+    abox.appendChild(headline(sunaMain.length ? 'Or, from Apple' : 'From Apple'));
+    appleMain.forEach((p) => abox.appendChild(appleRow(p)));
   }
 
-  const abox = $('identify-apple');
-  abox.innerHTML = '';
-  if (apple.length) {
-    abox.appendChild(headline(suna.length ? 'Or, from Apple' : 'From Apple'));
-    apple.forEach((p) => {
-      const b = document.createElement('button');
-      b.className = 'opt';
-      const util = p.poi && APPLE_UTILITY.has(p.poi);
-      b.innerHTML = escapeHtml(p.name)
-        + '<small>' + Math.round(p.km * 1000) + ' m · '
-        + escapeHtml(p.address || 'no address')
-        + (util ? ' · may not belong in the catalogue' : '') + '</small>';
-      b.onclick = () => pickAppleResult(p);
-      abox.appendChild(b);
-    });
+  const demoted = [...sunaDemoted.map((r) => ({ kind: 'suna', r, km: r.km })),
+                   ...appleDemoted.map((p) => ({ kind: 'apple', p, km: p.km }))]
+                   .sort((a, b) => a.km - b.km);
+  if (demoted.length) {
+    const h = headline('Nearby transport and services');
+    h.style.color = 'var(--dim)';
+    h.style.fontWeight = '400';
+    abox.appendChild(h);
+    demoted.forEach((d) => abox.appendChild(
+      d.kind === 'suna' ? sunaRow(d.r) : appleRow(d.p)));
   }
+
   if (!suna.length && !apple.length) {
     box.innerHTML = '<p class="sub">Nothing found at this coordinate. '
       + 'Name it yourself below.</p>';
   }
+}
+
+/** Distance leads every row: the nearest thing is usually the right thing, and
+ *  when it is not, he can see that at a glance instead of guessing. */
+function metres(km) {
+  return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km';
+}
+
+/** Transit and utility — Apple's categories, and Suna's own Travel Hub. */
+const TRANSIT_POI = new Set([
+  'PublicTransport', 'Airport', 'Parking', 'EVCharger', 'GasStation', 'ATM',
+  'Bank', 'Hospital', 'Pharmacy', 'Police', 'FireStation', 'PostOffice',
+  'Restroom',
+]);
+function isTransit(poi, category) {
+  if (poi && TRANSIT_POI.has(poi)) return true;
+  if (category && category === 'Travel Hub') return true;
+  return false;
+}
+
+function sunaRow(r) {
+  const b = document.createElement('button');
+  b.className = 'opt known';
+  // Category and cover state, so "Travel Hub · has a cover" is visibly not the
+  // restaurant in front of him.
+  const bits = [metres(r.km)];
+  if (r.category) bits.push(escapeHtml(r.category));
+  bits.push(r.cover_image_url ? 'has a cover' : '<b>no cover yet</b>');
+  b.innerHTML = escapeHtml(r.name || 'Unnamed') + '<small>' + bits.join(' · ') + '</small>';
+  b.onclick = () => pickExistingPlace(r.id);
+  return b;
+}
+
+function appleRow(p) {
+  const b = document.createElement('button');
+  b.className = 'opt';
+  const util = p.poi && APPLE_UTILITY.has(p.poi);
+  // §2 — English leads, the local script sits under it.
+  const second = [metres(p.km)];
+  if (p.localName) second.push(escapeHtml(p.localName));
+  else if (p.address) second.push(escapeHtml(p.address));
+  if (util) second.push('may not belong in the catalogue');
+  b.innerHTML = escapeHtml(p.name) + '<small>' + second.join(' · ') + '</small>';
+  b.onclick = () => pickAppleResult(p);
+  return b;
 }
 
 function headline(text) {
@@ -2283,7 +2345,7 @@ function headline(text) {
 async function nearbySunaPlaces(lat, lon) {
   try {
     const { data, error } = await db.from('landmarks')
-      .select('id,name,latitude,longitude,cover_image_url,origin')
+      .select('id,name,latitude,longitude,cover_image_url,origin,category')
       .gte('latitude', lat - 0.002).lte('latitude', lat + 0.002)
       .gte('longitude', lon - 0.002).lte('longitude', lon + 0.002)
       .limit(40);
@@ -2291,38 +2353,83 @@ async function nearbySunaPlaces(lat, lon) {
     return data
       .map((r) => ({ ...r, km: haversineKm(lat, lon, r.latitude, r.longitude) }))
       .filter((r) => r.km <= 0.15)
-      .sort((a, b) => a.km - b.km)
-      .slice(0, 8);
+      .sort((a, b) => a.km - b.km);
   } catch { return []; }
+}
+
+/** §2 — the language on the door, by country. Only the markets this tool is
+ *  actually used in; anywhere else the English answer is the local answer and a
+ *  second request would buy nothing. */
+const LOCAL_LANG = {
+  KR: 'ko', JP: 'ja', VN: 'vi', TH: 'th', CN: 'zh-Hans', TW: 'zh-Hant',
+  HK: 'zh-Hant', MO: 'zh-Hant', KH: 'km', LA: 'lo', MM: 'my', ID: 'id',
+  MY: 'ms', RU: 'ru', GR: 'el', IL: 'he', IN: 'hi', NP: 'ne', LK: 'si',
+  BD: 'bn', AE: 'ar', SA: 'ar', EG: 'ar', QA: 'ar', KW: 'ar', BH: 'ar',
+  OM: 'ar', JO: 'ar', LB: 'ar', MA: 'ar', TN: 'ar',
+};
+
+function poiSearch(lat, lon, language) {
+  return new Promise((resolve) => {
+    try {
+      const opts = { center: new mapkit.Coordinate(lat, lon), radius: 150 };
+      if (language) opts.language = language;
+      new mapkit.PointsOfInterestSearch(opts).search((err, data) => {
+        resolve((!err && data && Array.isArray(data.places)) ? data.places : []);
+      });
+    } catch { resolve([]); }
+  });
 }
 
 /** **`PointsOfInterestSearch`, not `Search`.** Search wants a query string and
  *  we have none; this one takes a centre and a radius, which is exactly the
- *  question being asked. Confirmed on the live library, MapKit 5.81.65. */
+ *  question being asked. Confirmed on the live library, MapKit 5.81.65.
+ *
+ *  **Two passes where the script differs.** `Place` carries no alternate name —
+ *  checked — so the local name can only come from a second search in the local
+ *  language. The English name leads because that is what he can read; the local
+ *  name sits under it because that is what is written on the door, and he is
+ *  standing in front of the door.
+ *
+ *  **Pairing on `id` alone is WRONG, and quietly.** Seoul matched 19 of 19 and
+ *  looked perfect; Hanoi put "Peach&Co" under two different places, 10m and 19m
+ *  from the ones it named — Apple reuses ids across responses. A true pair is
+ *  the SAME place, so the coordinates are identical; the false ones were metres
+ *  apart. The coordinate is therefore part of the key, and a local name that
+ *  cannot be matched safely is simply not shown. A wrong name under a place is
+ *  worse than no name. */
+const SAME_PLACE_KM = 0.002;          // 2m of float noise, nothing more
 async function applePOIsAt(lat, lon) {
   try { await initMapkit(); } catch { return []; }
-  return new Promise((resolve) => {
-    try {
-      const s = new mapkit.PointsOfInterestSearch({
-        center: new mapkit.Coordinate(lat, lon),
-        radius: 150,
-      });
-      s.search((err, data) => {
-        if (err || !data || !Array.isArray(data.places)) return resolve([]);
-        resolve(data.places.map((p) => ({
-          name: p.name || 'Unnamed',
-          address: p.formattedAddress || null,
-          lat: p.coordinate ? p.coordinate.latitude : NaN,
-          lon: p.coordinate ? p.coordinate.longitude : NaN,
-          poi: p.pointOfInterestCategory || null,
-          source: 'apple',
-        })).filter((p) => isFinite(p.lat))
-          .map((p) => ({ ...p, km: haversineKm(lat, lon, p.lat, p.lon) }))
-          .sort((a, b) => a.km - b.km)
-          .slice(0, 8));
-      });
-    } catch { resolve([]); }
-  });
+  const places = await poiSearch(lat, lon, 'en');
+  if (!places.length) return [];
+
+  const cc = (places.find((p) => p.countryCode) || {}).countryCode;
+  const lang = LOCAL_LANG[String(cc || '').toUpperCase()];
+  let localById = new Map();
+  if (lang) {
+    const local = await poiSearch(lat, lon, lang);
+    localById = new Map(local.filter((p) => p.name && p.coordinate).map((p) => [p.id, p]));
+  }
+
+  return places.map((p) => {
+    const m = localById.get(p.id);
+    const samePlace = !!(m && p.coordinate
+      && haversineKm(p.coordinate.latitude, p.coordinate.longitude,
+                     m.coordinate.latitude, m.coordinate.longitude) <= SAME_PLACE_KM);
+    const localName = samePlace ? m.name : null;
+    return {
+      name: p.name || 'Unnamed',
+      // Only when it says something different — an identical pair is noise.
+      localName: (localName && localName !== p.name) ? localName : null,
+      address: p.formattedAddress || null,
+      lat: p.coordinate ? p.coordinate.latitude : NaN,
+      lon: p.coordinate ? p.coordinate.longitude : NaN,
+      poi: p.pointOfInterestCategory || null,
+      source: 'apple',
+    };
+  }).filter((p) => isFinite(p.lat))
+    .map((p) => ({ ...p, km: haversineKm(lat, lon, p.lat, p.lon) }))
+    .sort((a, b) => a.km - b.km);
 }
 
 /** **The photo run, reached from the camera.** Opens the existing row and
@@ -2592,7 +2699,14 @@ function renderSaveState() {
   // existing row already carries its name, coordinate and category; requiring
   // a city, hours or a description to attach a photograph would stop the run
   // on rows that are not broken. One photo is the whole gate here.
-  if (photoMode()) {
+  // **The relaxation is for rows that already exist on the server**, not for a
+  // mode. An existing row carries its name, coordinate and category, and
+  // demanding a city to attach a photograph would stop the run on rows that are
+  // not broken. A NEW capture carries none of that — and `landmarks.name` is
+  // NOT NULL, so letting one through queues an item that can never succeed.
+  // That is what happened: "null value in column name violates not-null
+  // constraint", forever, on every retry.
+  if (photoMode() && cap.onServer) {
     const has = cap.photos.length >= 1;
     btn.disabled = !has;
     btn.textContent = 'Save photo';
@@ -3712,9 +3826,20 @@ function queueLabel(item, all) {
 /** State in plain words. "Retrying" and "given up" used to look identical until
  *  you read the small text. */
 function queueState(item) {
+  // **A place with no name can never land** — `landmarks.name` is NOT NULL — so
+  // say that instead of counting attempts at a wall. Items queued before the
+  // gate was fixed are in exactly this state, and they are a day of field work,
+  // so they are repaired rather than dropped: Open takes it back into the form.
+  if (needsAName(item)) return 'Needs a name — open it and add one';
   if (item.state === 'failed') return 'Stopped after 5 attempts';
   const n = item.attempts || 0;
   return n ? 'Retrying, attempt ' + n + ' of 5' : 'Waiting';
+}
+
+function needsAName(item) {
+  if (item.kind && item.kind !== 'place') return false;
+  if (item.editing) return false;                  // an edit does not resend the name
+  return !((item.row && item.row.name) || '').trim();
 }
 
 function queueWhen(at) {
@@ -3776,11 +3901,15 @@ function renderQueueList(items) {
     const acts = document.createElement('div');
     acts.className = 'acts';
 
-    const retry = document.createElement('button');
-    retry.className = 'ghost';
-    retry.textContent = 'Retry now';
-    retry.onclick = () => retryQueued(item.id);
-    acts.appendChild(retry);
+    // Retrying a nameless place just burns another attempt against a NOT NULL
+    // column, so it is not offered — Open is the only thing that helps.
+    if (!needsAName(item)) {
+      const retry = document.createElement('button');
+      retry.className = 'ghost';
+      retry.textContent = 'Retry now';
+      retry.onclick = () => retryQueued(item.id);
+      acts.appendChild(retry);
+    }
 
     if (!item.kind || item.kind === 'place') {
       const open = document.createElement('button');
@@ -3868,6 +3997,9 @@ async function openQueued(id) {
   cap = blank();
   cap.id = row.id || item.id;
   cap.editing = true;                      // already dupe-checked when captured
+  // A queued EDIT is on the server; a queued NEW capture is not, and must still
+  // earn its name before it can be saved again.
+  cap.onServer = !!item.editing;
   cap.name = row.name || '';
   cap.category = row.category || '';
   cap.lat = row.latitude; cap.lon = row.longitude;
@@ -3942,6 +4074,7 @@ async function openExisting(id) {
   cap.originalCoordSource = data.coordinate_source || null;
   cap.originalLat = data.latitude; cap.originalLon = data.longitude;
   cap.wasHidden = data.is_hidden; cap.wasApproval = data.approval_status || null;
+  cap.onServer = true;
   cap.cityId = data.city_id || null;
   cap.note = data.description || '';
   cap.address = data.address || '';
