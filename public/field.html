@@ -321,8 +321,23 @@
   <!-- finish these -->
   <div class="wrap" id="pane-finish" hidden>
     <h1>Finish these</h1>
-    <p class="sub" id="finish-sub">Rows that are not live yet. Tap one to complete it.</p>
+    <p class="sub" id="finish-sub">Places missing data. Nearest first — tap one to fill it in.</p>
+
+    <!-- What counts as missing. Photo is the default because it is 8,658 of
+         8,672: almost the whole catalogue. -->
+    <div class="chips" id="finish-missing" style="margin-bottom:10px">
+      <button class="chip" data-missing="photo" aria-pressed="true">Photo</button>
+      <button class="chip" data-missing="hours" aria-pressed="false">Hours</button>
+      <button class="chip" data-missing="desc" aria-pressed="false">Description</button>
+      <button class="chip" data-missing="unfinished" aria-pressed="false">Unfinished</button>
+    </div>
+
+    <!-- Where to work. "Near me" is the posture the tool is used in; the city
+         and country options are for scoping an evening to one place. -->
+    <select id="finish-scope" style="width:100%;margin-bottom:12px"></select>
+
     <div id="finish-list"></div>
+    <button class="ghost" id="finish-more" hidden style="width:100%;margin-top:12px">Load more</button>
   </div>
 
   <!-- queue -->
@@ -2366,7 +2381,7 @@ async function drainQueue() {
   } finally {
     draining = false;
     await refreshQueueBadge();
-    if ($('pane-finish').hidden === false) loadFinishList();
+    if ($('pane-finish').hidden === false) loadFinishList(false);
   }
 }
 
@@ -2654,127 +2669,282 @@ function switchTab(which) {
   }
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
-  if (which === 'finish') loadFinishList();
+  if (which === 'finish') { buildFinishScope(); loadFinishList(false); }
   if (which === 'queue') loadQueueList();
   if (which === 'country') renderCountryTab();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
 }
 
-/** How many hidden rows the list will fetch. 171 exist today; the point of the
- *  headroom is that the catalogue backlog is meant to be visible in full. */
-const FINISH_LIMIT = 1000;
+/* ── "Finish these" — places missing data, nearest first ────────────────────
 
-async function loadFinishList() {
-  const list = $('finish-list');
-  list.innerHTML = '<p class="sub">Loading…</p>';
+   **This was `is_hidden = true`, which is 171 rows.** Brian, 19 Sep: the tab is
+   the tool for populating the catalogue by hand so it stops depending on the
+   Places API. Measured against production the same day, of 8,672 visible
+   places:
 
-  // **Queued items are NOT shown here any more — they have their own tab.**
-  // Mixed in above the server rows, a failed cover upload, a queued hint and a
-  // genuinely half-finished place all read as the same kind of thing. This list
-  // now means exactly one thing: rows that REACHED the server and are missing a
-  // category, a city, a photo or a location.
-  // **The tab said "Your captures" and held none of them.** Measured 19 Sep:
-  // 171 hidden rows, 171 of them `origin='catalogue'`, zero his. Both readings
-  // the brief offered were available — label the backlog, or restrict to his
-  // own rows — and the answer is BOTH, split, because they are two different
-  // jobs and only one of them is the capture workflow.
-  //
-  //   His own unfinished captures  — the second half of capturing, on the bus home.
-  //   The catalogue backlog        — Suna's rows missing a photo. Real work,
-  //                                  worth keeping reachable, but not his and
-  //                                  never again presented as his.
-  //
-  // Restricting to his own rows alone would have emptied the tab and quietly
-  // dropped 171 rows of useful work; labelling alone would have left the
-  // capture workflow mixed in with someone else's backlog.
-  let rows = [];
-  if (navigator.onLine) {
-    // `is_admin` decides only whether rows submitted by someone else may show.
-    // It does not gate capture.
-    let q = db.from('landmarks')
-      .select('id,name,category,latitude,longitude,city_id,cover_image_url,coordinate_source,is_hidden,origin,submitted_by')
-      // **A cap that silently drops rows is a narrowing by another name.** This
-      // was 100 against 171 hidden rows, so a third of the backlog was already
-      // invisible; 200 left 29 of headroom. It is 1000 now, and if it ever
-      // fills, the list says so instead of just ending.
-      .eq('is_hidden', true).order('name').limit(FINISH_LIMIT);
+       no cover image                     8,658
+       no hours                           5,327
+       no description, or under 40 chars  4,417
+       no category                            0
+       no city                                1
+
+   So the backlog is three orders of magnitude bigger than the list was, and
+   what almost every place is missing is a photograph. Photo is the default
+   filter for that reason. The 171 hidden rows are kept as "Unfinished" — they
+   are still unfinished work, they are just a subset rather than the list.
+
+   ## Ordering and paging — what was chosen, and why
+
+   **Nearest first, inside a widening box.** PostgREST cannot ORDER BY a
+   computed distance, and an RPC that could is a schema change this brief does
+   not carry. So the query is a lat/lon bounding box around the live fix, tried
+   at 2 km, then 10, 50, 200, and finally no box at all; the first radius that
+   returns anything wins. Everything inside the box is then sorted by true
+   haversine distance on the client, which is exact rather than box-ordered.
+
+   The consequence, stated plainly: nearest-first is exact WITHIN the chosen
+   radius, and the radius is the neighbourhood. For a tool used on foot that is
+   the right shape — the alternative, paging 8,658 rows ordered by name, puts
+   Aachen first wherever you are standing.
+
+   `BOX_FETCH` caps what one radius will pull so a dense city cannot drag
+   thousands of rows onto a phone. In Hong Kong a 2 km box is well inside it.
+
+   **Paging is client-side over the fetched radius.** `PAGE` rows are rendered
+   at a time and "Load more" reveals the next slice of the same sorted array,
+   so scrolling never re-queries and never re-sorts. With no fix and no city
+   scope, the box is skipped and the server pages by name via `.range()`.
+*/
+
+const PAGE = 40;         // rendered at a time
+const BOX_FETCH = 600;   // most rows any one radius will pull
+const BOXES_KM = [2, 10, 50, 200, null]; // null = no box, the whole catalogue
+
+let finishMissing = 'photo';
+let finishRows = [];     // the fetched radius, sorted
+let finishShown = 0;
+let finishServerOffset = 0;
+let finishServerPaged = false;
+
+/** The column test for each filter. `desc` mirrors the app's own 40-character
+ *  floor (`PlaceSheetView.storyText`) rather than testing for null — a
+ *  12-character category echo is not a description, and the place sheet will
+ *  not render it either. */
+function applyMissing(q, which) {
+  if (which === 'photo') return q.or('cover_image_url.is.null,cover_image_url.eq.');
+  if (which === 'hours') return q.is('operating_hours', null);
+  // **`desc` is deliberately NOT filtered here.** The real test is the app's
+  // own 40-character floor (`PlaceSheetView.storyText`), and PostgREST cannot
+  // express `length(description) < 40` without a computed column or an RPC —
+  // neither of which this brief carries. Filtering to null-or-empty instead
+  // would quietly drop every 20-character category echo, which is most of what
+  // needs rewriting. It is refined on the client by `thinDescription` once the
+  // radius is in hand, which is exact.
+  return q; // 'unfinished' is expressed by is_hidden below
+}
+
+/** The app's floor, so the list agrees with what the place sheet will render. */
+function thinDescription(r) {
+  return ((r.description || '').trim()).length < 40;
+}
+
+function finishScopeValue() {
+  const el = $('finish-scope');
+  return el && el.value ? el.value : 'near';
+}
+
+/** Builds the scope clause. Country is resolved through the locally cached
+ *  `cities` list rather than a join, because PostgREST cannot filter a foreign
+ *  table's column here — capped at 300 city ids so the URL stays sane, which is
+ *  more cities than any country in the cache has. */
+function applyScope(q, scope) {
+  if (scope.startsWith('city:'))    return q.eq('city_id', scope.slice(5));
+  if (scope.startsWith('country:')) {
+    const cc = scope.slice(8);
+    const ids = cities.filter((c) => c.country_code === cc).map((c) => c.id).slice(0, 300);
+    return ids.length ? q.in('city_id', ids) : q;
+  }
+  return q;
+}
+
+function finishSelect() {
+  return 'id,name,category,latitude,longitude,city_id,cover_image_url,'
+       + 'operating_hours,description,coordinate_source,is_hidden,origin,submitted_by';
+}
+
+/** One page of rows for the current filter and scope. */
+async function fetchFinishRows() {
+  const scope = finishScopeValue();
+  const unfinished = finishMissing === 'unfinished';
+
+  const base = () => {
+    let q = db.from('landmarks').select(finishSelect());
+    // Unfinished means the hidden rows; every other filter is about live
+    // places that are short of something.
+    q = unfinished ? q.eq('is_hidden', true) : q.eq('is_hidden', false);
+    q = applyMissing(q, finishMissing);
+    q = applyScope(q, scope);
     // Only about whose rows a NON-admin may see. It does not narrow the
-    // catalogue for an admin, and must not.
+    // catalogue for an admin, and must not — that is the whole point of the tab.
     if (!profile.is_admin) q = q.eq('submitted_by', session.user.id);
-    const { data } = await q;
-    rows = data || [];
+    return q;
+  };
+
+  const fix = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
+  const canBox = scope === 'near' && fix && fix.lat != null;
+
+  if (!canBox) {
+    // No fix, or an explicit city/country: let the server page by name.
+    finishServerPaged = true;
+    const { data } = await base().order('name')
+      .range(finishServerOffset, finishServerOffset + PAGE - 1);
+    finishServerOffset += PAGE;
+    return (data || [])
+      .filter((r) => finishMissing !== 'desc' || thinDescription(r))
+      .map((r) => ({ ...r, km: fix ? haversineKm(fix.lat, fix.lon, r.latitude, r.longitude) : null }));
   }
 
-  // **Split on `origin`, not on `submitted_by`.** `origin` is the provenance
-  // field — it is the whole subject of this fix — and `submitted_by` is not a
-  // synonym for it. Measured: three hidden rows are `origin='catalogue'` and
-  // already carry a `submitted_by`, and `buildRow` stamps
-  // `cap.submittedBy || session.user.id`, so every one of the 168 catalogue
-  // rows with a null `submitted_by` gets HIS id the first time he adds a photo
-  // to it. Keyed on `submitted_by`, the catalogue backlog would have leaked
-  // into "Your captures" one row at a time as he worked through it — the same
-  // mislabel this brief is about, pointing the other way.
-  const mine = rows.filter((r) => r.origin === 'user');
-  const catalogue = rows.filter((r) => r.origin !== 'user');
+  finishServerPaged = false;
+  for (const km of BOXES_KM) {
+    let q = base();
+    if (km != null) {
+      const dLat = km / 111.32;
+      const dLon = km / (111.32 * Math.max(Math.cos(fix.lat * Math.PI / 180), 0.01));
+      q = q.gte('latitude', fix.lat - dLat).lte('latitude', fix.lat + dLat)
+           .gte('longitude', fix.lon - dLon).lte('longitude', fix.lon + dLon);
+    }
+    const { data } = await q.limit(BOX_FETCH);
+    const kept = (data || []).filter((r) => finishMissing !== 'desc' || thinDescription(r));
+    if (kept.length) {
+      return kept
+        .map((r) => ({ ...r, km: haversineKm(fix.lat, fix.lon, r.latitude, r.longitude) }))
+        .sort((a, b) => a.km - b.km);
+    }
+  }
+  return [];
+}
 
-  if (!rows.length) {
+async function loadFinishList(append) {
+  const list = $('finish-list');
+  const more = $('finish-more');
+  if (!append) {
+    list.innerHTML = '<p class="sub">Loading…</p>';
+    finishRows = []; finishShown = 0; finishServerOffset = 0;
+  }
+  more.hidden = true;
+
+  if (!navigator.onLine) {
+    list.innerHTML = '<p class="sub">Offline. This list is the server’s, so it needs a connection — '
+      + 'your own unsent work is in Queue and is safe.</p>';
+    return;
+  }
+
+  const batch = await fetchFinishRows();
+  if (append) finishRows = finishRows.concat(batch);
+  else finishRows = batch;
+
+  if (!finishRows.length) {
     const waiting = (await idbAll('queue')).length;
-    list.innerHTML = '<p class="sub">Nothing here. Every row that reached the server is complete.'
+    list.innerHTML = '<p class="sub">Nothing missing here. Try another filter, or widen the area.'
       + (waiting ? ' ' + plural(waiting, 'item') + ' still waiting to upload — see Queue.' : '')
       + '</p>';
     return;
   }
 
-  list.innerHTML = '';
-  section('Your captures', mine,
-    'None of your captures are waiting. Anything not on the server yet is in Queue.');
-  section('Catalogue backlog', catalogue,
-    null,
-    'Suna’s own rows, not your captures. Opening one adds to it — it stays a '
-    + 'catalogue place.');
+  if (!append) list.innerHTML = '';
+  renderFinishSlice(list);
 
-  if (rows.length >= FINISH_LIMIT) {
-    const p = document.createElement('p');
-    p.className = 'note';
-    p.textContent = 'Showing the first ' + FINISH_LIMIT
-      + '. There are more — clear some and they will appear.';
-    list.appendChild(p);
-  }
+  const hasMore = finishServerPaged
+    ? batch.length === PAGE
+    : finishShown < finishRows.length;
+  more.hidden = !hasMore;
+}
 
-  function section(title, group, emptyLine, lead) {
-    if (!group.length && !emptyLine) return;
-    const h = document.createElement('h2');
-    h.style.cssText = 'font-size:15px;margin:18px 0 6px';
-    h.textContent = title + (group.length ? ' · ' + group.length : '');
-    list.appendChild(h);
-    if (lead && group.length) {
-      const p = document.createElement('p');
-      p.className = 'sub'; p.style.margin = '0 0 10px';
-      p.textContent = lead;
-      list.appendChild(p);
-    }
-    if (!group.length) {
-      const p = document.createElement('p');
-      p.className = 'sub'; p.textContent = emptyLine;
-      list.appendChild(p);
-      return;
-    }
-    group.forEach((r) => {
-      const missing = [];
-      if (!r.category) missing.push('category');
-      if (!r.city_id) missing.push('city');
-      if (!r.cover_image_url) missing.push('photo');
-      if (r.latitude == null) missing.push('location');
-      const d = document.createElement('div');
-      d.className = 'item';
-      d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
-        + '<p>' + (missing.length ? ('Needs ' + missing.join(', ')) : 'Ready — reopen and save to go live') + '</p>';
-      d.onclick = () => openExisting(r.id);
-      list.appendChild(d);
+function renderFinishSlice(list) {
+  const slice = finishRows.slice(finishShown, finishShown + PAGE);
+  finishShown += slice.length;
+
+  slice.forEach((r) => {
+    const missing = [];
+    if (!r.cover_image_url) missing.push('photo');
+    if (!r.operating_hours) missing.push('hours');
+    if (!r.description) missing.push('description');
+    if (!r.category) missing.push('category');
+    if (!r.city_id) missing.push('city');
+    if (r.latitude == null) missing.push('location');
+
+    // Distance is the reason this list is usable, so it leads the line.
+    const where = (r.km == null) ? ''
+      : (r.km < 1 ? Math.round(r.km * 1000) + ' m · ' : r.km.toFixed(r.km < 10 ? 1 : 0) + ' km · ');
+    const provenance = r.origin === 'user' ? '' : ' · catalogue';
+
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
+      + '<p>' + where + (missing.length ? ('needs ' + missing.join(', ')) : 'ready — reopen and save')
+      + provenance + '</p>';
+    d.onclick = () => openExisting(r.id);
+    list.appendChild(d);
+  });
+
+  const sub = $('finish-sub');
+  const total = finishServerPaged ? finishShown + '+' : finishRows.length;
+  sub.textContent = 'Showing ' + finishShown + ' of ' + total
+    + (finishServerPaged ? ' — paged by name.' : ' nearby, nearest first.');
+}
+
+/** "Near me", then every country in the cache, then the nearest cities. Built
+ *  once, from the same cached `cities` the capture form already uses, so it
+ *  costs no request. */
+function buildFinishScope() {
+  const sel = $('finish-scope');
+  if (!sel || sel.dataset.built) return;
+  const fix = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
+
+  const opts = ['<option value="near">Near me</option>'];
+
+  const seen = new Set();
+  cities.forEach((c) => { if (c.country_code) seen.add(c.country_code); });
+  [...seen].sort().forEach((cc) => {
+    opts.push('<option value="country:' + cc + '">Country · ' + escapeHtml(cc) + '</option>');
+  });
+
+  const near = (fix && fix.lat != null) ? nearestCities(fix.lat, fix.lon, 12) : cities.slice(0, 12);
+  near.forEach((c) => {
+    opts.push('<option value="city:' + c.id + '">City · ' + escapeHtml(c.name) + '</option>');
+  });
+
+  sel.innerHTML = opts.join('');
+  sel.dataset.built = '1';
+  sel.onchange = () => loadFinishList(false);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const chips = $('finish-missing');
+  if (chips) {
+    chips.querySelectorAll('.chip').forEach((b) => {
+      b.onclick = () => {
+        chips.querySelectorAll('.chip').forEach((o) => o.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        finishMissing = b.dataset.missing;
+        loadFinishList(false);
+      };
     });
   }
-}
+  const more = $('finish-more');
+  if (more) {
+    more.onclick = () => {
+      // A client-side page needs no request; a server-paged list does.
+      if (!finishServerPaged && finishShown < finishRows.length) {
+        renderFinishSlice($('finish-list'));
+        more.hidden = finishShown >= finishRows.length;
+      } else {
+        loadFinishList(true);
+      }
+    };
+  }
+});
 
 /* ════════════════════════════════════════════════════════════════════════
    11b. The Queue — work that has not reached the server, and is the only copy
