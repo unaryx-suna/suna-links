@@ -117,6 +117,20 @@
   .danger { background: rgba(255,107,107,.14); color: var(--danger); }
   .badge { background: var(--sand); color: var(--ink); border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
+  /* §1 — the photograph starts the capture, so it is the first thing on the
+     screen rather than a field part way down the form. */
+  .shoot {
+    display: block; width: 100%; text-align: left; font-family: inherit;
+    background: var(--sand); color: var(--ink); border-radius: 16px;
+    padding: 18px; font-size: 17px; font-weight: 700; margin: 14px 0 6px;
+  }
+  .shoot small { display: block; font-weight: 400; font-size: 12px; opacity: .75; margin-top: 3px; }
+  /* Which source the coordinate came from, said every time. A silent fallback
+     to the device fix is how a hotel becomes a restaurant's coordinate. */
+  .shotsrc { font-size: 12px; margin: 0 0 10px; color: var(--dim); }
+  .shotsrc.verified { color: var(--ok); }
+  .shotsrc.fallback { color: var(--sand); }
+  .shotsrc.none { color: var(--danger); }
   .build { font-size: 10px; color: var(--dim); letter-spacing: .3px; white-space: nowrap; }
   .build.stale { color: var(--danger); font-weight: 700; }
   /* The photo run: a counter and the controls that move it along. */
@@ -257,6 +271,15 @@
     <!-- Item 6 — shown after a save, so the next place on the same walk is one
          tap rather than a cold form. -->
     <button class="qbar" id="another-nearby" type="button" hidden>Saved. Add another nearby →</button>
+
+    <!-- §1 — shoot first. Standing in front of a place, the photograph is the
+         thing you have and the name is the thing you are least sure how to
+         spell. One tap opens the camera; everything else follows from it. -->
+    <button class="shoot" id="btn-shoot" type="button">
+      📷 Photograph a place
+      <small>The photo says where you are — then pick what it is</small>
+    </button>
+    <p class="shotsrc" id="shot-source" hidden></p>
 
     <!-- §1 — the run's counter and controls. Hidden outside a run. -->
     <div class="runbar" id="run-bar" hidden>
@@ -499,6 +522,22 @@
   </div>
 </div>
 
+<!-- §2 — straight after the shutter. A coordinate and no name is the better
+     position to be in than a name and no coordinate, which is what the
+     save-time dupe check had. This replaces that check for this path. -->
+<div class="sheet" id="identify-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Which of these is it?</h1>
+    <p class="sub" id="identify-where"></p>
+    <div id="identify-suna"></div>
+    <div id="identify-apple"></div>
+    <button class="opt" id="identify-new" style="margin-top:4px">
+      None of these — it’s new<small>Start a fresh place from this photo</small>
+    </button>
+    <button class="linkish" id="identify-close" style="margin-top:10px">Close</button>
+  </div>
+</div>
+
 <!-- city picker -->
 <div class="sheet" id="city-sheet" hidden>
   <div>
@@ -556,7 +595,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v15';
+const BUILD = 'field-v16';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2026,8 +2065,243 @@ function locSheetError(msg) { $('loc-sheet-error').textContent = msg; $('loc-she
 
 $('btn-camera').onclick  = () => $('in-camera').click();
 $('btn-library').onclick = () => $('in-library').click();
-$('in-camera').onchange  = (e) => addPhotos(e.target.files);
+$('in-camera').onchange  = async (e) => {
+  await addPhotos(e.target.files);
+  if (shootFirst) { shootFirst = false; await afterShutter(); }
+};
 $('in-library').onchange = (e) => addPhotos(e.target.files);
+
+/* ════════════════════════════════════════════════════════════════════════
+   §1–§3 — shoot first
+   ════════════════════════════════════════════════════════════════════════
+
+   photo → coordinate → what is this? → confirm → save, rather than
+   name → location → category → photo → save. Standing in front of a place the
+   photograph is what you have; the name, in Vietnamese or Korean or Arabic
+   script, is what you are least sure how to spell.
+
+   `addPhotos` already reads EXIF from the ORIGINAL bytes before `reencode()`
+   strips them, and that ordering is deliberate — nothing here disturbs it.
+*/
+
+let shootFirst = false;
+
+$('btn-shoot').onclick = () => {
+  // A fresh place unless a capture is already open with something in it.
+  if (!runActive() && !cap.editing && !cap.name.trim() && !cap.photos.length) resetForm();
+  shootFirst = true;
+  $('in-camera').click();
+};
+
+/** **Say which source the coordinate came from, every time.**
+ *
+ *  Safari strips EXIF GPS from a capture more often than not, so the fallback
+ *  to the live fix is the common path rather than the exception — and a silent
+ *  fallback to the device fix is how a hotel ends up as a restaurant's
+ *  coordinate. The existing chain is unchanged; it just says what it did. */
+function sayShotSource(kind, detail) {
+  const el = $('shot-source');
+  const text = {
+    photo: 'Location from the photo' + (detail ? ' · ' + detail : ''),
+    gps: 'The photo carried no location. Using the live fix' + (detail ? ', ' + detail : '') + '.',
+    none: 'The photo carried no location and there is no usable fix yet — set it below.',
+  }[kind];
+  el.className = 'shotsrc ' + ({ photo: 'verified', gps: 'fallback', none: 'none' }[kind] || '');
+  el.textContent = text;
+  el.hidden = false;
+  return text;
+}
+
+async function afterShutter() {
+  let kind, detail = '';
+  if (cap.locFrom === 'exif' && cap.lat != null) {
+    kind = 'photo';
+    detail = cap.lat.toFixed(5) + ', ' + cap.lon.toFixed(5);
+  } else if (liveFix && liveFix.accuracy <= GPS_ACCURACY_LIMIT_M) {
+    setLocation(liveFix.lat, liveFix.lon, 'gps', { accuracy: liveFix.accuracy });
+    kind = 'gps';
+    detail = '±' + Math.round(liveFix.accuracy) + 'm';
+  } else {
+    kind = 'none';
+  }
+  const line = sayShotSource(kind, detail);
+
+  if (cap.lat == null) {
+    // No coordinate, so there is nothing to ask "which of these" against. The
+    // location sheet is the answer, and search is the first thing in it.
+    openLocationSheet();
+    locSheetError(line);
+    return;
+  }
+  await openIdentify(line);
+}
+
+/* ── §2 "which of these is it?" ──────────────────────────────────────── */
+
+async function openIdentify(whereLine) {
+  $('identify-where').textContent = whereLine;
+  $('identify-suna').innerHTML = '<p class="sub">Looking…</p>';
+  $('identify-apple').innerHTML = '';
+  $('identify-sheet').hidden = false;
+
+  const at = { lat: cap.lat, lon: cap.lon };
+  const [suna, apple] = await Promise.all([
+    nearbySunaPlaces(at.lat, at.lon),
+    applePOIsAt(at.lat, at.lon),
+  ]);
+
+  // **Suna first, and it is the expected outcome.** 8,660 of 8,676 visible
+  // places have no cover image, so the most likely thing happening when he
+  // stands in front of a place is that he is adding its first photograph — not
+  // creating a row. This list is the anti-duplication answer, and putting it
+  // above Apple's is what makes the fast path the right one.
+  const box = $('identify-suna');
+  box.innerHTML = '';
+  if (suna.length) {
+    box.appendChild(headline('Already in Suna'));
+    suna.forEach((r) => {
+      const b = document.createElement('button');
+      b.className = 'opt known';
+      b.innerHTML = escapeHtml(r.name || 'Unnamed')
+        + '<small>' + Math.round(r.km * 1000) + ' m away · '
+        + (r.cover_image_url ? 'has a cover' : '<b>no cover yet</b>')
+        + '</small>';
+      b.onclick = () => pickExistingPlace(r.id);
+      box.appendChild(b);
+    });
+  }
+
+  const abox = $('identify-apple');
+  abox.innerHTML = '';
+  if (apple.length) {
+    abox.appendChild(headline(suna.length ? 'Or, from Apple' : 'From Apple'));
+    apple.forEach((p) => {
+      const b = document.createElement('button');
+      b.className = 'opt';
+      const util = p.poi && APPLE_UTILITY.has(p.poi);
+      b.innerHTML = escapeHtml(p.name)
+        + '<small>' + Math.round(p.km * 1000) + ' m · '
+        + escapeHtml(p.address || 'no address')
+        + (util ? ' · may not belong in the catalogue' : '') + '</small>';
+      b.onclick = () => pickAppleResult(p);
+      abox.appendChild(b);
+    });
+  }
+  if (!suna.length && !apple.length) {
+    box.innerHTML = '<p class="sub">Nothing found at this coordinate. '
+      + 'Name it yourself below.</p>';
+  }
+}
+
+function headline(text) {
+  const h = document.createElement('p');
+  h.className = 'sub';
+  h.style.cssText = 'margin:10px 0 6px;font-weight:600;color:var(--text)';
+  h.textContent = text;
+  return h;
+}
+
+/** The catalogue within ~150m. Same bounding box the save-time check uses, with
+ *  no name filter — the whole point of shooting first is that there is no name
+ *  yet, and a coordinate is unambiguous where a name is not. */
+async function nearbySunaPlaces(lat, lon) {
+  try {
+    const { data, error } = await db.from('landmarks')
+      .select('id,name,latitude,longitude,cover_image_url,origin')
+      .gte('latitude', lat - 0.002).lte('latitude', lat + 0.002)
+      .gte('longitude', lon - 0.002).lte('longitude', lon + 0.002)
+      .limit(40);
+    if (error || !data) return [];
+    return data
+      .map((r) => ({ ...r, km: haversineKm(lat, lon, r.latitude, r.longitude) }))
+      .filter((r) => r.km <= 0.15)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 8);
+  } catch { return []; }
+}
+
+/** **`PointsOfInterestSearch`, not `Search`.** Search wants a query string and
+ *  we have none; this one takes a centre and a radius, which is exactly the
+ *  question being asked. Confirmed on the live library, MapKit 5.81.65. */
+async function applePOIsAt(lat, lon) {
+  try { await initMapkit(); } catch { return []; }
+  return new Promise((resolve) => {
+    try {
+      const s = new mapkit.PointsOfInterestSearch({
+        center: new mapkit.Coordinate(lat, lon),
+        radius: 150,
+      });
+      s.search((err, data) => {
+        if (err || !data || !Array.isArray(data.places)) return resolve([]);
+        resolve(data.places.map((p) => ({
+          name: p.name || 'Unnamed',
+          address: p.formattedAddress || null,
+          lat: p.coordinate ? p.coordinate.latitude : NaN,
+          lon: p.coordinate ? p.coordinate.longitude : NaN,
+          poi: p.pointOfInterestCategory || null,
+          source: 'apple',
+        })).filter((p) => isFinite(p.lat))
+          .map((p) => ({ ...p, km: haversineKm(lat, lon, p.lat, p.lon) }))
+          .sort((a, b) => a.km - b.km)
+          .slice(0, 8));
+      });
+    } catch { resolve([]); }
+  });
+}
+
+/** **The photo run, reached from the camera.** Opens the existing row and
+ *  attaches the shot. `openExisting` resets `cap`, so the photographs are held
+ *  across it — and because nothing else is marked as touched,
+ *  `onlyWhatWasEdited` sends the cover and the provenance the row already had.
+ *  A photograph must never relabel a catalogue row. */
+async function pickExistingPlace(id) {
+  const photos = cap.photos.slice();
+  const takenAt = cap.locTakenAt;
+  const sourceLine = $('shot-source').textContent;
+  const sourceClass = $('shot-source').className;
+  $('identify-sheet').hidden = true;
+  await openExisting(id);
+  cap.photos = photos;
+  if (takenAt) cap.locTakenAt = takenAt;
+  soloShot = true;
+  $('shot-source').textContent = sourceLine;
+  $('shot-source').className = sourceClass;
+  $('shot-source').hidden = false;
+  applyRunChrome();
+  renderThumbs();
+  renderSaveState();
+}
+
+/** Apple's answer pre-fills the form. **The photo's own coordinate is kept when
+ *  there is one**: it is presence — he stood there — and an index result is
+ *  not, so taking Apple's would quietly downgrade `coordinate_source` from
+ *  `manual_entry_verified`. Apple's coordinate is used when the photo carried
+ *  none, which is the common case. */
+function pickAppleResult(p) {
+  $('identify-sheet').hidden = true;
+  if (cap.locFrom !== 'exif') {
+    setLocation(p.lat, p.lon, 'search', { provider: 'apple_mklocalsearch' });
+  }
+  if (!cap.name.trim() && p.name) {
+    cap.name = p.name; $('f-name').value = p.name; markTouched('name');
+  }
+  if (!cap.address.trim() && p.address) {
+    cap.address = p.address; $('f-address').value = p.address; markTouched('address');
+  }
+  categoryHint('');
+  suggestCategoryFromApple(p.poi);
+  offerOSMHours(cap.lat, cap.lon);          // §3
+  renderSaveState();
+  window.scrollTo(0, 0);
+}
+
+$('identify-new').onclick = () => {
+  $('identify-sheet').hidden = true;
+  offerOSMHours(cap.lat, cap.lon);          // §3
+  $('f-name').focus();
+  renderSaveState();
+};
+$('identify-close').onclick = () => { $('identify-sheet').hidden = true; };
 
 async function addPhotos(files) {
   for (const file of Array.from(files || [])) {
@@ -2502,7 +2776,14 @@ function resetForm() {
   $('f-featured').innerHTML = '☆ Feature this place on its country screen'
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   categoryHint('');
+  // The photo-mode chrome belongs to a run or a shot, not to a blank form. It
+  // used to survive a reset, leaving a "More" disclosure over an empty capture.
+  soloShot = false;
+  $('run-more').hidden = true;
+  $('f-name').readOnly = false;
+  $('pane-capture').classList.remove('photo-run', 'show-all');
   $('osm-hours').hidden = true;
+  $('shot-source').hidden = true;
   $('another-nearby').hidden = true;
   growNote();
   renderThumbs();
@@ -3139,8 +3420,10 @@ let finishScrollY = 0;
 
 function runActive() { return runAt >= 0; }
 
-/** Photo mode is on when the list filter is the one this run exists for. */
-function photoMode() { return runActive() && finishMissing === 'photo'; }
+/** Photo mode is on for a list run over the Photo filter, and for a single
+ *  place reached from the camera — the same screen, one place instead of many. */
+let soloShot = false;
+function photoMode() { return soloShot || (runActive() && finishMissing === 'photo'); }
 
 async function startRun(at) {
   finishScrollY = window.scrollY;
@@ -3201,6 +3484,7 @@ async function advanceRun() {
 
 function endRun(why) {
   runAt = -1;
+  soloShot = false;
   $('run-bar').hidden = true;
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
@@ -3215,6 +3499,7 @@ function endRun(why) {
  *  scroll — rather than at the top of a re-queried list. */
 function leaveRun() {
   runAt = -1;
+  soloShot = false;
   $('run-bar').hidden = true;
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
