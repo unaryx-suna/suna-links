@@ -117,6 +117,20 @@
   .danger { background: rgba(255,107,107,.14); color: var(--danger); }
   .badge { background: var(--sand); color: var(--ink); border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
+  .build { font-size: 10px; color: var(--dim); letter-spacing: .3px; white-space: nowrap; }
+  .build.stale { color: var(--danger); font-weight: 700; }
+  /* The photo run: a counter and the controls that move it along. */
+  .runbar {
+    display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    background: rgba(246,203,148,.12); border: 1px solid rgba(246,203,148,.35);
+    border-radius: 12px; padding: 10px 12px; margin: 12px 0 4px; font-size: 13px; color: var(--sand);
+  }
+  .runbar .count { font-weight: 700; }
+  .runbar button { padding: 7px 12px; font-size: 12px; }
+  /* Photo mode hides the groups this run is not editing. Nothing is removed and
+     nothing is cleared — `More` puts them all back. */
+  #pane-capture.photo-run .fg-hide { display: none; }
+  #pane-capture.photo-run.show-all .fg-hide { display: block; }
   .savebar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
     background: rgba(17,17,17,.96); border-top: 1px solid var(--line);
@@ -214,6 +228,11 @@
       <button class="tab" id="tab-country" aria-selected="false" hidden>Country</button>
     </div>
     <div class="row">
+      <!-- §4 — twice now a stale shell has been argued about as if it were a
+           deployed fix. This answers "is this the new build" at a glance, and
+           says so LOUDLY when the page and its service worker disagree, which
+           is the exact shape that confusion took. -->
+      <span class="build" id="build-stamp" title="Build"></span>
       <button class="badge zero" id="queue-badge" title="Pending uploads">0</button>
       <button class="linkish" id="btn-signout" style="font-size:12px">Sign out</button>
     </div>
@@ -239,38 +258,63 @@
          tap rather than a cold form. -->
     <button class="qbar" id="another-nearby" type="button" hidden>Saved. Add another nearby →</button>
 
-    <label for="f-name">Name</label>
-    <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
-
-    <label>Category</label>
-    <div class="chips" id="f-categories"></div>
-    <p class="note" id="category-hint" style="margin:0 0 4px" hidden></p>
-
-    <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
-    <div class="thumbs" id="f-thumbs">
-      <button class="addphoto" id="btn-camera">📷<br>Camera</button>
-      <button class="addphoto" id="btn-library">🖼<br>Library</button>
+    <!-- §1 — the run's counter and controls. Hidden outside a run. -->
+    <div class="runbar" id="run-bar" hidden>
+      <span class="count" id="run-count"></span>
+      <div class="row" style="gap:8px">
+        <button class="ghost" id="run-skip">Skip</button>
+        <button class="linkish" id="run-leave">Back to list</button>
+      </div>
     </div>
-    <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
-    <input id="in-library" type="file" accept="image/*" multiple hidden>
 
-    <label>Location</label>
-    <button class="locline" id="loc-line" type="button">
-      <span class="body" id="loc-text">Waiting for a fix…</span>
-      <span class="chev" aria-hidden="true">›</span>
-    </button>
+    <div class="fg">
+      <label for="f-name">Name</label>
+      <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
+    </div>
 
-    <label>City</label>
-    <button class="opt" id="city-chip" style="margin:0">Waiting for a location…</button>
+    <!-- §2 — one disclosure for everything the photo run is not editing. -->
+    <button class="linkish" id="run-more" hidden style="margin:4px 0 6px">More — everything else about this place</button>
+
+    <div class="fg fg-hide">
+      <label>Category</label>
+      <div class="chips" id="f-categories"></div>
+      <p class="note" id="category-hint" style="margin:0 0 4px" hidden></p>
+    </div>
+
+    <div class="fg">
+      <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
+      <div class="thumbs" id="f-thumbs">
+        <button class="addphoto" id="btn-camera">📷<br>Camera</button>
+        <button class="addphoto" id="btn-library">🖼<br>Library</button>
+      </div>
+      <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
+      <input id="in-library" type="file" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="fg fg-hide">
+      <label>Location</label>
+      <button class="locline" id="loc-line" type="button">
+        <span class="body" id="loc-text">Waiting for a fix…</span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+    </div>
+
+    <div class="fg fg-hide">
+      <label>City</label>
+      <button class="opt" id="city-chip" style="margin:0">Waiting for a location…</button>
+    </div>
 
     <!-- §2 — the star lives on the CAPTURE form, not the country tab: it is a
          property of this place, and the id has to exist before it can be
          appended to `countries.featured_landmark_ids`. -->
+    <div class="fg fg-hide">
     <button class="opt" id="f-featured" style="margin:18px 0 0" aria-pressed="false">
       ☆ Feature this place on its country screen
       <small>Fills the Top Places block. Added after the place uploads.</small>
     </button>
+    </div>
 
+    <div class="fg fg-hide">
     <label for="f-note">A line about this place</label>
     <!-- **One box, because there is one column.** `f-note` and `f-desc` both
          landed in `landmarks.description` and buildRow wrote
@@ -282,7 +326,9 @@
          sees; tapping it opens More with the grid already filled in. Hidden
          entirely when OSM has nothing, which is most of the time. -->
     <button class="qbar" id="osm-hours" type="button" hidden></button>
+    </div>
 
+    <div class="fg fg-hide">
     <details>
       <summary>More</summary>
       <label for="f-address">Address</label>
@@ -313,6 +359,7 @@
       <p class="err" id="hint-error" hidden></p>
       <div id="hint-list" style="margin-top:10px"></div>
     </details>
+    </div>
 
     <p class="err" id="dupe-note" hidden></p>
     <p class="err" id="save-error" hidden></p>
@@ -505,6 +552,12 @@
    service-role key never comes near this page.
    ════════════════════════════════════════════════════════════════════════ */
 
+/** **§4 — the build, visible.** Bumped with `CACHE_VERSION` in `field-sw.js`,
+ *  and the header says so when the two disagree: the page you are looking at
+ *  and the worker that served it are different things, and twice now a stale
+ *  shell has been argued about as though it were a deployed fix. */
+const BUILD = 'field-v15';
+
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -556,6 +609,13 @@ const blank = () => ({
   editing: false,
   /** The stored cover on a re-opened row — counts toward the gate. */
   hadCover: false,
+  /** What the row's visibility and approval already were, so a save that only
+   *  adds a photo cannot demote it. Null on a new capture. */
+  wasHidden: null, wasApproval: null,
+  /** **Which fields this session actually edited.** On a reopened row, anything
+   *  not in here is not written at all — see `buildRow`. Untouched means
+   *  unchanged, and a form default is not an edit. */
+  touched: new Set(),
   /** The row's existing `submitted_by`, so an admin edit does not steal it. */
   submittedBy: null,
   /** **What the row's provenance ALREADY is.** A capture made here is 'user'.
@@ -930,6 +990,7 @@ function renderHours() {
     // **The checkbox IS open/closed.** That was the ask — a checkbox, not a
     // form. Unticking contributes no period, which is how the data says closed.
     cb.onchange = () => {
+      markTouched('hours');
       if (cb.checked) {
         cap.hours[day] = { open: true, periods: own.length ? own : [] };
       } else {
@@ -958,6 +1019,7 @@ function renderHours() {
       const b = document.createElement('button');
       b.textContent = 'set its own';
       b.onclick = () => {
+        markTouched('hours');
         // Copying the inherited times in is what breaks the link.
         cap.hours[day] = {
           open: true,
@@ -968,24 +1030,41 @@ function renderHours() {
       line.appendChild(b);
       body.appendChild(line);
     } else {
+      // **Drawing the grid must not answer the question.**
+      //
+      // This used to do `if (!own.length) cap.hours[day] = {open:true, periods}`
+      // — so merely RENDERING the form committed 09:00–18:00 for every day that
+      // had no hours. On a new capture that was invisible, because the grid is
+      // only rendered when he opens More. On a photo run over the catalogue it
+      // is catastrophic: reopening a row rendered the grid, and saving wrote a
+      // fabricated "9:00 AM – 6:00 PM, seven days" with hours_source 'admin' —
+      // i.e. "he typed this" — onto a place nobody had checked. Measured on a
+      // real run before the fix, on Wing fat seafood restaurant, whose stored
+      // operating_hours was null.
+      //
+      // The pickers still SHOW a sensible default. It reaches `cap.hours` when
+      // he changes one, which is what an edit is.
       const periods = own.length ? own : [{ from: '09:00', to: '18:00' }];
-      if (!own.length) cap.hours[day] = { open: true, periods };
+      const commit = () => {
+        markTouched('hours');
+        if (!own.length) cap.hours[day] = { open: true, periods };
+      };
       periods.forEach((p, i) => {
         const wrap = document.createElement('div');
         wrap.className = 'hperiod';
         const from = document.createElement('input');
         from.type = 'time'; from.value = p.from;
-        from.onchange = () => { p.from = from.value; };
+        from.onchange = () => { p.from = from.value; commit(); };
         const dash = document.createElement('span');
         dash.className = 'dash'; dash.textContent = '–';
         const to = document.createElement('input');
         to.type = 'time'; to.value = p.to;
-        to.onchange = () => { p.to = to.value; };
+        to.onchange = () => { p.to = to.value; commit(); };
         wrap.appendChild(from); wrap.appendChild(dash); wrap.appendChild(to);
         if (periods.length > 1) {
           const x = document.createElement('button');
           x.className = 'drop'; x.textContent = '×';
-          x.onclick = () => { periods.splice(i, 1); renderHours(); };
+          x.onclick = () => { commit(); periods.splice(i, 1); renderHours(); };
           wrap.appendChild(x);
         }
         body.appendChild(wrap);
@@ -995,7 +1074,7 @@ function renderHours() {
         const add = document.createElement('button');
         add.className = 'hadd';
         add.textContent = '+ second period (lunch & dinner)';
-        add.onclick = () => { periods.push({ from: '17:00', to: '23:00' }); renderHours(); };
+        add.onclick = () => { periods.push({ from: '17:00', to: '23:00' }); commit(); renderHours(); };
         body.appendChild(add);
       }
     }
@@ -1075,6 +1154,7 @@ function renderLocation() {
 /** Any hand edit drops the row to source 3 and says so AT THAT MOMENT, so the
  *  downgrade is visible rather than discovered in SQL later. */
 function setLocation(lat, lon, from, extra = {}) {
+  markTouched('location');
   cap.lat = lat; cap.lon = lon; cap.locFrom = from;
   cap.locProvider = extra.provider || null;
   cap.locAccuracy = extra.accuracy != null ? extra.accuracy : null;
@@ -1232,10 +1312,11 @@ $('city-sheet-close').onclick = () => { $('city-sheet').hidden = true; };
 
 // 00:00 → 00:00 on every day: the shape the existing 24-hour rows use.
 $('hours-24').onclick = () => {
+  markTouched('hours');
   for (const d of MON_FIRST) cap.hours[d] = { open: true, periods: [{ from: '00:00', to: '00:00' }] };
   renderHours();
 };
-$('hours-clear').onclick = () => { cap.hours = {}; renderHours(); };
+$('hours-clear').onclick = () => { markTouched('hours'); cap.hours = {}; renderHours(); };
 
 /* ════════════════════════════════════════════════════════════════════════
    6. The location editor — reachable in EVERY state, including verified ones
@@ -1732,6 +1813,7 @@ async function offerOSMHours(lat, lon) {
       btn.textContent = 'OSM says ' + raw + ' · use it';
       btn.hidden = false;
       btn.onclick = () => {
+        markTouched('hours');
         cap.hours = parsed;
         const more = document.querySelector('#pane-capture details');
         if (more) more.open = true;
@@ -2156,6 +2238,20 @@ function renderSaveState() {
   // requirement rather than only a completeness one. The alternative — writing
   // 'Other' as a placeholder — would be indistinguishable later from someone
   // deciding the place really is Other, and the chips are one tap away.
+  // **The photo run does not edit the fields the full gate asks about.** An
+  // existing row already carries its name, coordinate and category; requiring
+  // a city, hours or a description to attach a photograph would stop the run
+  // on rows that are not broken. One photo is the whole gate here.
+  if (photoMode()) {
+    const has = cap.photos.length >= 1;
+    btn.disabled = !has;
+    btn.textContent = 'Save photo';
+    $('save-why').textContent = has
+      ? 'Adds the cover. Nothing else about this place changes.'
+      : 'Take or choose a photo.';
+    return;
+  }
+
   const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category;
   btn.disabled = !canSave;
   btn.textContent = isComplete() ? 'Save place' : 'Save as incomplete';
@@ -2164,10 +2260,13 @@ function renderSaveState() {
     : (isComplete() ? 'Goes live straight away' : ('Will need ' + why.join(', ') + ' to go live'));
 }
 
+/** Records that a field was edited by hand this session. */
+function markTouched(what) { if (cap.touched) cap.touched.add(what); }
+
 function buildRow() {
   const nowISO = new Date().toISOString();
   const complete = isComplete();
-  return {
+  const row = {
     id: cap.id,
     name: cap.name.trim(),
     category: cap.category || null,
@@ -2231,9 +2330,62 @@ function buildRow() {
     // `blank()` seeds 'user', so a capture created here is still 'user'.
     origin: cap.origin || 'user',
     place_kind: 'place',
-    approval_status: complete ? 'approved' : 'pending',
-    is_hidden: !complete,
+    // **An existing row is only ever improved, never demoted.**
+    //
+    // `is_hidden: !complete` is right for a NEW capture and dangerous for an
+    // existing one: a visible catalogue row that happens to be missing a city
+    // would be taken off the app by a run that only added a photograph. One
+    // visible row has no city today; at 8,660 places the arithmetic is not the
+    // point, the rule is. A hidden row still goes live the moment it is
+    // complete, which is the whole review workflow.
+    approval_status: complete ? 'approved'
+      : (cap.editing ? (cap.wasApproval || 'pending') : 'pending'),
+    is_hidden: complete ? false : (cap.editing ? (cap.wasHidden !== false) : true),
   };
+  return cap.editing ? onlyWhatWasEdited(row) : row;
+}
+
+/** **On an existing row, write what was edited and nothing else.**
+ *
+ *  §3 of PROMPT-PANEL-PHOTO-RUN, and it matters at volume rather than in
+ *  principle: a run that adds photographs to 8,660 places must not carry a
+ *  form's defaults into every one of them. An upsert omitting a column leaves
+ *  that column alone, so the fields he never opened are simply not sent.
+ *
+ *  Three of these were real, found by reading a queued row back against the
+ *  database during a run rather than by reading the code:
+ *    - `operating_hours` / `hours_source` — fabricated 9–6 every day (fixed at
+ *      source in `renderHours` as well; this is the second line of defence)
+ *    - `signature_dishes` — the panel no longer writes dishes, but it was still
+ *      sending `[]`, which would have wiped them off every row it touched
+ *    - `description` — a stored empty string rewritten to null
+ *
+ *  What ALWAYS goes: the id, the cover, and the fact that he has now seen the
+ *  place. Those are what the save is.
+ */
+const ALWAYS_WRITE = new Set([
+  'id', 'submitted_by', 'origin', 'place_kind', 'approval_status', 'is_hidden',
+  'photographer_name', 'coordinate_verified_at', 'last_verified_at',
+]);
+const EDIT_KEYS = {
+  name: ['name'],
+  note: ['description'],
+  address: ['address'],
+  building: ['building_name'],
+  hours: ['operating_hours', 'hours_source'],
+  category: ['category'],
+  location: ['latitude', 'longitude', 'coordinate_source'],
+  city: ['city_id'],
+};
+
+function onlyWhatWasEdited(row) {
+  const keep = new Set(ALWAYS_WRITE);
+  (cap.touched || new Set()).forEach((what) => {
+    (EDIT_KEYS[what] || []).forEach((col) => keep.add(col));
+  });
+  const out = {};
+  Object.keys(row).forEach((col) => { if (keep.has(col)) out[col] = row[col]; });
+  return out;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2263,6 +2415,9 @@ async function doSave() {
         photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
       })),
       kind: 'place',
+      // A queued EDIT carries only the columns that were edited, so reopening
+      // it has to read the rest back from the server — see `openQueued`.
+      editing: !!cap.editing,
       // **The label is stored, not derived at render time.** For a place the
       // name happens to be on the row, but a hint's place name is only in hand
       // while the hint is being written — so every kind stores one, uniformly.
@@ -2273,6 +2428,18 @@ async function doSave() {
       countryCode: countryCodeForCapture(),
       state: 'pending', attempts: 0, lastError: null, at: Date.now(),
     });
+
+    // **§1 — the run advances HERE**, the moment the capture is safely in
+    // IndexedDB, not when the upload finishes. A phone connection would
+    // otherwise make every place wait on a round trip, and the Queue tab
+    // already reports upload failures with their real error.
+    if (runActive()) {
+      runDone++;
+      await refreshQueueBadge();
+      drainQueue();
+      await advanceRun();
+      return;
+    }
 
     // Item 6 — the region survives the save. He captures several places on one
     // walk, and a cold form each time throws away the city and country that
@@ -2669,7 +2836,10 @@ function switchTab(which) {
   }
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
-  if (which === 'finish') { buildFinishScope(); loadFinishList(false); }
+  // Re-querying on every visit would lose the run's place in the list, its
+  // scroll and its order. The filter chips and the scope select reload it
+  // themselves when they change, which is when it should reload.
+  if (which === 'finish') { buildFinishScope(); if (!finishRows.length) loadFinishList(false); }
   if (which === 'queue') loadQueueList();
   if (which === 'country') renderCountryTab();
   // The quiet line hides itself on the Queue tab and comes back off it.
@@ -2862,10 +3032,12 @@ async function loadFinishList(append) {
 }
 
 function renderFinishSlice(list) {
+  const start = finishShown;                 // absolute index, the run's cursor
   const slice = finishRows.slice(finishShown, finishShown + PAGE);
   finishShown += slice.length;
 
-  slice.forEach((r) => {
+  slice.forEach((r, n) => {
+    const at = start + n;
     const missing = [];
     if (!r.cover_image_url) missing.push('photo');
     if (!r.operating_hours) missing.push('hours');
@@ -2884,7 +3056,7 @@ function renderFinishSlice(list) {
     d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
       + '<p>' + where + (missing.length ? ('needs ' + missing.join(', ')) : 'ready — reopen and save')
       + provenance + '</p>';
-    d.onclick = () => openExisting(r.id);
+    d.onclick = () => startRun(at);
     list.appendChild(d);
   });
 
@@ -2945,6 +3117,127 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 });
+
+/* ════════════════════════════════════════════════════════════════════════
+   11c. The photo run — one place at a time, without the round trip
+   ════════════════════════════════════════════════════════════════════════
+
+   8,660 of 8,676 visible places have no cover image. At that volume the cost
+   is not the photograph, it is everything around it: open, save, back to the
+   list, find where you were, open the next. This removes the middle.
+
+   **Advance on QUEUED, not on uploaded.** Waiting for an upload per place makes
+   the run unusable on a phone connection, and the Queue tab already reports
+   failures with their real error — so the run moves the moment the capture is
+   safely in IndexedDB.
+*/
+
+let runAt = -1;                 // index into `finishRows`, or -1 when not running
+let runDone = 0;                // saved in this run, for the counter
+const runSkipped = new Set();   // not re-offered for the rest of the session
+let finishScrollY = 0;
+
+function runActive() { return runAt >= 0; }
+
+/** Photo mode is on when the list filter is the one this run exists for. */
+function photoMode() { return runActive() && finishMissing === 'photo'; }
+
+async function startRun(at) {
+  finishScrollY = window.scrollY;
+  runAt = at;
+  runDone = 0;
+  await openRunRow();
+}
+
+async function openRunRow() {
+  const row = finishRows[runAt];
+  if (!row) return endRun('That place is no longer in the list.');
+  await openExisting(row.id);
+  applyRunChrome();
+}
+
+/** Collapse the form to what the run needs. **Nothing is removed and nothing is
+ *  cleared** — every hidden field keeps whatever the row already had, and
+ *  "More" puts them all back. */
+function applyRunChrome() {
+  const pane = $('pane-capture');
+  pane.classList.toggle('photo-run', photoMode());
+  pane.classList.remove('show-all');
+  $('run-more').hidden = !photoMode();
+  $('run-more').textContent = 'More — everything else about this place';
+  // Read-only, so he can see what he is photographing without editing it by
+  // accident with a thumb on a moving train.
+  $('f-name').readOnly = photoMode();
+  $('run-bar').hidden = !runActive();
+  $('another-nearby').hidden = true;
+  renderRunCount();
+  renderSaveState();
+  window.scrollTo(0, 0);
+}
+
+function renderRunCount() {
+  if (!runActive()) return;
+  const total = finishServerPaged ? (finishRows.length + '+') : finishRows.length;
+  $('run-count').textContent = (runAt + 1) + ' of ' + total
+    + (runDone ? ' · ' + runDone + ' done' : '');
+}
+
+/** The next row that has not been skipped, fetching another page at the end of
+ *  the loaded set rather than stopping on it. */
+async function advanceRun() {
+  let i = runAt + 1;
+  for (;;) {
+    while (i < finishRows.length && runSkipped.has(finishRows[i].id)) i++;
+    if (i < finishRows.length) break;
+    const before = finishRows.length;
+    const canFetch = finishServerPaged || finishShown >= finishRows.length;
+    if (!canFetch) { finishShown = finishRows.length; continue; }
+    await loadFinishList(true);
+    if (finishRows.length === before) return endRun('That is the end of this list.');
+  }
+  runAt = i;
+  await openRunRow();
+}
+
+function endRun(why) {
+  runAt = -1;
+  $('run-bar').hidden = true;
+  $('run-more').hidden = true;
+  $('f-name').readOnly = false;
+  $('pane-capture').classList.remove('photo-run', 'show-all');
+  resetForm();
+  switchTab('finish');
+  const sub = $('finish-sub');
+  if (why) sub.textContent = why + ' Change the filter or the area to keep going.';
+}
+
+/** Leaving returns to the list where he left it — same filter, same order, same
+ *  scroll — rather than at the top of a re-queried list. */
+function leaveRun() {
+  runAt = -1;
+  $('run-bar').hidden = true;
+  $('run-more').hidden = true;
+  $('f-name').readOnly = false;
+  $('pane-capture').classList.remove('photo-run', 'show-all');
+  resetForm();
+  switchTab('finish');
+  window.scrollTo(0, finishScrollY);
+}
+
+$('run-skip').onclick = async () => {
+  if (!runActive()) return;
+  const row = finishRows[runAt];
+  if (row) runSkipped.add(row.id);
+  await advanceRun();
+};
+$('run-leave').onclick = () => leaveRun();
+$('run-more').onclick = () => {
+  const pane = $('pane-capture');
+  const open = pane.classList.toggle('show-all');
+  $('run-more').textContent = open
+    ? 'Less — back to the photo'
+    : 'More — everything else about this place';
+};
 
 /* ════════════════════════════════════════════════════════════════════════
    11b. The Queue — work that has not reached the server, and is the only copy
@@ -3155,6 +3448,21 @@ async function openQueued(id) {
   if (!item || (item.kind && item.kind !== 'place')) return;
   const row = item.row || {};
 
+  // **A queued edit is a partial row.** `onlyWhatWasEdited` strips every column
+  // the session did not touch, so a photo-run item holds an id, a cover and
+  // little else — there is no form to rebuild from it. The server has the rest,
+  // and this row exists there by definition, so read it back and re-attach the
+  // photographs that have not landed yet.
+  if (item.editing && !row.name && navigator.onLine) {
+    await openExisting(row.id);
+    cap.photos = (item.photos || []).map((p) => ({
+      photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
+    }));
+    renderThumbs();
+    renderSaveState();
+    return;
+  }
+
   cap = blank();
   cap.id = row.id || item.id;
   cap.editing = true;                      // already dupe-checked when captured
@@ -3231,6 +3539,7 @@ async function openExisting(id) {
   cap.origin = data.origin || 'user';
   cap.originalCoordSource = data.coordinate_source || null;
   cap.originalLat = data.latitude; cap.originalLon = data.longitude;
+  cap.wasHidden = data.is_hidden; cap.wasApproval = data.approval_status || null;
   cap.cityId = data.city_id || null;
   cap.note = data.description || '';
   cap.address = data.address || '';
@@ -3763,6 +4072,7 @@ $('f-featured').onclick = () => {
     const key = { 'f-name':'name','f-note':'note','f-address':'address',
                   'f-building':'building' }[id];
     cap[key] = $(id).value;
+    markTouched(key);
     if (id === 'f-note') growNote();
     if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
     renderSaveState();
@@ -3798,6 +4108,7 @@ function renderCategories() {
     b.setAttribute('aria-pressed', String(cap.category === name));
     b.onclick = () => {
       cap.category = cap.category === name ? '' : name;
+      markTouched('category');
       box.querySelectorAll('.chip').forEach((c) =>
         c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
       // Once he has chosen, it is his choice and not Apple's suggestion.
@@ -3806,6 +4117,32 @@ function renderCategories() {
     };
     box.appendChild(b);
   });
+}
+
+/** The header stamp. Asks the ACTIVE service worker what it is serving rather
+ *  than trusting the page alone — a page can only report the build it IS, and
+ *  the whole failure mode is a worker handing back an older one. When they
+ *  match it is one quiet token; when they do not it turns red and names both,
+ *  which is the moment to reload. */
+function renderBuildStamp() {
+  const el = $('build-stamp');
+  if (!el) return;
+  el.textContent = BUILD.replace('field-', '');
+  el.title = 'Build ' + BUILD;
+
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller) return;          // no worker: the page is the truth
+  const chan = new MessageChannel();
+  const timer = setTimeout(() => { /* an old worker has no listener — say nothing */ }, 1500);
+  chan.port1.onmessage = (e) => {
+    clearTimeout(timer);
+    const theirs = e.data && e.data.version;
+    if (!theirs || theirs === BUILD) return;
+    el.classList.add('stale');
+    el.textContent = BUILD.replace('field-', '') + ' · sw ' + String(theirs).replace('field-', '');
+    el.title = 'This page is ' + BUILD + ' but the service worker is ' + theirs + '. Reload.';
+  };
+  try { sw.controller.postMessage({ ask: 'version' }, [chan.port2]); } catch { /* ignore */ }
 }
 
 /** 650 rows, ~30KB. Cached and refreshed when older than seven days AND online. */
@@ -3846,6 +4183,8 @@ async function boot() {
     if (next && !session) await showApp(next);
     if (!next) { session = null; $('app').hidden = true; $('login').hidden = false; }
   });
+
+  renderBuildStamp();
 
   // The service worker is what makes a cold open in a basement work at all.
   //
