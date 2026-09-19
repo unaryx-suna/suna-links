@@ -338,6 +338,15 @@
   <div>
     <h1 style="margin-top:0">Where is this place?</h1>
     <p class="sub" id="loc-sheet-now"></p>
+
+    <!-- Search first, because it is now the primary way in: Google's iOS share
+         link carries no coordinate at all, so no parser can recover one. -->
+    <label for="opt-search">Search for it by name</label>
+    <input id="opt-search" type="text" inputmode="search" autocomplete="off"
+           autocapitalize="words" placeholder="Two words is usually enough">
+    <p class="note" id="opt-search-note" style="margin:6px 0 0"></p>
+    <div id="opt-search-results" style="margin-top:8px"></div>
+
     <button class="opt" id="opt-gps">Use my current location<small id="opt-gps-sub">Only correct if you are standing here.</small></button>
     <button class="opt" id="opt-exif" hidden>Use the photo's location<small id="opt-exif-sub"></small></button>
     <label for="opt-link">Paste a Google or Apple Maps link</label>
@@ -412,9 +421,12 @@ const blank = () => ({
   name: '',
   category: '',
   lat: null, lon: null,
-  /** 'exif' | 'gps' | 'link' | 'manual' | null — what the UI names, and what
-   *  maps onto `coordinate_source`. */
+  /** 'exif' | 'gps' | 'link' | 'search' | 'manual' | null — what the UI names,
+   *  and what maps onto `coordinate_source`. */
   locFrom: null,
+  /** For a search result: which index found it, so the provenance is the
+   *  provider's rather than a generic "manual". */
+  locProvider: null,
   locAccuracy: null,           // metres, live fix only
   locTakenAt: null,            // EXIF DateTimeOriginal, ISO
   cityId: null, cityName: null, cityDistanceKm: null,
@@ -887,6 +899,11 @@ function renderHours() {
 
 /** What goes in `coordinate_source`. Only presence earns `_verified`. */
 function coordinateSource() {
+  // **A searched coordinate is not presence-verified** — he did not stand
+  // there, a search index did. So it takes the provider's own source rather
+  // than `manual_entry_verified`, and both values were already in
+  // `landmarks_coordinate_source_check`: no migration.
+  if (cap.locFrom === 'search') return cap.locProvider || 'osm_nominatim';
   return (cap.locFrom === 'exif' || cap.locFrom === 'gps')
     ? 'manual_entry_verified'
     : 'manual_entry_unverified';
@@ -907,6 +924,8 @@ function renderLocation() {
     } else if (cap.locFrom === 'gps') {
       text.innerHTML = '📍 Live GPS · ' + co
         + '<span class="why">±' + Math.round(cap.locAccuracy || 0) + 'm</span>';
+    } else if (cap.locFrom === 'search') {
+      text.innerHTML = '📍 From search · ' + co + '<span class="why">Not verified</span>';
     } else if (cap.locFrom === 'link') {
       text.innerHTML = '📍 From link · ' + co + '<span class="why">Not verified</span>';
     } else {
@@ -921,6 +940,7 @@ function renderLocation() {
  *  downgrade is visible rather than discovered in SQL later. */
 function setLocation(lat, lon, from, extra = {}) {
   cap.lat = lat; cap.lon = lon; cap.locFrom = from;
+  cap.locProvider = extra.provider || null;
   cap.locAccuracy = extra.accuracy != null ? extra.accuracy : null;
   // A photo's timestamp is kept even when the coordinate is overridden: it is
   // still when the place was seen, which is what `last_verified_at` answers.
@@ -1080,6 +1100,12 @@ $('btn-edit-loc').onclick = () => {
   // Current value pre-filled and editable, per §4.2.
   $('opt-coords').value = cap.lat == null ? '' : cap.lat.toFixed(6) + ', ' + cap.lon.toFixed(6);
   $('opt-link').value = '';
+  // Offline, the field is disabled with a reason rather than left to look
+  // broken. Re-enabled whenever the sheet is opened with a signal.
+  $('opt-search').disabled = !navigator.onLine;
+  $('opt-search').value = '';
+  $('opt-search-results').innerHTML = '';
+  searchNote(navigator.onLine ? '' : 'No signal, so search is off. The other options below still work.');
   $('opt-exif').hidden = !exifCandidate;
   if (exifCandidate) {
     $('opt-exif-sub').textContent = exifCandidate.takenAt
@@ -1089,6 +1115,115 @@ $('btn-edit-loc').onclick = () => {
   $('loc-sheet').hidden = false;
 };
 $('loc-sheet-close').onclick = () => { $('loc-sheet').hidden = true; };
+
+/* ── Search by name — PANEL-SEARCH-BY-NAME.md ──────────────────────────
+ *
+ * The primary way in now. Google's iOS share link carries a name and an
+ * internal `ftid` and **no coordinate at all**, so no parser recovers one;
+ * typing two words and tapping a match is the fix.
+ *
+ * **Search is NOT part of §4.2's precedence chain.** EXIF → live GPS → link is
+ * the automatic PROPOSAL. This is a deliberate action inside the sheet, like
+ * typing coordinates: it never silently overrides a proposal, it wins because
+ * he tapped it.
+ */
+
+/** Their floor is one request a second; 350ms of quiet is the client half. */
+const SEARCH_DEBOUNCE_MS = 350;
+const SEARCH_MIN_CHARS = 3;
+let searchTimer = null, searchSeq = 0;
+
+$('opt-search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = $('opt-search').value.trim();
+  $('opt-search-results').innerHTML = '';
+
+  if (!navigator.onLine) {
+    // **A plain reason, not a spinner that never resolves.** Everything else in
+    // this sheet still works offline — photo, GPS, link, typed coordinates.
+    searchNote('No signal, so search is off. The other options below still work.');
+    return;
+  }
+  if (q.length < SEARCH_MIN_CHARS) {
+    searchNote(q.length ? 'Keep going — ' + SEARCH_MIN_CHARS + ' characters to search.' : '');
+    return;
+  }
+
+  searchNote('Searching…');
+  searchTimer = setTimeout(() => runSearch(q), SEARCH_DEBOUNCE_MS);
+});
+
+async function runSearch(q) {
+  // Sequence guard: a slow early response must not overwrite a later one.
+  const seq = ++searchSeq;
+  // **Bias to where he is** — the coordinate already set if there is one,
+  // otherwise the live fix. "Wing fat" in Hong Kong must not return Vancouver.
+  const centre = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
+  let url = '/api/place-search?q=' + encodeURIComponent(q);
+  if (centre) url += '&lat=' + centre.lat + '&lon=' + centre.lon;
+
+  try {
+    const r = await fetch(url);
+    if (seq !== searchSeq) return;
+    if (!r.ok) { searchNote('Search is unavailable right now.'); return; }
+    const rows = await r.json();
+    if (seq !== searchSeq) return;
+    renderSearchResults(Array.isArray(rows) ? rows : [], centre);
+  } catch {
+    if (seq === searchSeq) searchNote('Search is unavailable right now.');
+  }
+}
+
+function renderSearchResults(rows, centre) {
+  const box = $('opt-search-results');
+  box.innerHTML = '';
+  if (!rows.length) {
+    // A real answer, not an error: OSM's coverage of small businesses in Asia
+    // is genuinely thin.
+    searchNote('Nothing found. Try fewer words, or use one of the options below.');
+    return;
+  }
+  searchNote('');
+
+  // **Distance disambiguates two branches of one chain**, so it is not
+  // decoration — it is the column that makes the list usable.
+  const withKm = rows.map((r) => ({
+    ...r,
+    km: centre ? haversineKm(centre.lat, centre.lon, r.lat, r.lon) : null,
+  })).sort((a, b) => (a.km == null ? 0 : a.km) - (b.km == null ? 0 : b.km));
+
+  withKm.forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    const dist = r.km == null ? ''
+      : (r.km < 1 ? Math.round(r.km * 1000) + ' m away' : r.km.toFixed(1) + ' km away');
+    b.innerHTML = escapeHtml(r.name)
+      + '<small>' + escapeHtml(r.address || 'no address') + (dist ? ' · ' + dist : '') + '</small>';
+    b.onclick = () => chooseSearchResult(r);
+    box.appendChild(b);
+  });
+}
+
+function chooseSearchResult(r) {
+  setLocation(r.lat, r.lon, 'search', { provider: r.source || 'osm_nominatim' });
+  // **Prefill, never overwrite.** Something already typed is the user's, and a
+  // search result is a suggestion arriving after it.
+  if (!cap.name.trim() && r.name) {
+    cap.name = r.name;
+    $('f-name').value = r.name;
+  }
+  if (!cap.address.trim() && r.address) {
+    cap.address = r.address;
+    $('f-address').value = r.address;
+  }
+  $('opt-search').value = '';
+  $('opt-search-results').innerHTML = '';
+  searchNote('');
+  $('loc-sheet').hidden = true;
+  renderSaveState();
+}
+
+function searchNote(msg) { $('opt-search-note').textContent = msg; }
 
 $('opt-gps').onclick = () => {
   if (!liveFix) { locSheetError('No fix yet. Give it a few seconds outdoors.'); return; }
