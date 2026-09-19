@@ -27,7 +27,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v10';
+const CACHE_VERSION = 'field-v11';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be
@@ -72,8 +72,11 @@ self.addEventListener('fetch', (event) => {
   // MapKit JS is versioned by Apple behind `5.x.x` and mints nothing itself,
   // but caching it would pin a build we cannot see — and the token route must
   // never be answered from cache.
+  // Overpass joins this list: opening hours change, and a cached answer would
+  // offer last month's for as long as the cache survives.
   if (url.hostname.endsWith('.supabase.co')
       || url.hostname.endsWith('.apple-mapkit.com')
+      || url.hostname.endsWith('overpass-api.de')
       || url.pathname.startsWith('/api/')) {
     return;                                    // let the browser do it, and fail honestly
   }

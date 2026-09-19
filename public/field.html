@@ -44,6 +44,9 @@
     font-family: inherit;
   }
   textarea { min-height: 76px; resize: vertical; }
+  /* The one description box grows with what is typed rather than scrolling
+     inside 76px. */
+  #f-note { overflow: hidden; }
   button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 14px 18px; }
   .primary { background: var(--sand); color: var(--ink); font-weight: 600; width: 100%; }
   .primary[disabled] { opacity: .45; }
@@ -135,6 +138,10 @@
     border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 8px; color: var(--text);
   }
   .opt small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
+  /* A result that is already in the catalogue. Marked, not hidden: it is still
+     the place he searched for, it just wants opening rather than re-capturing. */
+  .opt.known { border-color: rgba(246,203,148,.45); }
+  .opt.known small { color: var(--sand); }
   .note { font-size: 12px; color: var(--dim); margin: 8px 0 0; }
   .err { color: var(--danger); font-size: 13px; margin: 8px 0 0; }
   .ok { color: var(--ok); font-size: 13px; }
@@ -228,6 +235,10 @@
 
     <p class="err" id="profile-warning" hidden></p>
 
+    <!-- Item 6 — shown after a save, so the next place on the same walk is one
+         tap rather than a cold form. -->
+    <button class="qbar" id="another-nearby" type="button" hidden>Saved. Add another nearby →</button>
+
     <label for="f-name">Name</label>
     <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
 
@@ -261,12 +272,19 @@
     </button>
 
     <label for="f-note">A line about this place</label>
-    <textarea id="f-note" placeholder="What is it, in one line?"></textarea>
+    <!-- **One box, because there is one column.** `f-note` and `f-desc` both
+         landed in `landmarks.description` and buildRow wrote
+         `description.trim() || note.trim()`, so the second box silently won and
+         the first was discarded without saying so. It grows instead. -->
+    <textarea id="f-note" placeholder="What is it, in one line? Longer is fine — it grows."></textarea>
+
+    <!-- Item 3. Outside <details> because a chip nobody opens is a chip nobody
+         sees; tapping it opens More with the grid already filled in. Hidden
+         entirely when OSM has nothing, which is most of the time. -->
+    <button class="qbar" id="osm-hours" type="button" hidden></button>
 
     <details>
       <summary>More</summary>
-      <label for="f-desc">Description</label>
-      <textarea id="f-desc" placeholder="Longer, if you have it. Overrides the line above."></textarea>
       <label for="f-address">Address</label>
       <input id="f-address" type="text" autocomplete="off">
       <label>Opening hours</label>
@@ -284,6 +302,9 @@
         used once and is the thing a local knows best.
       </p>
       <div class="chips" id="hint-kinds"></div>
+      <!-- Item 5. 131 authored hints already exist; for a given kind they are a
+           better prompt than an empty box. -->
+      <div id="hint-starters" style="margin:2px 0 8px"></div>
       <textarea id="hint-body" placeholder="One short line — 3 to 200 characters."></textarea>
       <div class="row" style="justify-content:space-between;margin-top:6px">
         <span class="note" id="hint-count" style="margin:0">0/200</span>
@@ -504,7 +525,9 @@ const blank = () => ({
   locAccuracy: null,           // metres, live fix only
   locTakenAt: null,            // EXIF DateTimeOriginal, ISO
   cityId: null, cityName: null, cityDistanceKm: null,
-  note: '', description: '', address: '', building: '', dishes: '',
+  /** ONE field. `description` is gone: both boxes wrote to
+   *  `landmarks.description` and only one of them survived. */
+  note: '', address: '', building: '', dishes: '',
   /** §1 — `{ [day 0-6]: { open: boolean, periods: [{from:'09:00', to:'18:00'}] } }`.
    *  **Day 0 is Sunday**, matching `periods[].day`; `weekdayDescriptions` is
    *  Monday-first and is a different index entirely. A day ABSENT from this map
@@ -532,6 +555,9 @@ let cap = blank();
 /** The most recent EXIF coordinate seen on any photo in this capture, kept so
  *  "use the photo's location" stays available after the proposal is overridden. */
 let exifCandidate = null;      // {lat, lon, takenAt}
+/** Where the last successful save was. Used only as a search centre for the
+ *  next capture on the same walk (item 6) — never as a location. */
+let lastSavedFix = null;
 /** The most recent live fix, same reason. */
 let liveFix = null;            // {lat, lon, accuracy}
 
@@ -1267,7 +1293,7 @@ async function runSearch(q) {
   // **Bias to where he is** — the coordinate already set if there is one,
   // otherwise the live fix. "Wing fat" in Hong Kong must not return Vancouver,
   // and without a region MapKit does exactly that.
-  const centre = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
+  const centre = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : (liveFix || lastSavedFix);
 
   try {
     // **Apple first, OSM second, and the union is the point of having two.**
@@ -1460,6 +1486,7 @@ function renderSearchResults(rows, centre) {
     km: centre ? haversineKm(centre.lat, centre.lon, r.lat, r.lon) : null,
   })).sort((a, b) => (a.km == null ? 0 : a.km) - (b.km == null ? 0 : b.km));
 
+  const buttons = [];
   withKm.forEach((r) => {
     const b = document.createElement('button');
     b.className = 'opt';
@@ -1469,7 +1496,50 @@ function renderSearchResults(rows, centre) {
       + '<small>' + escapeHtml(r.address || 'no address') + (dist ? ' · ' + dist : '') + '</small>';
     b.onclick = () => chooseSearchResult(r);
     box.appendChild(b);
+    buttons.push({ row: r, el: b });
   });
+
+  // **The dupe check belongs HERE, not at save.** It already exists, but it
+  // only fires from `btn-save` — after the name, the category, the note and
+  // the photographs have all been done. Production carries 49 names on more
+  // than one visible landmark, 118 rows between them, and Abbaye d'Aulne is
+  // two of them 150m apart. Catching it in the result list turns a wasted
+  // capture into an edit before anything has been typed.
+  markKnownPlaces(buttons);
+}
+
+/** One query for the whole result list, not one per row: a box spanning every
+ *  result, matched locally on the same 150m + name rules the save-time sheet
+ *  uses. Silent on any failure — a search that works is worth more than an
+ *  accurate error, and this is an enhancement to it, not a gate. */
+async function markKnownPlaces(buttons) {
+  if (!buttons.length || !navigator.onLine) return;
+  const lats = buttons.map((b) => b.row.lat), lons = buttons.map((b) => b.row.lon);
+  const pad = 0.002;                                   // ≈220m, same as runDuplicateCheck
+  try {
+    const { data, error } = await db.from('landmarks')
+      .select('id,name,latitude,longitude,cover_image_url')
+      .gte('latitude',  Math.min(...lats) - pad).lte('latitude',  Math.max(...lats) + pad)
+      .gte('longitude', Math.min(...lons) - pad).lte('longitude', Math.max(...lons) + pad)
+      .limit(200);
+    if (error || !data || !data.length) return;
+    for (const { row, el } of buttons) {
+      const name = (row.name || '').toLowerCase();
+      const hit = data
+        .map((x) => ({ ...x, km: haversineKm(row.lat, row.lon, x.latitude, x.longitude) }))
+        .filter((x) => x.km <= 0.15 && nameLooksSame(name, (x.name || '').toLowerCase()))
+        .sort((a, b) => a.km - b.km)[0];
+      if (!hit) continue;
+      el.classList.add('known');
+      el.innerHTML = escapeHtml(row.name)
+        + '<small>Already in Suna' + (hit.cover_image_url ? '' : ', with no cover photo')
+        + ' — open it instead</small>';
+      // **Open the existing row rather than starting a second one.** Places are
+      // canonical; a new capture here is exactly how the 118 duplicate rows
+      // happened in the first place.
+      el.onclick = () => { $('loc-sheet').hidden = true; openExisting(hit.id); };
+    }
+  } catch { /* offline or refused — the list still works */ }
 }
 
 /* ── Apple's POI category → Suna's chip ───────────────────────────────
@@ -1565,6 +1635,7 @@ function chooseSearchResult(r) {
   // The whole Apple place is on `r` now; the category is what we take from it.
   categoryHint('');
   if (r.source === 'apple') suggestCategoryFromApple(r.poi);
+  offerOSMHours(r.lat, r.lon);
   $('opt-search').value = '';
   $('opt-search-results').innerHTML = '';
   searchFromLink = null;
@@ -1574,6 +1645,124 @@ function chooseSearchResult(r) {
 }
 
 function searchNote(msg) { $('opt-search-note').textContent = msg; }
+
+/* ── Opening hours, when OSM happens to know them ─────────────────────
+ *
+ * A *sometimes* source, not a fill. Measured 19 Sep: Hanoi returns nearby
+ * businesses with `opening_hours`, Hong Kong and rural Belgium return nothing.
+ * So this has to help when it can and be completely invisible when it cannot —
+ * no chip, no note, no empty state.
+ *
+ * **Never written straight into `operating_hours`.** `hours_source` is CHECKed
+ * against google|user|admin, and an unreviewed third-party string is none of
+ * those honestly. The chip fills the GRID; once he has looked at it and saved,
+ * `buildRow` stamps 'admin', exactly as if he had typed it.
+ */
+const OSM_DAYS = { Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6 };
+
+async function offerOSMHours(lat, lon) {
+  $('osm-hours').hidden = true;
+  // Never over something already entered.
+  if (Object.keys(cap.hours || {}).length) return;
+  if (!navigator.onLine) return;
+  try {
+    const query = '[out:json][timeout:10];nwr(around:80,' + lat + ',' + lon + ')["opening_hours"];out tags 5;';
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(query),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    // Overpass rate-limits with a plain-text body, so never assume JSON.
+    if (!r.ok) return;
+    const text = await r.text();
+    let data; try { data = JSON.parse(text); } catch { return; }
+    const els = (data && data.elements) || [];
+    for (const el of els) {
+      const raw = el.tags && el.tags.opening_hours;
+      if (!raw) continue;
+      const parsed = parseOSMHours(raw);
+      if (!parsed) continue;                 // unmodellable: say nothing at all
+      const btn = $('osm-hours');
+      btn.textContent = 'OSM says ' + raw + ' · use it';
+      btn.hidden = false;
+      btn.onclick = () => {
+        cap.hours = parsed;
+        const more = document.querySelector('#pane-capture details');
+        if (more) more.open = true;
+        renderHours();
+        btn.hidden = true;
+        // Scrolled to, because the grid it just filled is below the fold.
+        $('hours-grid').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      };
+      return;
+    }
+  } catch { /* no network, CORS, rate limit — this feature is never load-bearing */ }
+}
+
+/** The common `opening_hours` subset, and nothing else. Anything this cannot
+ *  represent returns null and no chip appears — a wrong grid would be worse
+ *  than no chip, because he would correct three days and trust the other four. */
+function parseOSMHours(raw) {
+  const str = String(raw || '').trim();
+  if (!str) return null;
+  if (/^24\/7$/i.test(str)) {
+    const all = {};
+    for (let d = 0; d < 7; d++) all[d] = { open: true, periods: [{ from: '00:00', to: '23:59' }] };
+    return all;
+  }
+  if (/\[|sunrise|sunset|easter|week|\bopen\b|\bunknown\b|"/i.test(str)) return null;
+
+  const out = {};
+  let any = false;
+  for (const rule of str.split(';')) {
+    const r = rule.trim();
+    if (!r) continue;
+    if (/^(PH|SH)\b/i.test(r)) continue;              // holidays are not in this model
+    const m = r.match(/^([A-Za-z,\-]+)\s+(.+)$/);
+    if (!m) return null;
+    const days = [];
+    for (const chunk of m[1].split(',')) {
+      const range = chunk.trim().match(/^([A-Za-z]{2})\s*-\s*([A-Za-z]{2})$/);
+      if (range) {
+        const a = OSM_DAYS[cap2(range[1])], b = OSM_DAYS[cap2(range[2])];
+        if (a == null || b == null) return null;
+        // Wraps: "We-Mo" is We Th Fr Sa Su Mo, not an empty range.
+        for (let i = 0, d = a; i < 7; i++, d = (d + 1) % 7) { days.push(d); if (d === b) break; }
+      } else {
+        const d = OSM_DAYS[cap2(chunk.trim())];
+        if (d == null) return null;
+        days.push(d);
+      }
+    }
+    if (!days.length) return null;
+
+    const times = m[2].trim();
+    if (/^(off|closed)$/i.test(times)) {
+      days.forEach((d) => { out[d] = { open: false, periods: [] }; any = true; });
+      continue;
+    }
+    const periods = [];
+    for (const span of times.split(',')) {
+      const t = span.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+      if (!t) return null;
+      const from = clock(t[1], t[2]), to = clock(t[3], t[4]);
+      if (!from || !to) return null;
+      periods.push({ from, to });
+    }
+    days.forEach((d) => { out[d] = { open: true, periods: periods.slice() }; any = true; });
+  }
+  return any ? out : null;
+}
+
+function cap2(x) { return x.charAt(0).toUpperCase() + x.charAt(1).toLowerCase(); }
+
+/** `<input type=time>` refuses "24:00", which OSM writes constantly for
+ *  midnight. Clamped to 23:59 rather than dropping the day. */
+function clock(h, m) {
+  const hh = parseInt(h, 10), mm = parseInt(m, 10);
+  if (!isFinite(hh) || !isFinite(mm) || hh > 24 || mm > 59) return null;
+  if (hh === 24) return mm === 0 ? '23:59' : null;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
 
 $('opt-gps').onclick = () => {
   if (!liveFix) { locSheetError('No fix yet. Give it a few seconds outdoors.'); return; }
@@ -1938,7 +2127,7 @@ function buildRow() {
     latitude: cap.lat,
     longitude: cap.lon,
     city_id: cap.cityId,
-    description: (cap.description.trim() || cap.note.trim() || null),
+    description: (cap.note.trim() || null),
     address: cap.address.trim() || null,
     // **`operating_hours` jsonb, not an `opening_hours` text column** — there
     // is no such column, and the shape is the one the CMS writes and
@@ -2026,7 +2215,18 @@ async function doSave() {
       state: 'pending', attempts: 0, lastError: null, at: Date.now(),
     });
 
+    // Item 6 — the region survives the save. He captures several places on one
+    // walk, and a cold form each time throws away the city and country that
+    // were just resolved from the coordinate.
+    const lastCity = { id: cap.cityId, name: cap.cityName };
+    const lastLat = cap.lat, lastLon = cap.lon;
     resetForm();
+    if (lastCity.id && cap.cityId == null) {
+      cap.cityId = lastCity.id; cap.cityName = lastCity.name;
+      cap.cityDistanceKm = 0;
+      renderCity();
+    }
+    offerAnotherNearby(lastLat, lastLon);
     await refreshQueueBadge();
     drainQueue();
   } catch (e) {
@@ -2035,6 +2235,25 @@ async function doSave() {
 }
 
 function showSaveError(msg) { $('save-error').textContent = msg; $('save-error').hidden = false; }
+
+/** **Offer the next one rather than a cold form.** The search box is the way in
+ *  and it is two taps down inside the location sheet; this is one tap, with the
+ *  region already set from the place just saved. */
+function offerAnotherNearby(lat, lon) {
+  const bar = $('another-nearby');
+  if (lat == null) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.onclick = () => {
+    bar.hidden = true;
+    // **Bias the next search to where he just was**, without pretending the new
+    // capture has a location. `runSearch` resolves its centre when the query
+    // runs, so this is remembered rather than written into `cap` — writing it
+    // there would put a pin on a place he has not chosen yet.
+    lastSavedFix = { lat, lon };
+    openLocationSheet();
+    $('opt-search').focus();
+  };
+}
 
 /** The country of the PLACE, from its own coordinate — never the device's. */
 function countryCodeForCapture() {
@@ -2049,7 +2268,7 @@ function resetForm() {
   cap = blank();
   exifCandidate = null;
   dupeCandidates = []; dupeDismissed = false;
-  ['f-name', 'f-note', 'f-desc', 'f-address', 'f-building']
+  ['f-name', 'f-note', 'f-address', 'f-building']
     .forEach((id) => { $(id).value = ''; });
   document.querySelectorAll('#f-categories .chip')
     .forEach((c) => c.setAttribute('aria-pressed', 'false'));
@@ -2057,6 +2276,9 @@ function resetForm() {
   $('f-featured').innerHTML = '☆ Feature this place on its country screen'
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   categoryHint('');
+  $('osm-hours').hidden = true;
+  $('another-nearby').hidden = true;
+  growNote();
   renderThumbs();
   renderHours();
   renderHintKinds();
@@ -2601,7 +2823,7 @@ async function openQueued(id) {
   cap.locProvider = cap.locFrom === 'search' ? row.coordinate_source : null;
   cap.locTakenAt = row.last_verified_at || null;
   cap.cityId = row.city_id || null;
-  cap.description = row.description || '';
+  cap.note = row.description || '';
   cap.address = row.address || '';
   cap.hours = hoursFromOperating(row.operating_hours);
   cap.building = row.building_name || '';
@@ -2614,7 +2836,7 @@ async function openQueued(id) {
   }));
 
   $('f-name').value = cap.name;
-  $('f-desc').value = cap.description;
+  $('f-note').value = cap.note;
   $('f-address').value = cap.address;
   $('f-building').value = cap.building;
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
@@ -2658,14 +2880,14 @@ async function openExisting(id) {
   cap.locProvider = cap.locFrom === 'search' ? data.coordinate_source : null;
   cap.locTakenAt = data.last_verified_at || null;
   cap.cityId = data.city_id || null;
-  cap.description = data.description || '';
+  cap.note = data.description || '';
   cap.address = data.address || '';
   cap.hours = hoursFromOperating(data.operating_hours);
   cap.building = data.building_name || '';
   cap.dishes = Array.isArray(data.signature_dishes) ? data.signature_dishes.join(', ') : '';
 
   $('f-name').value = cap.name;
-  $('f-desc').value = cap.description;
+  $('f-note').value = cap.note;
   $('f-address').value = cap.address;
   $('f-building').value = cap.building;
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
@@ -2689,6 +2911,13 @@ async function openExisting(id) {
   renderLocation();
   switchTab('capture');
   window.scrollTo(0, 0);
+}
+
+/** One box that grows, rather than two that disagreed about which one counts. */
+function growNote() {
+  const el = $('f-note');
+  el.style.height = 'auto';
+  el.style.height = Math.max(76, Math.min(el.scrollHeight, 320)) + 'px';
 }
 
 function escapeHtml(s) {
@@ -2718,8 +2947,19 @@ const HINT_KINDS = [
   { kind: 'see',       label: 'What to see' },
   { kind: 'time',      label: 'When to come' },
   { kind: 'practical', label: 'Worth knowing' },
+  // **`skip` stays on the row, with a written starter.** It has never been used
+  // once in 131 hints — but the reason to keep it is in this file already: it
+  // is the thing a local knows best and a visitor cannot find out. Zero uses is
+  // an empty-box problem, which is exactly what starters fix, so it gets a
+  // seeded one rather than being taken off the row.
   { kind: 'skip',      label: 'What to skip' },
 ];
+
+/** Seeds for kinds the corpus cannot supply. Only `skip` needs one today. */
+const HINT_SEEDS = {
+  skip: ['The upstairs dining room — same menu, none of the atmosphere.',
+         'Skip the gift shop and spend the time in the garden.'],
+};
 const HINT_MAX = 200, HINT_MIN = 3;
 
 let hintKind = 'order';
@@ -2738,6 +2978,53 @@ function renderHintKinds() {
       hintKind = k.kind;
       box.querySelectorAll('.chip').forEach((c) =>
         c.setAttribute('aria-pressed', String(c.textContent === k.label)));
+      loadHintStarters();
+    };
+    box.appendChild(b);
+  });
+  loadHintStarters();
+}
+
+/** **The shortest existing hints of this kind, as tappable starters.** They drop
+ *  into the box for editing rather than being submitted — the corpus is a
+ *  prompt, not an answer, and every one of them is about a different place. */
+async function loadHintStarters() {
+  const box = $('hint-starters');
+  box.innerHTML = '';
+  const seeds = HINT_SEEDS[hintKind] || [];
+  let bodies = seeds.slice(0, 3);
+
+  if (!bodies.length && navigator.onLine) {
+    try {
+      const { data } = await db.from('place_hints')
+        .select('body').eq('kind', hintKind).eq('status', 'published').limit(60);
+      bodies = (data || []).map((h) => h.body).filter(Boolean)
+        // Shortest first: a long hint read as a template invites a long hint,
+        // and the CHECK stops at 200 characters.
+        .sort((a, b) => a.length - b.length).slice(0, 3);
+    } catch { return; }
+  }
+  if (!bodies.length) return;
+  // The kind may have changed while the query was in flight.
+  if (box.innerHTML) return;
+
+  const lead = document.createElement('p');
+  lead.className = 'note';
+  lead.style.margin = '0 0 6px';
+  lead.textContent = seeds.length ? 'Nothing written yet for this kind. A start:'
+                                  : 'Tap one to start from it:';
+  box.appendChild(lead);
+
+  bodies.forEach((body) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.style.padding = '10px 12px';
+    b.style.fontSize = '13px';
+    b.textContent = body;
+    b.onclick = () => {
+      $('hint-body').value = body.slice(0, HINT_MAX);
+      $('hint-count').textContent = $('hint-body').value.length + '/' + HINT_MAX;
+      $('hint-body').focus();
     };
     box.appendChild(b);
   });
@@ -3119,11 +3406,12 @@ $('f-featured').onclick = () => {
    12. Boot
    ════════════════════════════════════════════════════════════════════════ */
 
-['f-name','f-note','f-desc','f-address','f-building'].forEach((id) => {
+['f-name','f-note','f-address','f-building'].forEach((id) => {
   $(id).addEventListener('input', () => {
-    const key = { 'f-name':'name','f-note':'note','f-desc':'description','f-address':'address',
+    const key = { 'f-name':'name','f-note':'note','f-address':'address',
                   'f-building':'building' }[id];
     cap[key] = $(id).value;
+    if (id === 'f-note') growNote();
     if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
     renderSaveState();
   });
