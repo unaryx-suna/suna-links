@@ -233,6 +233,7 @@
 
     <label>Category</label>
     <div class="chips" id="f-categories"></div>
+    <p class="note" id="category-hint" style="margin:0 0 4px" hidden></p>
 
     <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
     <div class="thumbs" id="f-thumbs">
@@ -1402,12 +1403,22 @@ async function searchApple(q, centre) {
           resolve([]);
           return;
         }
+        // **The whole place travels; the narrowing happens where the decision
+        // is made.** This mapper used to flatten an Apple `Place` to four
+        // fields, which threw away `pointOfInterestCategory` — the one thing
+        // that can fill the field on the critical path of every capture, since
+        // `landmarks.category` is NOT NULL and the save button is dead without
+        // it. Anything else Apple sends (locality, thoroughfare, timezone, and
+        // the telephone and urls that have no column to go in) is now available
+        // to `chooseSearchResult` rather than gone at the boundary.
         resolve(data.places.slice(0, 8).map((place) => ({
           name: place.name || q,
           address: place.formattedAddress || null,
           lat: place.coordinate ? place.coordinate.latitude : NaN,
           lon: place.coordinate ? place.coordinate.longitude : NaN,
           source: 'apple',
+          poi: place.pointOfInterestCategory || null,
+          place,
         })).filter((x) => isFinite(x.lat) && isFinite(x.lon)));
       });
     } catch (e) {
@@ -1461,6 +1472,80 @@ function renderSearchResults(rows, centre) {
   });
 }
 
+/* ── Apple's POI category → Suna's chip ───────────────────────────────
+ *
+ * Built against `mapkit.PointOfInterestCategory` read off the live library —
+ * **73 values on 19 Sep** — and `public.tags where dimension='category' and
+ * status='active'`, **16 values**. Both were enumerated rather than recalled,
+ * because a key that does not exist in the enum is a mapping that silently
+ * never fires and looks identical to Apple not knowing the place.
+ *
+ * **Three Suna categories can never be filled from Apple**: Sacred Space (Apple
+ * has no religious-building category at all, and it is one Suna uses constantly
+ * in Asia), Viewpoint and Picturesque. They stay manual. That is not a gap to
+ * chase and nothing here should invent a mapping for them.
+ */
+const APPLE_CATEGORY_MAP = {
+  Restaurant: 'Culinary Spot', Bakery: 'Culinary Spot',
+  Cafe: 'Cafe & Workspace',
+  Nightlife: 'Nightlife & Social', Brewery: 'Nightlife & Social',
+  Distillery: 'Nightlife & Social', Winery: 'Nightlife & Social',
+  MusicVenue: 'Nightlife & Social',
+  FoodMarket: 'Market & Bazaar',
+  Museum: 'Museum', Planetarium: 'Museum',
+  Castle: 'Historic Site', Fortress: 'Historic Site', Landmark: 'Historic Site',
+  NationalMonument: 'Monument & Statue',
+  Theater: 'Art & Culture', MovieTheater: 'Art & Culture',
+  ConventionCenter: 'Art & Culture', Library: 'Art & Culture',
+  Park: 'Nature & Parks', NationalPark: 'Nature & Parks', Beach: 'Nature & Parks',
+  Campground: 'Nature & Parks', RVPark: 'Nature & Parks', Hiking: 'Nature & Parks',
+  Airport: 'Travel Hub', PublicTransport: 'Travel Hub', Marina: 'Travel Hub',
+  AmusementPark: 'Activity', Fairground: 'Activity', Zoo: 'Activity',
+  Aquarium: 'Activity', Stadium: 'Activity', FitnessCenter: 'Activity',
+  Spa: 'Activity', Golf: 'Activity', MiniGolf: 'Activity', GoKart: 'Activity',
+  Bowling: 'Activity', SkatePark: 'Activity', Skating: 'Activity',
+  Skiing: 'Activity', Surfing: 'Activity', Swimming: 'Activity',
+  Kayaking: 'Activity', Fishing: 'Activity', RockClimbing: 'Activity',
+  Baseball: 'Activity', Basketball: 'Activity', Soccer: 'Activity',
+  Tennis: 'Activity', Volleyball: 'Activity',
+};
+
+/** **The unmapped values are themselves a signal.** If Apple calls the chosen
+ *  result one of these, it is probably not a place for the catalogue. Said
+ *  quietly, and it never blocks the save — the judgement is his. */
+const APPLE_UTILITY = new Set([
+  'ATM', 'Bank', 'Hospital', 'Pharmacy', 'Police', 'FireStation', 'PostOffice',
+  'Restroom', 'School', 'Laundry', 'Beauty', 'AutomotiveRepair', 'GasStation',
+  'Parking', 'Hotel', 'Store',
+]);
+
+function categoryHint(msg) {
+  const el = $('category-hint');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+/** **Pre-select, never lock** — the same rule the name and address prefill
+ *  already follows. A suggestion that arrives before he types is help; one that
+ *  overwrites what he chose is not. Marked in the UI so a wrong guess reads as
+ *  a guess and is one tap from being changed. */
+function suggestCategoryFromApple(poi) {
+  if (!poi) return;
+  if (APPLE_UTILITY.has(poi)) {
+    categoryHint('Apple calls this ' + poi + '. That may not be a place for the '
+      + 'catalogue — save it anyway if it is.');
+    return;
+  }
+  const suna = APPLE_CATEGORY_MAP[poi];
+  if (!suna) return;                       // no mapping: say nothing, choose nothing
+  if (cap.category) return;                // already chosen — his wins
+  if (!categories.includes(suna)) return;  // the chip row comes from `tags`, not from here
+  cap.category = suna;
+  document.querySelectorAll('#f-categories .chip').forEach((c) =>
+    c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
+  categoryHint('Category suggested from Apple (' + poi + '). Tap another if it is wrong.');
+}
+
 function chooseSearchResult(r) {
   // **Provenance stays honest, per provider.** Neither is presence: a search
   // index found it, he did not stand there. Both values are already in
@@ -1477,6 +1562,9 @@ function chooseSearchResult(r) {
     cap.address = r.address;
     $('f-address').value = r.address;
   }
+  // The whole Apple place is on `r` now; the category is what we take from it.
+  categoryHint('');
+  if (r.source === 'apple') suggestCategoryFromApple(r.poi);
   $('opt-search').value = '';
   $('opt-search-results').innerHTML = '';
   searchFromLink = null;
@@ -1968,6 +2056,7 @@ function resetForm() {
   $('f-featured').setAttribute('aria-pressed', 'false');
   $('f-featured').innerHTML = '☆ Feature this place on its country screen'
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+  categoryHint('');
   renderThumbs();
   renderHours();
   renderHintKinds();
@@ -3071,6 +3160,8 @@ function renderCategories() {
       cap.category = cap.category === name ? '' : name;
       box.querySelectorAll('.chip').forEach((c) =>
         c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
+      // Once he has chosen, it is his choice and not Apple's suggestion.
+      categoryHint('');
       renderSaveState();
     };
     box.appendChild(b);
