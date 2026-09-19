@@ -2105,7 +2105,20 @@ function AppLoggerNoop(e) { console.warn('featured append failed', e); }
 async function uploadCountryWork(item) {
   const c = item.country || {};
   const code = c.code;
-  if (!code) throw new Error('queued country work with no country');
+  // **The country guard is for COUNTRY work only.**
+  //
+  // A queued hint rides this same queue — `queueCountryWork({kind:'place_hint',
+  // code: null, …})` — because a hint on a not-yet-uploaded place has nothing to
+  // point at. With the guard at the top of the function, every one of them threw
+  // "queued country work with no country" before reaching its own branch below.
+  // So even with the column name fixed, a queued hint could never drain: it
+  // failed five times on a message about countries and stopped.
+  //
+  // Found by running this function against a queued hint rather than by reading
+  // it. `place_hint` is keyed by its landmark, never by a country code.
+  if (item.kind !== 'place_hint' && !code) {
+    throw new Error('queued country work with no country');
+  }
 
   if (item.kind === 'country_hero') {
     // **Fixed path, upsert.** One object per country, so a retry overwrites
@@ -2162,7 +2175,18 @@ async function uploadCountryWork(item) {
   if (item.kind === 'place_hint') {
     // Queued when the place was not on the server yet — a hint has a FK to
     // `landmarks`, so it can only land after its capture has.
-    const { error } = await db.from('place_hints').insert(c.row);
+    //
+    // **Repair the key on the way out.** Everything queued before this release
+    // stored `place_id`, which is not a column, so those rows would go on
+    // failing forever after the fix. They are a day of field work and the only
+    // copy of it, so the value is moved across rather than the item dropped.
+    // The repair is on the copy being sent; the queued item is left alone, so
+    // a failure here still leaves the work exactly where it was.
+    const hint = { ...c.row };
+    if (hint.landmark_id == null && hint.place_id != null) hint.landmark_id = hint.place_id;
+    delete hint.place_id;
+    if (!hint.landmark_id) throw new Error('place_hints: queued hint has no landmark');
+    const { error } = await db.from('place_hints').insert(hint);
     if (error) throw new Error('place_hints: ' + error.message);
     return;
   }
@@ -2315,7 +2339,9 @@ function queueWhat(item) {
  *
  *  **Items queued before this release carry no `label`** — and they are a day
  *  of field work, so they get derived rather than shrugged at. A hint's
- *  `place_id` is the client-generated id of the capture it was written against,
+ *  `landmark_id` is the client-generated id of the capture it was written
+ *  against (older queued rows spell the same value `place_id`, which is the bug
+ *  this release fixes — both are read so a day's queued work still names itself),
  *  which is very often still sitting in this same queue: that is the best
  *  derivation available and it costs nothing. Anything left over says what it
  *  is honestly, and a missing label NEVER renders a dangling separator. */
@@ -2326,7 +2352,7 @@ function queueLabel(item, all) {
   }
   const c = item.country || {};
   if (item.kind === 'place_hint') {
-    const placeID = c.row && c.row.place_id;
+    const placeID = c.row && (c.row.landmark_id || c.row.place_id);
     const owner = placeID && (all || []).find(
       (q) => (!q.kind || q.kind === 'place') && q.id === placeID);
     if (owner && owner.row && owner.row.name) return owner.row.name;
@@ -2648,7 +2674,13 @@ $('btn-add-hint').onclick = async () => {
   if (!session) { hintError('Signed out.'); return; }
 
   const row = {
-    place_id: cap.id,
+    // **`landmark_id`, not `place_id`.** There is no `place_id` column on
+    // `place_hints` and there never was — the live schema is
+    // (id, landmark_id NOT NULL, body, kind, source_tier, author_id, …). Every
+    // insert and every read from this page 400'd with 42703, the catch below
+    // filed each one in the queue, and the page said "Hint queued." So the
+    // panel reported success while `place_hints` took zero rows in three days.
+    landmark_id: cap.id,
     kind: hintKind,
     body,
     author_id: session.user.id,
@@ -2682,7 +2714,7 @@ async function loadPlaceHints() {
   placeHints = [];
   if (!cap.id || !navigator.onLine) return;
   const { data } = await db.from('place_hints')
-    .select('id,kind,body').eq('place_id', cap.id).order('kind');
+    .select('id,kind,body').eq('landmark_id', cap.id).order('kind');
   placeHints = data || [];
   placeHints.forEach((h) => {
     const label = (HINT_KINDS.find((k) => k.kind === h.kind) || {}).label || h.kind;
