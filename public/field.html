@@ -117,14 +117,36 @@
   .danger { background: rgba(255,107,107,.14); color: var(--danger); }
   .badge { background: var(--sand); color: var(--ink); border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
+  /* §3 — "stopped" must not read as a quieter "waiting". */
+  .badge.failed { background: var(--danger); color: #fff; }
   /* §1 — the photograph starts the capture, so it is the first thing on the
      screen rather than a field part way down the form. */
+  /* §2 — equal weight, side by side. They stack on a narrow phone rather than
+     shrinking to two cramped columns. */
+  .doors { display: flex; gap: 10px; margin: 14px 0 6px; }
+  .doors .shoot { flex: 1; margin: 0; }
+  @media (max-width: 420px) { .doors { flex-direction: column; } }
   .shoot {
     display: block; width: 100%; text-align: left; font-family: inherit;
     background: var(--sand); color: var(--ink); border-radius: 16px;
-    padding: 18px; font-size: 17px; font-weight: 700; margin: 14px 0 6px;
+    padding: 16px; font-size: 16px; font-weight: 700;
+    /* A transparent border so the two doors are the SAME width. A border is not
+       flexible, so without this the bordered one ends up 2px wider than the
+       one beside it — and "equal weight" is the whole point of §2. */
+    border: 1px solid transparent;
   }
+  .shoot .ico { display: block; font-size: 22px; margin-bottom: 4px; }
+  .shoot.alt { background: rgba(246,203,148,.16); color: var(--sand);
+               border: 1px solid rgba(246,203,148,.45); }
   .shoot small { display: block; font-weight: 400; font-size: 12px; opacity: .75; margin-top: 3px; }
+  .burger { background: none; color: var(--text); font-size: 20px; padding: 4px 6px; line-height: 1; }
+  .burger.stale { color: var(--danger); }
+  /* §1 — the one-tap fix for a stale shell. */
+  .updatebar {
+    display: block; width: 100%; text-align: left; font-family: inherit;
+    background: rgba(255,107,107,.12); border: 0; border-bottom: 1px solid rgba(255,107,107,.45);
+    color: var(--danger); font-size: 13px; font-weight: 600; padding: 11px 16px; border-radius: 0;
+  }
   /* Which source the coordinate came from, said every time. A silent fallback
      to the device fix is how a hotel becomes a restaurant's coordinate. */
   .shotsrc { font-size: 12px; margin: 0 0 10px; color: var(--dim); }
@@ -228,29 +250,25 @@
 
 <!-- ─────────────────────────── the tool ─────────────────────────── -->
 <div id="app" hidden>
+  <!-- §3/§4 — the front of this tool is for capturing, not for navigating.
+       Outside, always one tap: the camera and the upload (in the pane below),
+       and the queue badge WHEN there is something in it. Everything else —
+       Finish these, Country, Sign out, the build — is behind the menu. -->
   <div class="topbar">
-    <div class="tabs">
-      <button class="tab" id="tab-capture" aria-selected="true">Capture</button>
-      <button class="tab" id="tab-finish" aria-selected="false">Finish these</button>
-      <!-- The queue gets a tab of its own. Mixed into "Finish these" it was
-           indistinguishable from a genuinely half-finished server row, and a
-           queue that is retrying looked identical to one that had given up. -->
-      <button class="tab" id="tab-queue" aria-selected="false">Queue</button>
-      <!-- §2 — hidden entirely for a non-admin. Every write on it is
-           `is_admin()`-gated, and a tab that can only produce errors is worse
-           than no tab. -->
-      <button class="tab" id="tab-country" aria-selected="false" hidden>Country</button>
-    </div>
+    <button class="tab" id="tab-capture" aria-selected="true"
+            style="font-weight:700;font-size:15px">Suna Panel</button>
     <div class="row">
-      <!-- §4 — twice now a stale shell has been argued about as if it were a
-           deployed fix. This answers "is this the new build" at a glance, and
-           says so LOUDLY when the page and its service worker disagree, which
-           is the exact shape that confusion took. -->
-      <span class="build" id="build-stamp" title="Build"></span>
-      <button class="badge zero" id="queue-badge" title="Pending uploads">0</button>
-      <button class="linkish" id="btn-signout" style="font-size:12px">Sign out</button>
+      <!-- §3 — the badge IS the way in. No Queue tab: the count was already
+           here and a tab that duplicates it costs a slot on a 390px phone. -->
+      <button class="badge" id="queue-badge" hidden title="Waiting to upload">0</button>
+      <button class="burger" id="btn-menu" aria-label="Menu" aria-expanded="false">☰</button>
     </div>
   </div>
+
+  <!-- §1 — the stamp lives in the menu now, so a DISAGREEMENT has to announce
+       itself out here or it announces itself nowhere. One tap forces the update
+       and reloads; a stale shell should not be a conversation. -->
+  <button class="updatebar" id="update-bar" type="button" hidden></button>
 
   <!-- Outside every pane on purpose: it has to be visible from whichever tab
        he is on, which is the whole point of it. -->
@@ -275,10 +293,22 @@
     <!-- §1 — shoot first. Standing in front of a place, the photograph is the
          thing you have and the name is the thing you are least sure how to
          spell. One tap opens the camera; everything else follows from it. -->
-    <button class="shoot" id="btn-shoot" type="button">
-      📷 Photograph a place
-      <small>The photo says where you are — then pick what it is</small>
-    </button>
+    <!-- §2 — **two doors to the same room, the same weight.** On foot he
+         shoots; at a desk he has an image already. Making upload a smaller
+         option inside the camera flow would make the desk case a second-class
+         path, and the desk case is how a day's photographs get filed. -->
+    <div class="doors">
+      <button class="shoot" id="btn-shoot" type="button">
+        <span class="ico">📷</span>
+        Photograph a place
+        <small>The photo says where you are</small>
+      </button>
+      <button class="shoot alt" id="btn-upload" type="button">
+        <span class="ico">🖼</span>
+        Upload an image
+        <small>Choose, paste or drop one</small>
+      </button>
+    </div>
     <p class="shotsrc" id="shot-source" hidden></p>
 
     <!-- §1 — the run's counter and controls. Hidden outside a run. -->
@@ -522,6 +552,22 @@
   </div>
 </div>
 
+<!-- §4 — everything that is not the job. Ordered by how often it is wanted. -->
+<div class="sheet" id="menu-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Suna Panel</h1>
+    <button class="opt" id="menu-finish">Finish these<small>Places missing a photo, hours or a description</small></button>
+    <button class="opt" id="menu-queue">Queue<small id="menu-queue-sub">Nothing waiting</small></button>
+    <button class="opt" id="menu-country" hidden>Country<small>Hero image, subtitle, foods and apps</small></button>
+    <button class="opt" id="menu-signout">Sign out</button>
+    <p class="note" style="margin-top:14px">
+      Build <span id="build-stamp" class="build">…</span>
+      <button class="linkish" id="menu-update" style="font-size:12px;margin-left:8px">Check for an update</button>
+    </p>
+    <button class="linkish" id="menu-close" style="margin-top:6px">Close</button>
+  </div>
+</div>
+
 <!-- §2 — straight after the shutter. A coordinate and no name is the better
      position to be in than a name and no coordinate, which is what the
      save-time dupe check had. This replaces that check for this path. -->
@@ -595,7 +641,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v16';
+const BUILD = 'field-v17';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -717,7 +763,9 @@ $('btn-google').onclick = async () => {
 };
 
 $('btn-back').onclick = () => { $('login-otp-step').hidden = true; $('login-email-step').hidden = false; };
-$('btn-signout').onclick = async () => { await db.auth.signOut(); location.reload(); };
+/** Sign out lives in the menu now — §4. Named rather than bound to a button
+ *  that no longer exists in the bar. */
+async function signOut() { await db.auth.signOut(); location.reload(); }
 
 /* ════════════════════════════════════════════════════════════════════════
    2. IndexedDB — the queue, and the offline caches
@@ -2069,7 +2117,23 @@ $('in-camera').onchange  = async (e) => {
   await addPhotos(e.target.files);
   if (shootFirst) { shootFirst = false; await afterShutter(); }
 };
-$('in-library').onchange = (e) => addPhotos(e.target.files);
+$('in-library').onchange = async (e) => {
+  await addPhotos(e.target.files);
+  if (shootFirst) { shootFirst = false; await afterShutter(); }
+};
+
+/** At a desk, the fastest thing is ⌘V. Same flow as the upload button. */
+window.addEventListener('paste', async (e) => {
+  if ($('app').hidden) return;
+  const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+  const files = items.filter((i) => i.kind === 'file' && /^image\//.test(i.type))
+                     .map((i) => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  freshIfUntouched();
+  await addPhotos(files);
+  await afterShutter();
+});
 
 /* ════════════════════════════════════════════════════════════════════════
    §1–§3 — shoot first
@@ -2087,11 +2151,23 @@ $('in-library').onchange = (e) => addPhotos(e.target.files);
 let shootFirst = false;
 
 $('btn-shoot').onclick = () => {
-  // A fresh place unless a capture is already open with something in it.
-  if (!runActive() && !cap.editing && !cap.name.trim() && !cap.photos.length) resetForm();
+  freshIfUntouched();
   shootFirst = true;
   $('in-camera').click();
 };
+
+// §2 — the same room by the other door. An uploaded image runs the identical
+// flow: EXIF first, then the fallback chain, then "which of these is it?".
+$('btn-upload').onclick = () => {
+  freshIfUntouched();
+  shootFirst = true;
+  $('in-library').click();
+};
+
+/** A fresh place unless a capture is already open with something in it. */
+function freshIfUntouched() {
+  if (!runActive() && !cap.editing && !cap.name.trim() && !cap.photos.length) resetForm();
+}
 
 /** **Say which source the coordinate came from, every time.**
  *
@@ -3070,9 +3146,16 @@ async function refreshQueueBadge() {
   const items = await idbAll('queue');
   const badge = $('queue-badge');
   const failed = items.filter((i) => i.state === 'failed').length;
-  badge.textContent = items.length ? String(items.length) : '0';
-  badge.className = 'badge' + (items.length ? '' : ' zero');
-  badge.title = failed ? (failed + ' need attention') : 'Waiting to upload — tap to see them';
+  // **Gone when the queue is empty**, rather than a grey zero. An empty queue is
+  // not a state worth a pixel on the one bar that has to stay uncluttered.
+  badge.hidden = !items.length;
+  badge.textContent = String(items.length);
+  // Failed has to read differently from waiting at a glance — colour is the
+  // whole message, so it gets its own, not a dimmer version of the same one.
+  badge.className = 'badge' + (failed ? ' failed' : '');
+  badge.title = failed
+    ? (failed + ' stopped after 5 attempts — tap to look')
+    : (plural(items.length, 'item') + ' waiting to upload — tap to see them');
 
   // **The one quiet line, on every tab.** Pointless on the Queue tab itself.
   const bar = $('queue-bar'), wrap = $('queue-bar-wrap');
@@ -3105,16 +3188,50 @@ window.addEventListener('online', drainQueue);
    11. Finish these — the second half of the normal workflow, not a tidy-up
    ════════════════════════════════════════════════════════════════════════ */
 
+// The title is the way back to the job.
 $('tab-capture').onclick = () => switchTab('capture');
-$('tab-finish').onclick  = () => switchTab('finish');
-$('tab-queue').onclick   = () => switchTab('queue');
-$('tab-country').onclick = () => switchTab('country');
+
+/* ── §4 — the menu ──────────────────────────────────────────────────────
+ *
+ * **What is outside, and why.** The camera and the upload are the job, so they
+ * are the pane itself. The queue badge is outside because unsent work is the
+ * one thing that is urgent and invisible — but only when there IS some.
+ *
+ * **What is inside.** Finish these and Country are both "sit down and work
+ * through a list" jobs, wanted a few times a day rather than at every place.
+ * Sign out is wanted almost never. The build stamp is diagnostic, and §1's
+ * update bar surfaces the only case where it is urgent. Nothing else exists to
+ * place; the rule for anything added later is that the front of this tool is
+ * for capturing, not for navigating.
+ */
+function openMenu() {
+  $('btn-menu').setAttribute('aria-expanded', 'true');
+  $('menu-country').hidden = !(profile && profile.is_admin);
+  idbAll('queue').then((items) => {
+    const failed = items.filter((i) => i.state === 'failed').length;
+    $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
+      : failed ? (plural(items.length, 'item') + ' waiting · ' + failed + ' stopped')
+               : plural(items.length, 'item') + ' waiting to upload';
+  }).catch(() => {});
+  $('menu-sheet').hidden = false;
+}
+function closeMenu() {
+  $('btn-menu').setAttribute('aria-expanded', 'false');
+  $('menu-sheet').hidden = true;
+}
+$('btn-menu').onclick     = () => openMenu();
+$('menu-close').onclick   = () => closeMenu();
+$('menu-finish').onclick  = () => { closeMenu(); switchTab('finish'); };
+$('menu-queue').onclick   = () => { closeMenu(); switchTab('queue'); };
+$('menu-country').onclick = () => { closeMenu(); switchTab('country'); };
+$('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
+  // Only `capture` still has a button in the bar; the rest are menu entries.
   for (const t of ['capture', 'finish', 'queue', 'country']) {
-    $('tab-' + t).setAttribute('aria-selected', String(t === which));
     $('pane-' + t).hidden = t !== which;
   }
+  $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
   // Re-querying on every visit would lose the run's place in the list, its
@@ -4409,11 +4526,16 @@ function renderCategories() {
  *  the whole failure mode is a worker handing back an older one. When they
  *  match it is one quiet token; when they do not it turns red and names both,
  *  which is the moment to reload. */
+let swRegistration = null;
+
 function renderBuildStamp() {
   const el = $('build-stamp');
   if (!el) return;
-  el.textContent = BUILD.replace('field-', '');
+  const short = BUILD.replace('field-', '');
+  el.textContent = short;
   el.title = 'Build ' + BUILD;
+  el.classList.remove('stale');
+  showUpdateBar(null);
 
   const sw = navigator.serviceWorker;
   if (!sw || !sw.controller) return;          // no worker: the page is the truth
@@ -4424,11 +4546,45 @@ function renderBuildStamp() {
     const theirs = e.data && e.data.version;
     if (!theirs || theirs === BUILD) return;
     el.classList.add('stale');
-    el.textContent = BUILD.replace('field-', '') + ' · sw ' + String(theirs).replace('field-', '');
-    el.title = 'This page is ' + BUILD + ' but the service worker is ' + theirs + '. Reload.';
+    el.textContent = short + ' · sw ' + String(theirs).replace('field-', '');
+    el.title = 'This page is ' + BUILD + ' but the service worker is ' + theirs + '.';
+    showUpdateBar(theirs);
   };
   try { sw.controller.postMessage({ ask: 'version' }, [chan.port2]); } catch { /* ignore */ }
 }
+
+/** **The stamp lives in the menu now, so a disagreement has to shout out here.**
+ *  §4 puts the build behind the hamburger, which is right for a diagnostic and
+ *  wrong for the one case that matters — so the mismatch gets its own bar and
+ *  the hamburger goes red. One tap forces the update and reloads. */
+function showUpdateBar(theirs) {
+  const bar = $('update-bar');
+  if (!bar) return;
+  if (!theirs) { bar.hidden = true; $('btn-menu').classList.remove('stale'); return; }
+  bar.textContent = 'This page is ' + BUILD.replace('field-', '')
+    + ' but the app on this device is still ' + String(theirs).replace('field-', '')
+    + ' — tap to update';
+  bar.hidden = false;
+  $('btn-menu').classList.add('stale');
+}
+
+/** Force it: ask for the new worker, let it take over, then reload onto it.
+ *  `skipWaiting()` is already in the worker, so the wait is short and bounded —
+ *  and the reload happens either way rather than hanging on a promise. */
+async function forceUpdate(btn) {
+  const label = btn && btn.textContent;
+  if (btn) btn.textContent = 'Updating…';
+  try {
+    const reg = swRegistration
+      || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration('/field'));
+    if (reg) await reg.update();
+  } catch { /* reload anyway — a failed check must not strand him */ }
+  setTimeout(() => location.reload(), 400);
+  if (btn && label) setTimeout(() => { btn.textContent = label; }, 3000);
+}
+
+$('update-bar').onclick  = () => forceUpdate($('update-bar'));
+$('menu-update').onclick = () => forceUpdate($('menu-update'));
 
 /** 650 rows, ~30KB. Cached and refreshed when older than seven days AND online. */
 async function loadCities() {
@@ -4448,8 +4604,8 @@ async function loadProfile() {
   profile.is_admin = !!(data && data.is_admin);
   // §2 — hidden entirely for a non-admin. `countries`, `country_apps` and
   // `country_foods` are all `is_admin()` for writes, so for anyone else this
-  // tab could only produce errors.
-  $('tab-country').hidden = !profile.is_admin;
+  // entry could only produce errors. It is a menu row now, not a tab.
+  $('menu-country').hidden = !profile.is_admin;
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -4496,7 +4652,35 @@ async function boot() {
   // this page's own subresources are still intercepted, so the precache list is
   // unchanged.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/field-sw.js', { scope: '/field' }).catch(() => {});
+    // **Registering is not asking.** `register()` returns the EXISTING
+    // registration when there is one, and browsers re-fetch the worker script
+    // on a schedule of their own — which is how a device ends up a version
+    // behind while the page is current. `update()` asks explicitly. With
+    // `skipWaiting()` and `clients.claim()` already in the worker, a new
+    // version then takes over on the next load rather than whenever Safari
+    // feels like it.
+    navigator.serviceWorker.register('/field-sw.js', { scope: '/field' })
+      .then((reg) => {
+        swRegistration = reg;
+        reg.update().catch(() => {});
+        // Coming back to the tab is the other moment a new build might exist.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(() => {});
+            renderBuildStamp();
+          }
+        });
+        // A worker that installs while he is looking should say so at once.
+        reg.addEventListener('updatefound', () => {
+          const w = reg.installing;
+          if (!w) return;
+          w.addEventListener('statechange', () => {
+            if (w.state === 'activated') renderBuildStamp();
+          });
+        });
+      })
+      .catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => renderBuildStamp());
   }
 
   // Safari caps script-writable storage at seven days without interaction for
