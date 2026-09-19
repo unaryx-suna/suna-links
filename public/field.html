@@ -382,6 +382,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- MapKit JS, pinned. Loaded `async` and never awaited: if Apple's CDN is
+     blocked or slow the panel still opens and search still works through OSM. -->
+<script async src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js"></script>
 <script>
 'use strict';
 
@@ -1157,21 +1160,123 @@ async function runSearch(q) {
   // Sequence guard: a slow early response must not overwrite a later one.
   const seq = ++searchSeq;
   // **Bias to where he is** — the coordinate already set if there is one,
-  // otherwise the live fix. "Wing fat" in Hong Kong must not return Vancouver.
+  // otherwise the live fix. "Wing fat" in Hong Kong must not return Vancouver,
+  // and without a region MapKit does exactly that.
   const centre = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
-  let url = '/api/place-search?q=' + encodeURIComponent(q);
-  if (centre) url += '&lat=' + centre.lat + '&lon=' + centre.lon;
 
   try {
-    const r = await fetch(url);
+    // **Apple first, OSM second, and the union is the point of having two.**
+    // Apple's index is materially better for Asian businesses; OSM is better
+    // for some small places Apple has never heard of.
+    let rows = await searchApple(q, centre);
     if (seq !== searchSeq) return;
-    if (!r.ok) { searchNote('Search is unavailable right now.'); return; }
-    const rows = await r.json();
-    if (seq !== searchSeq) return;
-    renderSearchResults(Array.isArray(rows) ? rows : [], centre);
+
+    // Zero Apple results is not an answer — try the other index before saying
+    // "nothing found".
+    if (!rows.length) {
+      rows = await searchOSM(q, centre);
+      if (seq !== searchSeq) return;
+    }
+    renderSearchResults(rows, centre);
   } catch {
     if (seq === searchSeq) searchNote('Search is unavailable right now.');
   }
+}
+
+async function searchOSM(q, centre) {
+  let url = '/api/place-search?q=' + encodeURIComponent(q);
+  if (centre) url += '&lat=' + centre.lat + '&lon=' + centre.lon;
+  const r = await fetch(url);
+  if (!r.ok) return [];
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+/* ── MapKit JS ─────────────────────────────────────────────────────────
+ *
+ * **The `.p8` never reaches this page.** `/api/mapkit-token` signs a
+ * thirty-minute ES256 JWT server-side and hands back only the token.
+ *
+ * Every failure here is SILENT and falls through to OSM. A search that works is
+ * worth more than an accurate error, and which index answered is not the user's
+ * problem — the rows simply get better when Apple is available.
+ */
+
+let mapkitToken = null, mapkitTokenExp = 0, mapkitReady = null;
+
+/** Cached for the token's life, so a fast typist mints one token, not one per
+ *  keystroke. Sixty seconds of slack so a search never starts on a token that
+ *  expires mid-flight. */
+async function mapkitAuth() {
+  const now = Date.now() / 1000;
+  if (mapkitToken && now < mapkitTokenExp - 60) return mapkitToken;
+  const r = await fetch('/api/mapkit-token');
+  if (!r.ok) throw new Error('no token');
+  const { token } = await r.json();
+  if (!token) throw new Error('no token');
+  mapkitToken = token;
+  // Read the expiry off the token itself rather than assuming the TTL, so the
+  // two cannot drift apart.
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    mapkitTokenExp = payload.exp || (now + 1500);
+  } catch { mapkitTokenExp = now + 1500; }
+  return mapkitToken;
+}
+
+/** Resolves once MapKit is initialised, or rejects — cached either way so a
+ *  blocked CDN is not retried on every keystroke. */
+function initMapkit() {
+  if (mapkitReady) return mapkitReady;
+  mapkitReady = (async () => {
+    if (typeof mapkit === 'undefined') throw new Error('mapkit not loaded');
+    const token = await mapkitAuth();
+    await new Promise((resolve, reject) => {
+      try {
+        mapkit.init({
+          authorizationCallback: (done) => {
+            // Called again when MapKit decides the token is stale; `mapkitAuth`
+            // re-mints only when it actually has expired.
+            mapkitAuth().then(done).catch(() => done(token));
+          },
+        });
+        resolve();
+      } catch (e) { reject(e); }
+    });
+  })();
+  return mapkitReady;
+}
+
+async function searchApple(q, centre) {
+  try {
+    await initMapkit();
+  } catch {
+    return [];                       // unavailable — OSM answers instead
+  }
+  return new Promise((resolve) => {
+    try {
+      const opts = {};
+      if (centre) {
+        // Roughly the same box stage one passes to Nominatim, so the two
+        // providers are biased to the same place.
+        opts.region = new mapkit.CoordinateRegion(
+          new mapkit.Coordinate(centre.lat, centre.lon),
+          new mapkit.CoordinateSpan(0.7, 0.7)
+        );
+      }
+      const search = new mapkit.Search(opts);
+      search.search(q, (error, data) => {
+        if (error || !data || !Array.isArray(data.places)) { resolve([]); return; }
+        resolve(data.places.slice(0, 8).map((place) => ({
+          name: place.name || q,
+          address: place.formattedAddress || null,
+          lat: place.coordinate ? place.coordinate.latitude : NaN,
+          lon: place.coordinate ? place.coordinate.longitude : NaN,
+          source: 'apple',
+        })).filter((x) => isFinite(x.lat) && isFinite(x.lon)));
+      });
+    } catch { resolve([]); }
+  });
 }
 
 function renderSearchResults(rows, centre) {
@@ -1205,7 +1310,11 @@ function renderSearchResults(rows, centre) {
 }
 
 function chooseSearchResult(r) {
-  setLocation(r.lat, r.lon, 'search', { provider: r.source || 'osm_nominatim' });
+  // **Provenance stays honest, per provider.** Neither is presence: a search
+  // index found it, he did not stand there. Both values are already in
+  // `landmarks_coordinate_source_check`, so there is no migration.
+  const provider = r.source === 'apple' ? 'apple_mklocalsearch' : 'osm_nominatim';
+  setLocation(r.lat, r.lon, 'search', { provider });
   // **Prefill, never overwrite.** Something already typed is the user's, and a
   // search result is a suggestion arriving after it.
   if (!cap.name.trim() && r.name) {

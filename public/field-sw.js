@@ -24,7 +24,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v5';
+const CACHE_VERSION = 'field-v6';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be
@@ -66,7 +66,12 @@ self.addEventListener('fetch', (event) => {
   // **Network-only for Supabase and for the link resolver.** A cached answer
   // from either is worse than no answer: the first would fake a successful
   // write, the second would resolve a link to somewhere it no longer points.
-  if (url.hostname.endsWith('.supabase.co') || url.pathname.startsWith('/api/')) {
+  // MapKit JS is versioned by Apple behind `5.x.x` and mints nothing itself,
+  // but caching it would pin a build we cannot see — and the token route must
+  // never be answered from cache.
+  if (url.hostname.endsWith('.supabase.co')
+      || url.hostname.endsWith('.apple-mapkit.com')
+      || url.pathname.startsWith('/api/')) {
     return;                                    // let the browser do it, and fail honestly
   }
 
