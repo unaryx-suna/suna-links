@@ -321,7 +321,7 @@
   <!-- finish these -->
   <div class="wrap" id="pane-finish" hidden>
     <h1>Finish these</h1>
-    <p class="sub">Your captures that are not live yet. Tap one to complete it.</p>
+    <p class="sub" id="finish-sub">Rows that are not live yet. Tap one to complete it.</p>
     <div id="finish-list"></div>
   </div>
 
@@ -543,6 +543,13 @@ const blank = () => ({
   hadCover: false,
   /** The row's existing `submitted_by`, so an admin edit does not steal it. */
   submittedBy: null,
+  /** **What the row's provenance ALREADY is.** A capture made here is 'user'.
+   *  A row opened from the server keeps whatever it had — see `buildRow`. */
+  origin: 'user',
+  /** The stored `coordinate_source` and the coordinate it described, so a row
+   *  whose pin was never touched keeps the provenance it arrived with. */
+  originalCoordSource: null,
+  originalLat: null, originalLon: null,
   /** Already-uploaded media on a re-opened row: {id, media_url, path}. */
   stored: [],
   /** §2 — append this place to its country's `featured_landmark_ids` after the
@@ -999,6 +1006,16 @@ function renderHours() {
 
 /** What goes in `coordinate_source`. Only presence earns `_verified`. */
 function coordinateSource() {
+  // **The same rule as `origin`, for the same reason.** A row reopened from the
+  // server arrives with a stored `coordinate_source` — `google_places` on every
+  // one of the catalogue rows. If the pin was never moved, that is still true,
+  // and re-deriving it from the UI's label would overwrite it with
+  // `manual_entry_unverified` because somebody added a photo. Untouched means
+  // unchanged.
+  if (cap.originalCoordSource
+      && cap.lat === cap.originalLat && cap.lon === cap.originalLon) {
+    return cap.originalCoordSource;
+  }
   // **A searched coordinate is not presence-verified** — he did not stand
   // there, a search index did. So it takes the provider's own source rather
   // than `manual_entry_verified`, and both values were already in
@@ -1027,6 +1044,9 @@ function renderLocation() {
         + '<span class="why">±' + Math.round(cap.locAccuracy || 0) + 'm · Tap to change</span>';
     } else if (cap.locFrom === 'search') {
       text.innerHTML = '📍 From search · ' + co + '<span class="why">Not verified · Tap to change</span>';
+    } else if (cap.locFrom === 'google') {
+      text.innerHTML = '📍 From Google · ' + co
+        + '<span class="why">The catalogue\u2019s own pin · Tap to change</span>';
     } else if (cap.locFrom === 'link') {
       text.innerHTML = '📍 From link · ' + co + '<span class="why">Not verified · Tap to change</span>';
     } else {
@@ -1161,8 +1181,20 @@ function renderCity() {
   const el = $('city-chip');
   if (cap.lat == null) { el.textContent = 'Waiting for a location…'; return; }
   if (!cap.cityId) { el.textContent = 'No city found — tap to choose'; return; }
-  el.innerHTML = cap.cityName + ' ▾<small>' + cap.cityDistanceKm.toFixed(1)
-    + ' km from the pin · tap to change</small>';
+  // **A city id the cached list does not know about still has to render.**
+  // `openExisting` sets `cityId` from the row and then looks the name up in
+  // `cities`; a miss left `cityName`/`cityDistanceKm` null and this threw
+  // `Cannot read properties of null (reading 'toFixed')` — which happens inside
+  // `renderLocation`, half way through `openExisting`, so the row opened into a
+  // form that was only partly filled. Found while testing the origin fix
+  // against a real catalogue row.
+  if (!cap.cityName) {
+    el.innerHTML = 'City set ▾<small>not in the offline list · tap to change</small>';
+    return;
+  }
+  const km = (typeof cap.cityDistanceKm === 'number')
+    ? cap.cityDistanceKm.toFixed(1) + ' km from the pin' : 'distance unknown';
+  el.innerHTML = escapeHtml(cap.cityName) + ' ▾<small>' + km + ' · tap to change</small>';
 }
 
 $('city-chip').onclick = () => {
@@ -2170,7 +2202,19 @@ function buildRow() {
     // rows; `catalogue` walks past every one of them and a capture would have
     // its description replaced within the hour and a `google_place_id` written
     // into it within the week. `docs/briefs/CRON-WRITE-AUDIT.md`.
-    origin: 'user',
+    // **Preserve what the row had; stamp only what is new.**
+    //
+    // This was `origin: 'user'` unconditionally, and the write below is an
+    // upsert on the id — so opening one of the 171 hidden rows and adding a
+    // photo relabelled a catalogue row as a user capture. For the 87 that
+    // carry a `google_place_id` it failed outright on
+    // `landmarks_user_rows_have_no_google_id`; the other 84 SUCCEEDED, which is
+    // worse, because origin decides what nine automated writers do with a row
+    // for the rest of its life. A provenance field is not a side effect of
+    // adding a photograph.
+    //
+    // `blank()` seeds 'user', so a capture created here is still 'user'.
+    origin: cap.origin || 'user',
     place_kind: 'place',
     approval_status: complete ? 'approved' : 'pending',
     is_hidden: !complete,
@@ -2343,9 +2387,28 @@ async function uploadOne(item) {
     const coverPath = row.id + '/cover.jpg';
     const { error: cErr } = await db.storage.from('landmark-covers')
       .upload(coverPath, photos[0].blob, { contentType: 'image/jpeg', upsert: true });
-    if (cErr) throw new Error('cover upload: ' + cErr.message);
+    if (cErr && !(await coverAlreadyLanded(cErr, coverPath, photos[0].blob))) {
+      throw new Error('cover upload: ' + cErr.message);
+    }
     row.cover_image_url = db.storage.from('landmark-covers').getPublicUrl(coverPath).data.publicUrl;
   }
+
+  // **`origin` is settled against the server, not against what was queued.**
+  //
+  // The upsert below is an UPDATE whenever this id already exists, and the row
+  // it is updating owns its provenance. A row queued before this fix carries
+  // `origin: 'user'` baked in from the old `buildRow`, so without this the two
+  // items stuck since 19 Sep would go on failing
+  // `landmarks_user_rows_have_no_google_id` forever. Read what is there, keep
+  // it; a row that does not exist yet is a new capture and stays 'user'.
+  //
+  // Repaired on the copy being sent. The queued item is never rewritten, so a
+  // failure here still leaves the work exactly where it was.
+  try {
+    const { data: existing } = await db.from('landmarks')
+      .select('origin').eq('id', row.id).maybeSingle();
+    if (existing && existing.origin) row.origin = existing.origin;
+  } catch { /* offline mid-drain: the upsert below fails and it retries */ }
 
   // **Upsert on the client-generated id.** A queued save that actually
   // succeeded before the connection dropped, and gets retried, updates its own
@@ -2405,6 +2468,41 @@ async function uploadOne(item) {
       AppLoggerNoop(e);
     }
   }
+}
+
+/** **Did the cover actually land?**
+ *
+ *  Measured 19 Sep: six POSTs of the same cover for `aebb427f-…`, every one a
+ *  200, and the client threw every time — so the item stayed queued, re-uploaded
+ *  20KB on each retry, and reported `cover upload: Load failed` while the object
+ *  sat on the server. Worse, the false error hid the real one: the
+ *  `landmarks_user_rows_have_no_google_id` violation below never got to say
+ *  itself, because the cover step threw first.
+ *
+ *  On a phone the response can be lost after the server has already stored the
+ *  object. So a NETWORK-level failure asks the question rather than assuming an
+ *  answer. **A genuine refusal is not swallowed** — a 403, a 413, a policy error
+ *  all carry an HTTP status, and those still stop the item and name themselves.
+ *
+ *  The bucket is public, so presence is one HEAD with no credentials. Size is
+ *  compared as well as presence: matching bytes means the object up there is the
+ *  blob we just sent, not a cover from an earlier session at the same path.
+ */
+async function coverAlreadyLanded(err, path, blob) {
+  const status = err && (err.statusCode || err.status);
+  const msg = String((err && err.message) || '');
+  const networkish = !status && /load failed|network|fetch|timeout|abort/i.test(msg);
+  if (!networkish) return false;
+  try {
+    const url = db.storage.from('landmark-covers').getPublicUrl(path).data.publicUrl;
+    const r = await fetch(url + '?probe=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+    if (!r.ok) return false;
+    const len = r.headers.get('content-length');
+    // No length header is not evidence against it; a MISmatch is.
+    if (len && blob && blob.size && Number(len) !== blob.size) return false;
+    console.info('[panel/upload] cover was already on the server — the response was lost, not the upload');
+    return true;
+  } catch { return false; }
 }
 
 /** The queue is the only place that would swallow this, so it is named rather
@@ -2572,17 +2670,34 @@ async function loadFinishList() {
   // genuinely half-finished place all read as the same kind of thing. This list
   // now means exactly one thing: rows that REACHED the server and are missing a
   // category, a city, a photo or a location.
+  // **The tab said "Your captures" and held none of them.** Measured 19 Sep:
+  // 171 hidden rows, 171 of them `origin='catalogue'`, zero his. Both readings
+  // the brief offered were available — label the backlog, or restrict to his
+  // own rows — and the answer is BOTH, split, because they are two different
+  // jobs and only one of them is the capture workflow.
+  //
+  //   His own unfinished captures  — the second half of capturing, on the bus home.
+  //   The catalogue backlog        — Suna's rows missing a photo. Real work,
+  //                                  worth keeping reachable, but not his and
+  //                                  never again presented as his.
+  //
+  // Restricting to his own rows alone would have emptied the tab and quietly
+  // dropped 171 rows of useful work; labelling alone would have left the
+  // capture workflow mixed in with someone else's backlog.
   let rows = [];
   if (navigator.onLine) {
     // `is_admin` decides only whether rows submitted by someone else may show.
     // It does not gate capture.
     let q = db.from('landmarks')
-      .select('id,name,category,latitude,longitude,city_id,cover_image_url,coordinate_source,is_hidden')
-      .eq('is_hidden', true).order('name').limit(100);
+      .select('id,name,category,latitude,longitude,city_id,cover_image_url,coordinate_source,is_hidden,origin,submitted_by')
+      .eq('is_hidden', true).order('name').limit(200);
     if (!profile.is_admin) q = q.eq('submitted_by', session.user.id);
     const { data } = await q;
     rows = data || [];
   }
+
+  const mine = rows.filter((r) => r.submitted_by === session.user.id);
+  const catalogue = rows.filter((r) => r.submitted_by !== session.user.id);
 
   if (!rows.length) {
     const waiting = (await idbAll('queue')).length;
@@ -2593,19 +2708,45 @@ async function loadFinishList() {
   }
 
   list.innerHTML = '';
-  rows.forEach((r) => {
-    const missing = [];
-    if (!r.category) missing.push('category');
-    if (!r.city_id) missing.push('city');
-    if (!r.cover_image_url) missing.push('photo');
-    if (r.latitude == null) missing.push('location');
-    const d = document.createElement('div');
-    d.className = 'item';
-    d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
-      + '<p>' + (missing.length ? ('Needs ' + missing.join(', ')) : 'Ready — reopen and save to go live') + '</p>';
-    d.onclick = () => openExisting(r.id);
-    list.appendChild(d);
-  });
+  section('Your captures', mine,
+    'None of your captures are waiting. Anything not on the server yet is in Queue.');
+  section('Catalogue backlog', catalogue,
+    null,
+    'Suna’s own rows, not your captures. Opening one adds to it — it stays a '
+    + 'catalogue place.');
+
+  function section(title, group, emptyLine, lead) {
+    if (!group.length && !emptyLine) return;
+    const h = document.createElement('h2');
+    h.style.cssText = 'font-size:15px;margin:18px 0 6px';
+    h.textContent = title + (group.length ? ' · ' + group.length : '');
+    list.appendChild(h);
+    if (lead && group.length) {
+      const p = document.createElement('p');
+      p.className = 'sub'; p.style.margin = '0 0 10px';
+      p.textContent = lead;
+      list.appendChild(p);
+    }
+    if (!group.length) {
+      const p = document.createElement('p');
+      p.className = 'sub'; p.textContent = emptyLine;
+      list.appendChild(p);
+      return;
+    }
+    group.forEach((r) => {
+      const missing = [];
+      if (!r.category) missing.push('category');
+      if (!r.city_id) missing.push('city');
+      if (!r.cover_image_url) missing.push('photo');
+      if (r.latitude == null) missing.push('location');
+      const d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
+        + '<p>' + (missing.length ? ('Needs ' + missing.join(', ')) : 'Ready — reopen and save to go live') + '</p>';
+      d.onclick = () => openExisting(r.id);
+      list.appendChild(d);
+    });
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2632,6 +2773,10 @@ const QUEUE_WHAT = {
 function locFromSource(src) {
   if (src === 'manual_entry_verified') return 'exif';
   if (src === 'osm_nominatim' || src === 'apple_mklocalsearch') return 'search';
+  // Every one of the 171 hidden catalogue rows is `google_places`. Reading that
+  // back as "Edited by hand" claims he placed a pin he has never touched — the
+  // same dishonesty as stamping `origin`, one layer up in the UI.
+  if (src === 'google_places') return 'google';
   return 'manual';
 }
 
@@ -2822,6 +2967,12 @@ async function openQueued(id) {
   cap.locFrom = locFromSource(row.coordinate_source);
   cap.locProvider = cap.locFrom === 'search' ? row.coordinate_source : null;
   cap.locTakenAt = row.last_verified_at || null;
+  // A row queued BEFORE this fix has `origin: 'user'` baked into it even when
+  // it came from the catalogue. `uploadOne` settles that against the server on
+  // the way out; reopening it here must not re-bake the wrong answer.
+  cap.origin = row.origin || 'user';
+  cap.originalCoordSource = row.coordinate_source || null;
+  cap.originalLat = row.latitude; cap.originalLon = row.longitude;
   cap.cityId = row.city_id || null;
   cap.note = row.description || '';
   cap.address = row.address || '';
@@ -2879,6 +3030,10 @@ async function openExisting(id) {
   cap.locFrom = locFromSource(data.coordinate_source);
   cap.locProvider = cap.locFrom === 'search' ? data.coordinate_source : null;
   cap.locTakenAt = data.last_verified_at || null;
+  // `select('*')`, so the row's real provenance is in hand. Keep it.
+  cap.origin = data.origin || 'user';
+  cap.originalCoordSource = data.coordinate_source || null;
+  cap.originalLat = data.latitude; cap.originalLon = data.longitude;
   cap.cityId = data.city_id || null;
   cap.note = data.description || '';
   cap.address = data.address || '';
