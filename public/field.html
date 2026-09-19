@@ -382,9 +382,24 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<!-- MapKit JS, pinned. Loaded `async` and never awaited: if Apple's CDN is
-     blocked or slow the panel still opens and search still works through OSM. -->
-<script async src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js"></script>
+<!-- **`data-libraries="services"` is load-bearing.** `mapkit.core.js` alone
+     does NOT include `mapkit.Search` — it lives in the `services` library, and
+     without this attribute `new mapkit.Search()` throws
+     "[MapKit] mapkit.Search is available after loading the following library:
+     services". Which is exactly what shipped: the throw was caught, swallowed,
+     and every query fell through to OSM looking like success.
+
+     The resolver below is defined BEFORE this tag on purpose. `data-callback`
+     names a GLOBAL that MapKit calls on load, and this script is `async` — so
+     it can execute before the page's own script block does. Defining the
+     callback afterwards means MapKit calls a function that does not exist yet
+     and the readiness signal is lost forever. -->
+<script>
+  window.__mapkitReady = new Promise((resolve) => { window.__mapkitLoaded = resolve; });
+</script>
+<script async src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js"
+        data-libraries="services"
+        data-callback="__mapkitLoaded"></script>
 <script>
 'use strict';
 
@@ -1170,12 +1185,14 @@ async function runSearch(q) {
     // for some small places Apple has never heard of.
     let rows = await searchApple(q, centre);
     if (seq !== searchSeq) return;
+    if (rows.length) searchTrace('apple answered', rows.length + ' result(s)');
 
     // Zero Apple results is not an answer — try the other index before saying
     // "nothing found".
     if (!rows.length) {
       rows = await searchOSM(q, centre);
       if (seq !== searchSeq) return;
+      searchTrace('osm answered', rows.length + ' result(s)');
     }
     renderSearchResults(rows, centre);
   } catch {
@@ -1224,12 +1241,32 @@ async function mapkitAuth() {
   return mapkitToken;
 }
 
+/** How long to wait for Apple's CDN before giving up and letting OSM answer. */
+const MAPKIT_LOAD_TIMEOUT_MS = 6000;
+
 /** Resolves once MapKit is initialised, or rejects — cached either way so a
- *  blocked CDN is not retried on every keystroke. */
+ *  blocked CDN is not retried on every keystroke.
+ *
+ *  **Waits for the library callback rather than reading `typeof mapkit` once.**
+ *  The script tag is `async`, so on a cold load the first keystroke can easily
+ *  arrive before MapKit exists — and a single `typeof` check at that moment
+ *  said "not loaded" and condemned the whole session to OSM. */
 function initMapkit() {
   if (mapkitReady) return mapkitReady;
   mapkitReady = (async () => {
-    if (typeof mapkit === 'undefined') throw new Error('mapkit not loaded');
+    // Race the load against a timeout: a blocked CDN must not leave search
+    // hanging, it must fall through to OSM.
+    await Promise.race([
+      window.__mapkitReady,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('mapkit load timed out')), MAPKIT_LOAD_TIMEOUT_MS)),
+    ]);
+    if (typeof mapkit === 'undefined') throw new Error('mapkit did not load');
+    // The specific failure this release fixes. Checked explicitly so that if the
+    // services library ever goes missing again it is named, not guessed at.
+    if (typeof mapkit.Search !== 'function') {
+      throw new Error('mapkit.Search missing — the services library did not load');
+    }
     const token = await mapkitAuth();
     await new Promise((resolve, reject) => {
       try {
@@ -1250,8 +1287,13 @@ function initMapkit() {
 async function searchApple(q, centre) {
   try {
     await initMapkit();
-  } catch {
-    return [];                       // unavailable — OSM answers instead
+  } catch (e) {
+    // **Named, not swallowed.** The previous version was a bare `catch` that
+    // returned `[]`, which is how "mapkit.Search is available after loading the
+    // following library: services" stayed invisible through a whole release —
+    // every query fell through to OSM and looked like it had worked.
+    searchTrace('apple unavailable', e && e.message ? e.message : e);
+    return [];                       // OSM answers instead
   }
   return new Promise((resolve) => {
     try {
@@ -1266,7 +1308,11 @@ async function searchApple(q, centre) {
       }
       const search = new mapkit.Search(opts);
       search.search(q, (error, data) => {
-        if (error || !data || !Array.isArray(data.places)) { resolve([]); return; }
+        if (error || !data || !Array.isArray(data.places)) {
+          searchTrace('apple search failed', error && error.message ? error.message : error);
+          resolve([]);
+          return;
+        }
         resolve(data.places.slice(0, 8).map((place) => ({
           name: place.name || q,
           address: place.formattedAddress || null,
@@ -1275,8 +1321,22 @@ async function searchApple(q, centre) {
           source: 'apple',
         })).filter((x) => isFinite(x.lat) && isFinite(x.lon)));
       });
-    } catch { resolve([]); }
+    } catch (e) {
+      searchTrace('apple search threw', e && e.message ? e.message : e);
+      resolve([]);
+    }
   });
+}
+
+/** **Which provider answered, always said out loud.**
+ *
+ *  The OSM fallback was indistinguishable from success — that is what let a
+ *  broken Apple path ship. It is a console line rather than UI because the
+ *  brief is explicit that which index answered is not the user's problem; it is
+ *  ours, and it needs to be visible when someone looks. */
+function searchTrace(what, detail) {
+  // eslint-disable-next-line no-console
+  console.info('[panel/search] ' + what + (detail ? ' — ' + detail : ''));
 }
 
 function renderSearchResults(rows, centre) {
