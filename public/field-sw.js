@@ -8,8 +8,11 @@
  *
  * Two rules, and the second is as important as the first:
  *
- *  - **Cache-first for the shell** — the HTML, the Supabase UMD bundle, the
- *    icon. These are what make the page open at all.
+ *  - **Network-first for the page, cache-first for its assets** — the HTML is
+ *    the only thing here that carries code, so it is asked of the network first
+ *    and falls back to the cached copy the instant that fails. The Supabase UMD
+ *    bundle, the icon and the manifest stay cache-first. Together these are what
+ *    make the page open at all with no signal.
  *  - **Network-only for every Supabase call**, so a failed write falls into the
  *    queue rather than being answered from a stale cache. A cached POST reply
  *    would tell the tool a capture had landed when it had not.
@@ -24,7 +27,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v7';
+const CACHE_VERSION = 'field-v8';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be
@@ -73,6 +76,40 @@ self.addEventListener('fetch', (event) => {
       || url.hostname.endsWith('.apple-mapkit.com')
       || url.pathname.startsWith('/api/')) {
     return;                                    // let the browser do it, and fail honestly
+  }
+
+  // **The page itself is network-first. Everything else is cache-first.**
+  //
+  // This is the fix for "the network copy had the fix and the DOM did not".
+  // `skipWaiting()` and `clients.claim()` were already here, and CACHE_VERSION
+  // has been bumped on every deploy since v2 — neither was the problem. The
+  // problem is this handler: a navigation was answered from the cache and the
+  // fresh copy was fetched in the BACKGROUND, so the shell you looked at was
+  // always the one from the previous open. A new worker cannot help with that,
+  // because by the time it installs the old one has already answered.
+  //
+  // The shell is one small HTML file and it is the only thing here that carries
+  // code. Asking the network for it first, with the cached copy as the fallback
+  // the moment that fails, costs one request on a connection that is working
+  // and changes nothing at all on one that is not — which is the field
+  // condition this worker exists for.
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        if (fresh && fresh.ok) {
+          const cache = await caches.open(CACHE_VERSION);
+          await cache.put(req, fresh.clone());
+        }
+        return fresh;
+      } catch {
+        // Offline, which is normal here — the cached shell is the answer.
+        const cached = await caches.match(req) || await caches.match('/field.html');
+        if (cached) return cached;
+        throw new Error('offline and not cached');
+      }
+    })());
+    return;
   }
 
   // Everything else in scope: cache-first, then network, and store what comes

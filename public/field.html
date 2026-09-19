@@ -92,9 +92,26 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 16px; border-bottom: 1px solid var(--line);
   }
-  .tabs { display: flex; gap: 6px; }
-  .tab { background: none; color: var(--dim); padding: 8px 10px; font-size: 14px; border-radius: 8px; }
+  /* Four tabs plus the badge and Sign out do not fit a 390px phone, so the
+     strip scrolls rather than wrapping the topbar onto two lines. */
+  .tabs { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { background: none; color: var(--dim); padding: 8px 10px; font-size: 14px; border-radius: 8px;
+         white-space: nowrap; flex: none; }
   .tab[aria-selected="true"] { color: var(--text); background: rgba(255,255,255,.08); font-weight: 600; }
+  /* The one quiet line, on every tab. The only way to discover a stuck queue
+     used to be to go looking in the wrong tab. */
+  .qbar {
+    display: block; width: 100%; text-align: left; font-size: 13px; margin: 12px 0 0;
+    background: rgba(246,203,148,.12); border: 1px solid rgba(246,203,148,.35);
+    border-radius: 12px; padding: 11px 14px; color: var(--sand); font-family: inherit;
+  }
+  .qbar.stuck { background: rgba(255,107,107,.10); border-color: rgba(255,107,107,.40); color: var(--danger); }
+  .item .acts { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .item .acts button { padding: 8px 14px; font-size: 13px; }
+  .item .when { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .item .said { color: var(--danger); font-size: 12px; margin-top: 4px; word-break: break-word; }
+  .danger { background: rgba(255,107,107,.14); color: var(--danger); }
   .badge { background: var(--sand); color: var(--ink); border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
   .savebar {
@@ -180,6 +197,10 @@
     <div class="tabs">
       <button class="tab" id="tab-capture" aria-selected="true">Capture</button>
       <button class="tab" id="tab-finish" aria-selected="false">Finish these</button>
+      <!-- The queue gets a tab of its own. Mixed into "Finish these" it was
+           indistinguishable from a genuinely half-finished server row, and a
+           queue that is retrying looked identical to one that had given up. -->
+      <button class="tab" id="tab-queue" aria-selected="false">Queue</button>
       <!-- §2 — hidden entirely for a non-admin. Every write on it is
            `is_admin()`-gated, and a tab that can only produce errors is worse
            than no tab. -->
@@ -189,6 +210,12 @@
       <button class="badge zero" id="queue-badge" title="Pending uploads">0</button>
       <button class="linkish" id="btn-signout" style="font-size:12px">Sign out</button>
     </div>
+  </div>
+
+  <!-- Outside every pane on purpose: it has to be visible from whichever tab
+       he is on, which is the whole point of it. -->
+  <div class="wrap" style="padding-bottom:0" id="queue-bar-wrap" hidden>
+    <button class="qbar" id="queue-bar" type="button"></button>
   </div>
 
   <!-- capture -->
@@ -274,6 +301,15 @@
     <h1>Finish these</h1>
     <p class="sub">Your captures that are not live yet. Tap one to complete it.</p>
     <div id="finish-list"></div>
+  </div>
+
+  <!-- queue -->
+  <div class="wrap" id="pane-queue" hidden>
+    <h1>Queue</h1>
+    <p class="sub" id="queue-sub">Waiting to upload. This is the only copy — it
+      lives on this phone until it lands.</p>
+    <button class="ghost" id="btn-retry-all" style="width:100%;margin-bottom:14px">Retry all</button>
+    <div id="queue-list"></div>
   </div>
 
   <!-- country -->
@@ -363,6 +399,19 @@
     <button class="ghost" id="opt-coords-go" style="width:100%;margin-top:8px">Use these coordinates</button>
     <p class="err" id="loc-sheet-error" hidden></p>
     <button class="linkish" id="loc-sheet-close" style="margin-top:14px">Close</button>
+  </div>
+</div>
+
+<!-- discard confirm — a sheet rather than confirm(), matching every other
+     choice on this page, and because this deletes the only copy there is -->
+<div class="sheet" id="discard-sheet" hidden>
+  <div>
+    <h1 style="margin-top:0">Discard this?</h1>
+    <p class="sub" id="discard-what"></p>
+    <p class="sub">This is the only copy. It has not reached the server, and
+      discarding it cannot be undone.</p>
+    <button class="danger" id="discard-go" style="width:100%">Discard it</button>
+    <button class="linkish" id="discard-close" style="margin-top:12px">Keep it</button>
   </div>
 </div>
 
@@ -1878,6 +1927,10 @@ async function doSave() {
         photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
       })),
       kind: 'place',
+      // **The label is stored, not derived at render time.** For a place the
+      // name happens to be on the row, but a hint's place name is only in hand
+      // while the hint is being written — so every kind stores one, uniformly.
+      label: cap.name.trim() || 'Unnamed place',
       featured: cap.featured,
       // Resolved at SAVE time from the place's coordinate, not at upload time —
       // by then `cap` has been reset for the next capture.
@@ -2123,15 +2176,32 @@ async function refreshQueueBadge() {
   const failed = items.filter((i) => i.state === 'failed').length;
   badge.textContent = items.length ? String(items.length) : '0';
   badge.className = 'badge' + (items.length ? '' : ' zero');
-  badge.title = failed ? (failed + ' need attention') : 'Pending uploads — tap to retry';
+  badge.title = failed ? (failed + ' need attention') : 'Waiting to upload — tap to see them';
+
+  // **The one quiet line, on every tab.** Pointless on the Queue tab itself.
+  const bar = $('queue-bar'), wrap = $('queue-bar-wrap');
+  if (!items.length || $('pane-queue').hidden === false) {
+    wrap.hidden = true;
+  } else {
+    wrap.hidden = false;
+    bar.className = 'qbar' + (failed ? ' stuck' : '');
+    bar.textContent = failed
+      ? (failed === items.length
+          ? (plural(failed, 'item') + ' stopped after 5 attempts — tap to look')
+          : (plural(items.length, 'item') + ' waiting, ' + failed + ' stopped — tap to look'))
+      : (plural(items.length, 'item') + ' waiting to upload');
+  }
+
+  // A drain that finishes while the tab is open must redraw it.
+  if ($('pane-queue').hidden === false) renderQueueList(items);
 }
-$('queue-badge').onclick = async () => {
-  // A manual retry also un-fails, because the reason is usually "there was no
-  // signal", and refusing to try again would strand a capture forever.
-  const items = await idbAll('queue');
-  for (const i of items) { if (i.state === 'failed') { i.state = 'pending'; i.attempts = 0; await idbPut('queue', i); } }
-  drainQueue();
-};
+
+function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+// Tapping a count should show you the things it counted, not fire a blind
+// retry — Retry all is a visible button on the tab it takes you to.
+$('queue-badge').onclick = () => switchTab('queue');
+$('queue-bar').onclick   = () => switchTab('queue');
 
 window.addEventListener('online', drainQueue);
 
@@ -2141,27 +2211,32 @@ window.addEventListener('online', drainQueue);
 
 $('tab-capture').onclick = () => switchTab('capture');
 $('tab-finish').onclick  = () => switchTab('finish');
+$('tab-queue').onclick   = () => switchTab('queue');
 $('tab-country').onclick = () => switchTab('country');
 
 function switchTab(which) {
-  for (const t of ['capture', 'finish', 'country']) {
+  for (const t of ['capture', 'finish', 'queue', 'country']) {
     $('tab-' + t).setAttribute('aria-selected', String(t === which));
     $('pane-' + t).hidden = t !== which;
   }
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
   if (which === 'finish') loadFinishList();
+  if (which === 'queue') loadQueueList();
   if (which === 'country') renderCountryTab();
+  // The quiet line hides itself on the Queue tab and comes back off it.
+  refreshQueueBadge();
 }
 
 async function loadFinishList() {
   const list = $('finish-list');
   list.innerHTML = '<p class="sub">Loading…</p>';
 
-  // Anything still in the queue is also unfinished business, and it is the only
-  // copy that exists — show it first rather than making it invisible until it
-  // uploads.
-  const queued = await idbAll('queue');
+  // **Queued items are NOT shown here any more — they have their own tab.**
+  // Mixed in above the server rows, a failed cover upload, a queued hint and a
+  // genuinely half-finished place all read as the same kind of thing. This list
+  // now means exactly one thing: rows that REACHED the server and are missing a
+  // category, a city, a photo or a location.
   let rows = [];
   if (navigator.onLine) {
     // `is_admin` decides only whether rows submitted by someone else may show.
@@ -2174,44 +2249,15 @@ async function loadFinishList() {
     rows = data || [];
   }
 
-  if (!queued.length && !rows.length) {
-    list.innerHTML = '<p class="sub">Nothing waiting. Every capture is live.</p>';
+  if (!rows.length) {
+    const waiting = (await idbAll('queue')).length;
+    list.innerHTML = '<p class="sub">Nothing here. Every row that reached the server is complete.'
+      + (waiting ? ' ' + plural(waiting, 'item') + ' still waiting to upload — see Queue.' : '')
+      + '</p>';
     return;
   }
 
   list.innerHTML = '';
-  queued.forEach((q) => {
-    const d = document.createElement('div');
-    d.className = 'item';
-    // A country item has no `row` — name it for what it is rather than
-    // rendering "Unnamed" and looking like a broken capture.
-    if (q.kind && q.kind !== 'place') {
-      const what = { country_hero: 'Country hero photo', country_food: 'Country food',
-                     country_subtitle: 'Country subtitle', country_app: 'Country app',
-                     place_hint: 'Tip or hint' }[q.kind] || q.kind;
-      d.innerHTML = '<h3>' + escapeHtml(what) + ' · ' + escapeHtml((q.country && q.country.code) || '') + '</h3>'
-        + '<p>' + (q.state === 'failed'
-            ? 'Failed · ' + escapeHtml(q.lastError || 'upload failed')
-            : q.lastError ? 'Retrying · ' + escapeHtml(q.lastError) : 'Waiting to upload') + '</p>';
-      list.appendChild(d);
-      return;
-    }
-    // **Say why on the FIRST failure, not the fifth.**
-    //
-    // `drainQueue` records `lastError` on every failure, but this only rendered
-    // it once `state === 'failed'` — which takes five attempts. Until then it
-    // read "Waiting to upload", so a hard 400 was indistinguishable from a
-    // pending upload. That is why two storage policies looked like a hang.
-    const status = q.state === 'failed'
-      ? 'Failed · ' + escapeHtml(q.lastError || 'upload failed')
-      : q.lastError
-        ? 'Retrying · ' + escapeHtml(q.lastError)
-        : 'Waiting to upload · ' + (q.photos ? q.photos.length : 0) + ' photo(s)';
-    d.innerHTML = '<h3>' + escapeHtml(q.row.name || 'Unnamed') + '</h3>'
-      + '<p>' + status + '</p>';
-    list.appendChild(d);
-  });
-
   rows.forEach((r) => {
     const missing = [];
     if (!r.category) missing.push('category');
@@ -2225,6 +2271,255 @@ async function loadFinishList() {
     d.onclick = () => openExisting(r.id);
     list.appendChild(d);
   });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   11b. The Queue — work that has not reached the server, and is the only copy
+   ════════════════════════════════════════════════════════════════════════
+
+   Never drops an item on its own. Five attempts stops the RETRYING; it does not
+   delete the work. The only deletion here is one he asked for twice.
+*/
+
+const QUEUE_WHAT = {
+  place: 'Place',
+  place_hint: 'Tip or hint',
+  country_hero: 'Country hero photo',
+  country_food: 'Country food',
+  country_subtitle: 'Country subtitle',
+  country_app: 'Country app',
+};
+
+/** What this item is, in words. */
+/** `coordinate_source` back to what the location line calls it. **A searched
+ *  coordinate must not come back reading "Edited by hand"** — nobody edited it,
+ *  an index found it, and that is a different claim about how much to trust it. */
+function locFromSource(src) {
+  if (src === 'manual_entry_verified') return 'exif';
+  if (src === 'osm_nominatim' || src === 'apple_mklocalsearch') return 'search';
+  return 'manual';
+}
+
+function queueWhat(item) {
+  const kind = item.kind || 'place';
+  if (kind === 'place') {
+    // A place with photographs is mostly a photo upload, and saying so makes
+    // "cover upload: Load failed" legible rather than mysterious.
+    const n = item.photos ? item.photos.length : 0;
+    return n ? 'Place · ' + plural(n, 'photo') : 'Place';
+  }
+  return QUEUE_WHAT[kind] || kind;
+}
+
+/** What it belongs to.
+ *
+ *  **Items queued before this release carry no `label`** — and they are a day
+ *  of field work, so they get derived rather than shrugged at. A hint's
+ *  `place_id` is the client-generated id of the capture it was written against,
+ *  which is very often still sitting in this same queue: that is the best
+ *  derivation available and it costs nothing. Anything left over says what it
+ *  is honestly, and a missing label NEVER renders a dangling separator. */
+function queueLabel(item, all) {
+  if (item.label) return item.label;
+  if (!item.kind || item.kind === 'place') {
+    return (item.row && item.row.name) ? item.row.name : 'Unnamed place';
+  }
+  const c = item.country || {};
+  if (item.kind === 'place_hint') {
+    const placeID = c.row && c.row.place_id;
+    const owner = placeID && (all || []).find(
+      (q) => (!q.kind || q.kind === 'place') && q.id === placeID);
+    if (owner && owner.row && owner.row.name) return owner.row.name;
+    return null;                       // renders as "Tip or hint", no separator
+  }
+  return c.code || null;
+}
+
+/** State in plain words. "Retrying" and "given up" used to look identical until
+ *  you read the small text. */
+function queueState(item) {
+  if (item.state === 'failed') return 'Stopped after 5 attempts';
+  const n = item.attempts || 0;
+  return n ? 'Retrying, attempt ' + n + ' of 5' : 'Waiting';
+}
+
+function queueWhen(at) {
+  if (!at) return '';
+  const d = new Date(at);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sameDay = new Date().toDateString() === d.toDateString();
+  return 'Captured ' + (sameDay ? time
+    : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ', ' + time);
+}
+
+async function loadQueueList() {
+  renderQueueList(await idbAll('queue'));
+}
+
+function renderQueueList(items) {
+  const list = $('queue-list');
+  $('queue-sub').textContent = items.length
+    ? 'Not on the server yet. This is the only copy — it lives on this phone until it lands.'
+    : '';
+  $('btn-retry-all').hidden = !items.length;
+  list.innerHTML = '';
+
+  if (!items.length) {
+    list.innerHTML = '<p class="sub">Nothing waiting. Every capture is live.</p>';
+    return;
+  }
+
+  // Oldest first: the thing that has been stuck longest is the thing to look at.
+  [...items].sort((a, b) => (a.at || 0) - (b.at || 0)).forEach((item) => {
+    const label = queueLabel(item, items);
+    const d = document.createElement('div');
+    d.className = 'item';
+
+    const h = document.createElement('h3');
+    // **Never a dangling separator.** The separator belongs to the label, so no
+    // label means no separator rather than "Tip or hint · ".
+    h.textContent = queueWhat(item) + (label ? ' · ' + label : '');
+    d.appendChild(h);
+
+    const st = document.createElement('p');
+    st.textContent = queueState(item);
+    d.appendChild(st);
+
+    // **The actual error, on the FIRST failure, not the fifth.** `drainQueue`
+    // records `lastError` every time; this shows it every time.
+    if (item.lastError) {
+      const e = document.createElement('p');
+      e.className = 'said';
+      e.textContent = item.lastError;
+      d.appendChild(e);
+    }
+
+    const when = document.createElement('p');
+    when.className = 'when';
+    when.textContent = queueWhen(item.at);
+    d.appendChild(when);
+
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+
+    const retry = document.createElement('button');
+    retry.className = 'ghost';
+    retry.textContent = 'Retry now';
+    retry.onclick = () => retryQueued(item.id);
+    acts.appendChild(retry);
+
+    if (!item.kind || item.kind === 'place') {
+      const open = document.createElement('button');
+      open.className = 'ghost';
+      open.textContent = 'Open';
+      open.onclick = () => openQueued(item.id);
+      acts.appendChild(open);
+    }
+
+    const drop = document.createElement('button');
+    drop.className = 'linkish';
+    drop.textContent = 'Discard';
+    drop.onclick = () => askDiscard(item.id, queueWhat(item) + (label ? ' · ' + label : ''));
+    acts.appendChild(drop);
+
+    d.appendChild(acts);
+    list.appendChild(d);
+  });
+}
+
+/** A manual retry also un-fails, because the reason is almost always "there was
+ *  no signal", and refusing to try again would strand the work forever. */
+async function retryQueued(id) {
+  const item = await idbGet('queue', id);
+  if (!item) return;
+  item.state = 'pending'; item.attempts = 0;
+  await idbPut('queue', item);
+  await loadQueueList();
+  drainQueue();
+}
+
+$('btn-retry-all').onclick = async () => {
+  const items = await idbAll('queue');
+  for (const i of items) { i.state = 'pending'; i.attempts = 0; await idbPut('queue', i); }
+  await loadQueueList();
+  drainQueue();
+};
+
+/* ── discard, confirmed ─────────────────────────────────────────────── */
+
+let discardID = null;
+
+function askDiscard(id, what) {
+  discardID = id;
+  $('discard-what').textContent = what;
+  $('discard-sheet').hidden = false;
+}
+$('discard-close').onclick = () => { $('discard-sheet').hidden = true; discardID = null; };
+$('discard-go').onclick = async () => {
+  if (!discardID) return;
+  await idbDelete('queue', discardID);
+  discardID = null;
+  $('discard-sheet').hidden = true;
+  await loadQueueList();
+  await refreshQueueBadge();
+};
+
+/** Open a QUEUED place back into the capture form so it can be corrected before
+ *  it is retried. Not `openExisting` — that reads the row from the server, and
+ *  the defining property of a queued place is that the server has never seen it.
+ *
+ *  **The queued item is left exactly where it is.** Saving writes back under the
+ *  same client-generated id, so it overwrites its own entry rather than making a
+ *  second one; closing the tab without saving changes nothing. */
+async function openQueued(id) {
+  const item = await idbGet('queue', id);
+  if (!item || (item.kind && item.kind !== 'place')) return;
+  const row = item.row || {};
+
+  cap = blank();
+  cap.id = row.id || item.id;
+  cap.editing = true;                      // already dupe-checked when captured
+  cap.name = row.name || '';
+  cap.category = row.category || '';
+  cap.lat = row.latitude; cap.lon = row.longitude;
+  cap.locFrom = locFromSource(row.coordinate_source);
+  cap.locProvider = cap.locFrom === 'search' ? row.coordinate_source : null;
+  cap.locTakenAt = row.last_verified_at || null;
+  cap.cityId = row.city_id || null;
+  cap.description = row.description || '';
+  cap.address = row.address || '';
+  cap.hours = hoursFromOperating(row.operating_hours);
+  cap.building = row.building_name || '';
+  cap.submittedBy = row.submitted_by || null;
+  cap.featured = !!item.featured;
+  // The blobs come back with their original `photoId`, so a retry still uploads
+  // to the same path and upserts the same `landmark_media` row.
+  cap.photos = (item.photos || []).map((p) => ({
+    photoId: p.photoId, blob: p.blob, width: p.width, height: p.height,
+  }));
+
+  $('f-name').value = cap.name;
+  $('f-desc').value = cap.description;
+  $('f-address').value = cap.address;
+  $('f-building').value = cap.building;
+  document.querySelectorAll('#f-categories .chip').forEach((c) =>
+    c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
+  $('f-featured').setAttribute('aria-pressed', String(cap.featured));
+  $('f-featured').innerHTML = (cap.featured ? '★' : '☆')
+    + ' Feature this place on its country screen'
+    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+
+  if (cap.cityId) {
+    const c = cities.find((x) => x.id === cap.cityId);
+    if (c) { cap.cityName = c.name; cap.cityDistanceKm = cap.lat == null ? 0 : haversineKm(cap.lat, cap.lon, c.latitude, c.longitude); }
+  } else { pickNearestCity(); }
+
+  renderThumbs();
+  renderHours();
+  renderHintKinds();
+  renderLocation();
+  switchTab('capture');
+  window.scrollTo(0, 0);
 }
 
 /** Reopening loads the row back into the form. Saving re-runs the gate and, if
@@ -2242,8 +2537,10 @@ async function openExisting(id) {
   cap.category = data.category || '';
   cap.lat = data.latitude; cap.lon = data.longitude;
   // The label follows the STORED source, so a pin corrected a week ago still
-  // reads "Edited by hand" rather than silently claiming to be verified.
-  cap.locFrom = data.coordinate_source === 'manual_entry_verified' ? 'exif' : 'manual';
+  // reads "Edited by hand" rather than silently claiming to be verified — and a
+  // searched one reads "From search", because it was never hand-placed either.
+  cap.locFrom = locFromSource(data.coordinate_source);
+  cap.locProvider = cap.locFrom === 'search' ? data.coordinate_source : null;
   cap.locTakenAt = data.last_verified_at || null;
   cap.cityId = data.city_id || null;
   cap.description = data.description || '';
@@ -2368,7 +2665,8 @@ $('btn-add-hint').onclick = async () => {
   } catch (err) {
     // The place may not be on the server yet — a hint on a queued capture has
     // nothing to point at. Queue it with the same machinery as everything else.
-    await queueCountryWork({ kind: 'place_hint', code: null, row });
+    await queueCountryWork({ kind: 'place_hint', code: null, row },
+      cap.name.trim() || 'Unnamed place');
     hintNote('Hint queued.');
     $('hint-body').value = ''; $('hint-count').textContent = '0/' + HINT_MAX;
     return;
@@ -2517,7 +2815,7 @@ $('in-country-hero').onchange = async (e) => {
       kind: 'country_hero',
       code: country.code,
       blob,
-    });
+    }, country.name || country.code);
     countryNote('Hero queued.');
     renderCountryThumb('country-hero-thumbs', 'btn-country-hero', blob);
   } catch (err) { countryError(err.message || 'Could not read that photo.'); }
@@ -2546,7 +2844,7 @@ $('btn-add-food').onclick = async () => {
     blob: foodBlob,
     name,
     note: $('c-food-note').value.trim() || null,
-  });
+  }, country.name || country.code);
   foodBlob = null;
   $('c-food-name').value = ''; $('c-food-note').value = '';
   renderCountryThumb('country-food-thumbs', 'btn-country-food', null);
@@ -2580,7 +2878,8 @@ $('c-subtitle').addEventListener('blur', async () => {
     if (error) throw new Error(error.message);
     countryNote('Subtitle saved.');
   } catch (err) {
-    await queueCountryWork({ kind: 'country_subtitle', code: country.code, description });
+    await queueCountryWork({ kind: 'country_subtitle', code: country.code, description },
+      country.name || country.code);
     countryNote('Subtitle queued — it will save when you are back online.');
   }
 });
@@ -2657,7 +2956,8 @@ async function attachApp(catalogRow) {
     countryNote('App attached.');
     await loadCountryApps();
   } catch (err) {
-    await queueCountryWork({ kind: 'country_app', code: country.code, row });
+    await queueCountryWork({ kind: 'country_app', code: country.code, row },
+      country.name || country.code);
     countryNote('App queued — it will attach when you are back online.');
   }
 }
@@ -2668,11 +2968,16 @@ function countryNote(msg) { $('country-note').textContent = msg; $('country-erro
 /** Country work goes through the SAME IndexedDB queue as a capture — the badge,
  *  the five-attempt cap, the `online` retry and first-failure error reporting
  *  all apply unchanged. Hero and food carry blobs and must survive a reload. */
-async function queueCountryWork(item) {
+async function queueCountryWork(item, label) {
   await idbPut('queue', {
     id: crypto.randomUUID(),
     kind: item.kind,
     country: item,
+    // **Stored here, at queue time.** A `place_hint` is filed through this
+    // queue with `code: null`, and the renderer used to reach for that code and
+    // print "Tip or hint · " with nothing after it. The place name is in hand
+    // right now and is not in hand at render time, so it is captured now.
+    label: label || null,
     state: 'pending', attempts: 0, lastError: null, at: Date.now(),
   });
   await refreshQueueBadge();
