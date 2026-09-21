@@ -279,6 +279,10 @@
        and reloads; a stale shell should not be a conversation. -->
   <button class="updatebar" id="update-bar" type="button" hidden></button>
 
+  <!-- B3 — one sentence, no policy name. Tapping it tries the refresh token
+       first; only a dead refresh token sends him back to the sign-in screen. -->
+  <button class="updatebar" id="signedout-bar" type="button" hidden>You’re signed out — sign in to send these</button>
+
   <!-- Outside every pane on purpose: it has to be visible from whichever tab
        he is on, which is the whole point of it. -->
   <div class="wrap" style="padding-bottom:0" id="queue-bar-wrap" hidden>
@@ -674,7 +678,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v21';
+const BUILD = 'field-v22';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -3397,19 +3401,141 @@ function resetForm() {
 
 let draining = false;
 
+/* ── The session, checked before a write rather than discovered by one ──
+ *
+ * **Four captures burned their whole retry budget on an expired token.** The
+ * live INSERT policy is `WITH CHECK (auth.uid() IS NOT NULL)` and is unchanged;
+ * the panel's session had expired, so the writes went out anonymous and
+ * Postgres refused them. Janes+Hooch inserted at 05:12 UTC and everything from
+ * 07:57 failed — five attempts each against something no amount of retrying
+ * could fix.
+ *
+ * A backgrounded PWA is how the token died quietly: `autoRefreshToken` runs on
+ * a timer, and a suspended tab does not get timers.
+ */
+async function sessionIsLive() {
+  try {
+    const { data } = await db.auth.getSession();
+    const s = data && data.session;
+    if (!s || !s.access_token) return false;
+    // A token that expires in the next half minute is not worth starting an
+    // upload on — the refresh below is the cheaper move.
+    if (s.expires_at && (s.expires_at * 1000) < Date.now() + 30_000) return false;
+    return true;
+  } catch { return false; }
+}
+
+/** **B2 — every resume re-checks the token.**
+ *
+ *  `autoRefreshToken` schedules a timer, and a suspended PWA does not get
+ *  timers: the token expires while nothing is running, and the first thing that
+ *  notices is a refused insert. This notices first, and drains if it recovers. */
+let resumingSession = false;
+async function resumeSession() {
+  if (resumingSession || !session || !navigator.onLine) return;
+  resumingSession = true;
+  try {
+    const live = await ensureSession();
+    showSignedOut(!live);
+    if (live) { await clearSignedOutMarks(); drainQueue(); }
+  } finally { resumingSession = false; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') resumeSession();
+});
+window.addEventListener('online', () => resumeSession());
+window.addEventListener('pageshow', (e) => { if (e.persisted) resumeSession(); });
+
+/** Ask for a new token, and say whether there is one afterwards. */
+async function ensureSession() {
+  if (await sessionIsLive()) return true;
+  try {
+    const { data } = await db.auth.refreshSession();
+    if (data && data.session) { session = data.session; return true; }
+  } catch { /* fall through — it is genuinely gone */ }
+  return false;
+}
+
+/** **Never a policy name.** "new row violates row-level security policy for
+ *  table landmarks" is a sentence for us, not for whoever is standing in the
+ *  street holding a phone. */
+const SIGNED_OUT_MESSAGE = 'You’re signed out — sign in to send these';
+
+function looksLikeAuthFailure(message) {
+  return /row-level security|violates row-level|jwt|not authenticated|invalid (?:token|claim)|expired|401|permission denied/i
+    .test(String(message || ''));
+}
+
+/** The one bar that says it, wherever he is. */
+function showSignedOut(on) {
+  const bar = $('signedout-bar');
+  if (!bar) return;
+  bar.hidden = !on;
+}
+$('signedout-bar') && ($('signedout-bar').onclick = async () => {
+  if (await ensureSession()) {
+    showSignedOut(false);
+    await clearSignedOutMarks();
+    drainQueue();
+  } else {
+    // The refresh token is gone too. Back to the front door.
+    await db.auth.signOut().catch(() => {});
+    location.reload();
+  }
+});
+
+/** Items parked as `signed_out` become ordinary pending work again, with their
+ *  attempt counts exactly as they were — being signed out never cost one. */
+async function clearSignedOutMarks() {
+  const items = await idbAll('queue');
+  for (const i of items) {
+    if (i.state === 'signed_out') { i.state = 'pending'; i.lastError = null; await idbPut('queue', i); }
+  }
+  await refreshQueueBadge();
+  if ($('pane-queue').hidden === false) loadQueueList();
+}
+
 async function drainQueue() {
   if (draining || !navigator.onLine || !session) return;
   draining = true;
   try {
     const items = await idbAll('queue');
+
+    // **B1 — ask once, before the first write.** Not per item: the answer is
+    // the same for all of them, and one refused insert per item is four
+    // pointless round trips and four spent attempts.
+    if (items.length && !(await ensureSession())) {
+      showSignedOut(true);
+      for (const item of items) {
+        if (item.state === 'failed') continue;
+        item.state = 'signed_out';          // attempts deliberately untouched
+        item.lastError = null;              // and no policy name stored
+        await idbPut('queue', item);
+      }
+      return;
+    }
+    showSignedOut(false);
+
     for (const item of items) {
       if (item.state === 'failed') continue;
       try {
         await uploadOne(item);
         await idbDelete('queue', item.id);
       } catch (e) {
+        const message = e.message || String(e);
+        // **An auth failure costs no attempt, anywhere.** It is not a bad
+        // capture, it is a bad token, and burning the budget on it is what
+        // turned a re-sign-in into four dead items.
+        if (looksLikeAuthFailure(message)) {
+          item.state = 'signed_out';
+          item.lastError = null;
+          await idbPut('queue', item);
+          showSignedOut(true);
+          break;                            // the rest will fail identically
+        }
         item.attempts = (item.attempts || 0) + 1;
-        item.lastError = e.message || String(e);
+        item.lastError = message;
         // Five, then surface it rather than retrying forever. Never silently
         // dropped: he stood somewhere to make it.
         item.state = item.attempts >= 5 ? 'failed' : 'pending';
@@ -4230,6 +4356,8 @@ function queueState(item) {
   // say that instead of counting attempts at a wall. Items queued before the
   // gate was fixed are in exactly this state, and they are a day of field work,
   // so they are repaired rather than dropped: Open takes it back into the form.
+  // Not a failure of the capture, and not something a retry can fix.
+  if (item.state === 'signed_out') return 'Waiting — you’re signed out';
   if (needsAName(item)) return 'Needs a name — open it and add one';
   if (item.state === 'failed') return 'Stopped after 5 attempts';
   const n = item.attempts || 0;
@@ -4303,7 +4431,7 @@ function renderQueueList(items) {
 
     // Retrying a nameless place just burns another attempt against a NOT NULL
     // column, so it is not offered — Open is the only thing that helps.
-    if (!needsAName(item)) {
+    if (!needsAName(item) && item.state !== 'signed_out') {
       const retry = document.createElement('button');
       retry.className = 'ghost';
       retry.textContent = 'Retry now';
@@ -5227,6 +5355,11 @@ async function boot() {
             renderBuildStamp();
           }
         });
+        // **B2 — the worker waking is the other resume signal.** A PWA that has
+        // been backgrounded for hours gets neither `autoRefreshToken`'s timer
+        // nor, reliably, a visibility event; a controller change means the page
+        // is live again and the token is worth checking.
+        navigator.serviceWorker.addEventListener('controllerchange', () => { resumeSession(); });
         // A worker that installs while he is looking should say so at once.
         reg.addEventListener('updatefound', () => {
           const w = reg.installing;
