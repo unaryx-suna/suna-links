@@ -53,6 +53,49 @@ const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/a
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
+  // ── Search mode: read-only, JSON, no bytes ────────────────────────────────
+  //
+  // `?provider=pexels&q=<query>` returns what a query WOULD offer, so a cover
+  // decision can be reviewed before anything is stored. It exists because the
+  // key lives only in this environment: there is no way to see what a query
+  // returns without asking from here.
+  //
+  // Writes nothing and downloads no image. The per-photo route below is still
+  // the only way to obtain bytes.
+  if (req.query && req.query.q) {
+    const provider = String(req.query.provider || 'pexels').toLowerCase();
+    const spec = PROVIDERS[provider];
+    if (!spec || provider !== 'pexels') {
+      return res.status(400).json({ error: 'search supports pexels only' });
+    }
+    const key = process.env[spec.keyEnv];
+    if (!key) return res.status(503).json({ error: 'no PEXELS_API_KEY configured' });
+
+    const q = String(req.query.q).slice(0, 120);
+    const per = Math.min(Math.max(parseInt(String(req.query.per_page || '3'), 10) || 3, 1), 10);
+    try {
+      const r = await fetch(
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${per}`,
+        { headers: spec.authHeader(key) });
+      if (!r.ok) return res.status(r.status).json({ error: `pexels search ${r.status}` });
+      const j = await r.json();
+      return res.status(200).json({
+        query: q,
+        total_results: j.total_results ?? null,
+        photos: (j.photos || []).map((p) => ({
+          id: p.id,
+          alt: p.alt || null,
+          photographer: p.photographer || null,
+          width: p.width, height: p.height,
+          url: p.url || null,
+          src: (p.src && (p.src.large2x || p.src.large || p.src.original)) || null,
+        })),
+      });
+    } catch (e) {
+      return res.status(502).json({ error: 'pexels search failed' });
+    }
+  }
+
   const provider = String((req.query && req.query.provider) || '').toLowerCase();
   const rawId = String((req.query && req.query.id) || '');
   const spec = PROVIDERS[provider];
