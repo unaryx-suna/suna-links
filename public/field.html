@@ -341,6 +341,10 @@
     <div class="fg">
       <label for="f-name">Name</label>
       <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
+      <!-- NAME-FIRST §1 — the name IS the search. Results appear here, ours
+           first, so the link and the address stop being the toll gate. -->
+      <div id="name-results" hidden></div>
+      <p class="note" id="name-results-note" style="margin:4px 0 0" hidden></p>
     </div>
 
     <!-- §2 — one disclosure for everything the photo run is not editing. -->
@@ -354,6 +358,10 @@
 
     <div class="fg">
       <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
+      <!-- NAME-FIRST §2 — what the place already holds, and where it came
+           from. Until now the only way to find out a cover was wrong was to
+           notice it in the app. -->
+      <p class="note" id="cover-info" style="margin:0 0 6px" hidden></p>
       <div class="thumbs" id="f-thumbs">
         <button class="addphoto" id="btn-camera">📷<br>Camera</button>
         <button class="addphoto" id="btn-library">🖼<br>Library</button>
@@ -683,7 +691,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v24';
+const BUILD = 'field-v25';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2885,11 +2893,25 @@ async function addPhotos(files) {
 async function loadStoredMedia(landmarkId) {
   cap.stored = [];
   if (!navigator.onLine) return;
+  // **NAME-FIRST §2 — every photo the place holds, not only mine.**
+  //
+  // This used to filter `user_id = me`, which meant the one thing the tool
+  // could never show was the picture someone else uploaded — the exact photo
+  // most likely to be wrong and the reason §2 exists. RLS already decides what
+  // comes back (`is_private = false OR mine`), so dropping the filter widens
+  // nothing: it stops the client hiding rows the server was willing to send.
+  //
+  // `username` is denormalised onto the row, so "who uploaded it" costs no join.
   const { data } = await db.from('landmark_media')
-    .select('id,media_url').eq('landmark_id', landmarkId).eq('user_id', session.user.id);
+    .select('id,media_url,user_id,username,is_private,created_at')
+    .eq('landmark_id', landmarkId)
+    .order('created_at', { ascending: true });
   cap.stored = (data || []).map((m) => ({
     id: m.id,
     media_url: m.media_url,
+    mine: m.user_id === session.user.id,
+    username: m.username || null,
+    isPrivate: m.is_private === true,
     // The object path is everything after the public-URL prefix.
     path: (m.media_url || '').split('/user-landmark-photos/')[1] || null,
   }));
@@ -2925,12 +2947,30 @@ function renderThumbs() {
     img.src = entry.media_url;
     d.appendChild(img);
     const tag = document.createElement('div');
-    tag.className = 'cov'; tag.textContent = 'UPLOADED';
+    tag.className = 'cov';
+    tag.textContent = entry.mine ? 'UPLOADED' : 'UPLOADED';
     d.appendChild(tag);
-    const x = document.createElement('button');
-    x.className = 'x'; x.textContent = '×';
-    x.onclick = () => deleteStored(entry);
-    d.appendChild(x);
+    // §2 — who took it. Without this the strip is a row of pictures with no
+    // way to tell your own from someone else's, and the whole point of showing
+    // other people's is that you can see one is wrong.
+    if (!entry.mine) {
+      const cr = document.createElement('div');
+      cr.className = 'credit';
+      cr.textContent = entry.username ? 'by ' + entry.username : 'by another user';
+      cr.title = cr.textContent;
+      d.appendChild(cr);
+    }
+    // **The × is only ever on your own photograph.** R1: a hard delete of
+    // someone else's picture is not a thing this tool does, and the policy
+    // agrees — `Users delete own media` is `auth.uid() = user_id`, so the
+    // button would have failed anyway, loudly, after the operator pressed it.
+    // Hiding someone else's (§3) needs a policy that does not exist yet.
+    if (entry.mine) {
+      const x = document.createElement('button');
+      x.className = 'x'; x.textContent = '×';
+      x.onclick = () => deleteStored(entry);
+      d.appendChild(x);
+    }
     box.insertBefore(d, $('btn-camera'));
   });
 
@@ -2961,6 +3001,226 @@ function renderThumbs() {
     d.appendChild(x);
     box.insertBefore(d, $('btn-camera'));
   });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   7b. The name field IS the search — NAME-FIRST §1
+
+   Brian, 21 Sep: *"when typing the name of the place, can it search whether it
+   exists on the database or MapKit? Cause when i enter the google link or
+   address, it makes it redundant."*
+
+   He is describing an inverted order. `runDuplicateCheck` opens with
+   `if (cap.lat == null) return`, so the check that would say "you already have
+   this place" could not run until a coordinate existed — and the coordinate is
+   exactly what the link and the address were being pasted for. The operator did
+   the work that would have told them the work was unnecessary.
+
+   So the name searches as it is typed: our catalogue first, then MapKit, in one
+   list with our own rows marked. No coordinate is needed for any of it. The
+   link and address paths stay exactly as they are; they are now the exception
+   rather than the toll gate.
+
+   The coordinate-proximity check in section 8 keeps its job — a place captured
+   photo-first has its name typed last, and that is the case this cannot catch.
+   ════════════════════════════════════════════════════════════════════════ */
+
+const NAME_SEARCH_DEBOUNCE_MS = 700;   // the same 700ms `scheduleDuplicateCheck` uses
+const NAME_SEARCH_MIN_CHARS = 3;
+let nameSearchTimer = null;
+let nameSearchSeq = 0;
+/** The query a result was already taken from, so the list does not reappear
+ *  the moment a chosen name is written back into the field. */
+let nameSearchSettled = '';
+
+/** Accents off, punctuation to spaces, case folded. `Café-Müller` and
+ *  `cafe muller` are the same name and the `ilike` this replaces said they
+ *  were not. CJK survives `\p{L}` untouched. */
+function normaliseName(v) {
+  return String(v || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** A stored name is often `English\n中文`, and either half may be the one the
+ *  operator is typing. Split on the separators we actually store — a newline,
+ *  a pipe, a slash — and compare every half against every half. */
+function nameHalves(v) {
+  return String(v || '')
+    .split(/[\n|｜/]+/)
+    .map(normaliseName)
+    .filter(Boolean);
+}
+
+/** Word-subset, not contiguous substring.
+ *
+ *  "Heaven Temple" should find "Temple of Heaven"; an `ilike '%heaven temple%'`
+ *  never will, because the words are not adjacent and not in that order. Every
+ *  word of the shorter name has to appear in the longer one, which is strict
+ *  enough that "Temple" alone does not match everything. */
+function nameWordSubset(a, b) {
+  const wa = a.split(' ').filter((w) => w.length >= 2);
+  const wb = b.split(' ').filter((w) => w.length >= 2);
+  if (!wa.length || !wb.length) return false;
+  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  const set = new Set(long);
+  return short.every((w) => set.has(w));
+}
+
+function nameMatchesStored(query, stored) {
+  const qs = nameHalves(query), ss = nameHalves(stored);
+  for (const q of qs) {
+    if (q.length < 2) continue;
+    for (const t of ss) {
+      if (!t) continue;
+      if (t === q) return true;
+      // A typed prefix is still a match while it is being typed.
+      if (t.startsWith(q) || q.startsWith(t)) return true;
+      if (t.includes(q) || q.includes(t)) return true;
+      if (nameWordSubset(q, t)) return true;
+    }
+  }
+  return false;
+}
+
+function clearNameResults() {
+  clearTimeout(nameSearchTimer);
+  $('name-results').innerHTML = '';
+  $('name-results').hidden = true;
+  $('name-results-note').hidden = true;
+}
+
+function nameResultsNote(msg) {
+  const el = $('name-results-note');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+function scheduleNameSearch() {
+  clearTimeout(nameSearchTimer);
+  const q = $('f-name').value.trim();
+  // **Not while editing an existing row, and not during a photo run.** Both
+  // already know which place they are on; offering to open a different one
+  // there would be a trapdoor, and in a run the field is read-only anyway.
+  if (cap.editing || photoMode() || !navigator.onLine) { clearNameResults(); return; }
+  if (q.length < NAME_SEARCH_MIN_CHARS) { clearNameResults(); return; }
+  if (normaliseName(q) === normaliseName(nameSearchSettled)) { clearNameResults(); return; }
+  nameSearchTimer = setTimeout(() => runNameSearch(q), NAME_SEARCH_DEBOUNCE_MS);
+}
+
+/** Our catalogue, matched on the name alone.
+ *
+ *  PostgREST cannot express the comparison above, so the server does the coarse
+ *  work — any row containing any one of the typed words — and the fine work
+ *  happens here on at most 60 rows. `is_hidden` is not filtered: a place parked
+ *  in "Finish these" is precisely the one worth reopening rather than
+ *  re-capturing. */
+async function searchCatalogue(q) {
+  const words = normaliseName(q).split(' ').filter((w) => w.length >= 2).slice(0, 4);
+  if (!words.length) return [];
+  // PostgREST `or=` is comma-separated, so a comma inside a value would split
+  // the filter. `normaliseName` has already removed every character that is
+  // not a letter or a digit, so there is nothing left to escape.
+  const or = words.map((w) => 'name.ilike.%' + w + '%').join(',');
+  const { data, error } = await db.from('landmarks')
+    .select('id,name,latitude,longitude,cover_image_url,category,city_id,is_hidden')
+    .or(or)
+    .limit(60);
+  if (error) return [];
+  const centre = currentCentre();
+  return (data || [])
+    .filter((r) => nameMatchesStored(q, r.name))
+    .map((r) => ({
+      ...r,
+      km: centre && r.latitude != null
+        ? haversineKm(centre.lat, centre.lon, r.latitude, r.longitude) : null,
+    }))
+    .sort((a, b) => (a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km))
+    .slice(0, 6);
+}
+
+async function runNameSearch(q) {
+  const seq = ++nameSearchSeq;
+  nameResultsNote('Looking…');
+  let ours = [];
+  try { ours = await searchCatalogue(q); } catch { ours = []; }
+  if (seq !== nameSearchSeq) return;
+  // Ours renders immediately; MapKit is slower and must not hold it back.
+  renderNameResults(ours, [], q, true);
+
+  let theirs = [];
+  try { theirs = await searchApple(q, currentCentre()); } catch { theirs = []; }
+  if (seq !== nameSearchSeq) return;
+  renderNameResults(ours, theirs, q, false);
+}
+
+function renderNameResults(ours, theirs, q, stillLooking) {
+  const box = $('name-results');
+  box.innerHTML = '';
+
+  ours.forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    const bits = [];
+    if (r.km != null) bits.push(r.km < 1 ? Math.round(r.km * 1000) + ' m away' : r.km.toFixed(1) + ' km away');
+    bits.push(r.cover_image_url ? 'has a cover' : 'no cover — worth a photo');
+    if (r.is_hidden) bits.push('unfinished');
+    b.innerHTML = '<strong>Already in Suna</strong> · ' + escapeHtml(r.name || 'Unnamed')
+      + '<small>' + escapeHtml(bits.join(' · ')) + '</small>';
+    b.onclick = () => {
+      // **Ours OPENS. It does not prefill.** Choosing a place we already hold
+      // and then starting a fresh capture of it is the duplicate this whole
+      // section exists to prevent.
+      nameSearchSettled = r.name || q;
+      clearNameResults();
+      openExisting(r.id).then(() => showExistingPlaceNote(r.name));
+    };
+    box.appendChild(b);
+  });
+
+  theirs.forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = escapeHtml(r.name)
+      + '<small>' + escapeHtml(r.address || 'no address') + ' · from Apple Maps</small>';
+    b.onclick = () => chooseNameMapResult(r);
+    box.appendChild(b);
+  });
+
+  box.hidden = !box.children.length;
+  if (stillLooking) {
+    nameResultsNote(ours.length ? 'Also checking Apple Maps…' : 'Checking Apple Maps…');
+  } else if (!box.children.length) {
+    nameResultsNote('Nothing by that name yet — carry on and this becomes a new place.');
+  } else {
+    nameResultsNote('');
+  }
+}
+
+/** A MapKit result fills the capture, exactly as `chooseSearchResult` does from
+ *  inside the location sheet. Kept separate because this one must not touch the
+ *  sheet's own box, and must not close a sheet that was never open. */
+function chooseNameMapResult(r) {
+  setLocation(r.lat, r.lon, 'search', { provider: 'apple_mklocalsearch' });
+  if (r.name) {
+    cap.name = r.name;
+    $('f-name').value = r.name;
+    markTouched('name');
+  }
+  if (!cap.address.trim() && r.address) {
+    cap.address = r.address;
+    $('f-address').value = r.address;
+    markTouched('address');
+  }
+  categoryHint('');
+  suggestCategoryFromApple(r.poi);
+  offerOSMHours(r.lat, r.lon);
+  nameSearchSettled = r.name || $('f-name').value;
+  clearNameResults();
+  renderSaveState();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -3380,6 +3640,8 @@ function resetForm() {
   // used to survive a reset, leaving a "More" disclosure over an empty capture.
   soloShot = false;
   showExistingPlaceNote(null);
+  nameSearchSettled = '';
+  clearNameResults();               // NAME-FIRST §1
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
   $('pane-capture').classList.remove('photo-run', 'show-all');
@@ -3387,6 +3649,7 @@ function resetForm() {
   $('shot-source').hidden = true;
   $('another-nearby').hidden = true;
   growNote();
+  renderCoverInfo();
   renderThumbs();
   renderHours();
   renderHintKinds();
@@ -4787,7 +5050,17 @@ async function openExisting(id) {
   // stored one. `photos` stays empty unless new ones are added.
   cap.photos = [];
   cap.hadCover = !!data.cover_image_url;
+  cap.coverURL = data.cover_image_url || null;
+  // §2 — the provenance columns `PROMPT-PANEL-PASTE-STOCK-LINK` §3 added.
+  cap.coverSource = data.cover_source || null;
+  cap.coverSourceRef = data.cover_source_ref || null;
+  cap.photographer = data.photographer_name || null;
   cap.submittedBy = data.submitted_by || null;
+  // Opening a place settles the name, so the search list does not reopen over
+  // the row that was just chosen.
+  nameSearchSettled = cap.name;
+  clearNameResults();
+  renderCoverInfo();
   await loadStoredMedia(id);
   renderThumbs();
   renderHours();
@@ -4796,6 +5069,32 @@ async function openExisting(id) {
   renderLocation();
   switchTab('capture');
   window.scrollTo(0, 0);
+}
+
+/** §2 — the cover, said out loud: where it came from and who took it.
+ *
+ *  A cover with a `cover_source_ref` and no photographer is fine and
+ *  backfillable from the id. A cover with neither is the one worth looking at,
+ *  because nothing records where it came from — most of the catalogue, since
+ *  those two columns only exist from 20260921000002 onwards.
+ *
+ *  There is no "Not this place" control here yet. §3 of the brief specifies
+ *  one, and it needs an RLS path that does not exist: `flagged_places` has no
+ *  INSERT policy at all — only `service_role` ALL, plus admin SELECT and
+ *  UPDATE — so the write would be refused for every operator including an
+ *  admin. Reported rather than written, per §3's own instruction. */
+function renderCoverInfo() {
+  const el = $('cover-info');
+  if (!el) return;
+  if (!cap.editing || !cap.coverURL) { el.hidden = true; el.textContent = ''; return; }
+  const bits = [];
+  if (cap.coverSource) bits.push('from ' + capitalise(cap.coverSource));
+  if (cap.photographer) bits.push('by ' + cap.photographer);
+  if (cap.coverSourceRef) bits.push(cap.coverSourceRef);
+  el.textContent = bits.length
+    ? 'Cover: ' + bits.join(' · ')
+    : 'Cover: this place has one, and nothing records where it came from.';
+  el.hidden = false;
 }
 
 /** One box that grows, rather than two that disagreed about which one counts. */
@@ -5298,7 +5597,11 @@ $('f-featured').onclick = () => {
     cap[key] = $(id).value;
     markTouched(key);
     if (id === 'f-note') growNote();
-    if (id === 'f-name') { dupeDismissed = false; scheduleDuplicateCheck(); }
+    if (id === 'f-name') {
+      dupeDismissed = false;
+      scheduleDuplicateCheck();
+      scheduleNameSearch();          // NAME-FIRST §1
+    }
     renderSaveState();
   });
 });
