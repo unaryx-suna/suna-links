@@ -3593,10 +3593,51 @@ async function uploadOne(item) {
   //
   // Repaired on the copy being sent. The queued item is never rewritten, so a
   // failure here still leaves the work exactly where it was.
+  //
+  // **And the same read carries the row's identity, because an upsert is not a
+  // patch.**
+  //
+  // `upsert` compiles to `INSERT ... ON CONFLICT DO UPDATE`, so Postgres forms
+  // a complete candidate row BEFORE it discovers the conflict, and every policy
+  // and trigger is applied to THAT row — not to the one already in the table.
+  // A payload of metadata alone cannot stand one up.
+  //
+  // Two things then fail, and the second is the one that cost the evening:
+  //
+  //   `name` and `category` are the only columns on `landmarks` that are NOT
+  //   NULL with no default. Without them the candidate row is rejected
+  //   outright — honestly, as 23502.
+  //
+  //   `latitude`/`longitude` are nullable, so their absence looks harmless. It
+  //   is not. `heal_missing_city` is a BEFORE INSERT trigger that fills
+  //   `city_id` from the coordinate and returns early when the coordinate is
+  //   null, so the candidate row gets `city_id = NULL`. The SELECT policy on
+  //   `landmarks` then reads
+  //
+  //       is_hidden = false AND (origin <> 'user' OR city_id IS NOT NULL
+  //                              OR submitted_by = auth.uid())
+  //
+  //   and for a field capture all three branches are false: `origin` is
+  //   'user', `city_id` is now null, and `submitted_by` is the person who
+  //   captured it, not whoever is draining the queue. The statement is refused
+  //   as **42501, "new row violates row-level security policy"** — which reads
+  //   as a permission problem and is nothing of the kind. Proven by supplying
+  //   any ONE of the three: a city_id, our own submitted_by, or origin
+  //   'catalogue'; each on its own makes the identical upsert succeed.
+  //
+  // So the fix is the coordinate, and the rest of the identity with it. Only
+  // filled where the payload is silent, so an edit that deliberately renames or
+  // moves a place still does.
   try {
     const { data: existing } = await db.from('landmarks')
-      .select('origin').eq('id', row.id).maybeSingle();
-    if (existing && existing.origin) row.origin = existing.origin;
+      .select('origin,name,category,latitude,longitude,city_id')
+      .eq('id', row.id).maybeSingle();
+    if (existing) {
+      if (existing.origin) row.origin = existing.origin;
+      for (const col of ['name', 'category', 'latitude', 'longitude', 'city_id']) {
+        if (row[col] == null && existing[col] != null) row[col] = existing[col];
+      }
+    }
   } catch { /* offline mid-drain: the upsert below fails and it retries */ }
 
   // **Upsert on the client-generated id.** A queued save that actually
