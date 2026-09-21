@@ -674,7 +674,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v20';
+const BUILD = 'field-v21';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2374,22 +2374,28 @@ function parseStockLink(text) {
     const m = path.match(/\/photo-([A-Za-z0-9_-]{5,64})/);
     if (m) return { provider: 'unsplash', id: m[1] };
   }
+  // **An Unsplash PAGE link is recognised and refused, not parsed.**
+  //
+  // Resolving one needs `UNSPLASH_ACCESS_KEY`, which is deliberately not set —
+  // Brian's call, 21 Sep. The page id is not a CDN path either: the slug's id
+  // is a short public id and `images.unsplash.com/photo-<that>` is a genuine
+  // 404 at Unsplash, verified. So there is no keyless route from this URL to
+  // the bytes, and guessing one would produce a failed fetch and a vague error.
+  //
+  // Naming it here means the refusal costs no request and can say the one
+  // useful thing: copy the image address instead.
   if (host === 'unsplash.com' || host === 'www.unsplash.com') {
-    // **The id is the LAST hyphen-separated token, not a regex group.** An
-    // Unsplash id may itself contain `-`, so a character class that includes
-    // the hyphen swallows the whole slug:
-    // `a-view-of-a-mountain-range-Ki0dpxp01Sg` came back as
-    // `view-of-a-mountain-range-Ki0dpxp01Sg`, which is not an id and fetches
-    // nothing. Splitting is unambiguous where matching is not.
     const parts = path.split('/').filter(Boolean);
-    if (parts[0] === 'photos' && parts[1]) {
-      const slug = parts[1];
-      const id = slug.includes('-') ? slug.slice(slug.lastIndexOf('-') + 1) : slug;
-      if (/^[A-Za-z0-9_-]{8,32}$/.test(id)) return { provider: 'unsplash', id };
-    }
+    if (parts[0] === 'photos' && parts[1]) return { unsupported: 'unsplash-page' };
   }
   return null;
 }
+
+/** The only refusal that gets a sentence. Everything else unrecognised stays
+ *  silent, because this must not become a "paste any URL" field. */
+const UNSPLASH_PAGE_HELP =
+  'Unsplash page links can’t be used. Right-click the photo → Copy image address, '
+  + 'and paste that (it starts images.unsplash.com).';
 
 function stockNote(msg, bad) {
   const el = $('stock-note');
@@ -2449,6 +2455,10 @@ function capitalise(s) { return String(s || '').charAt(0).toUpperCase() + String
 
 $('stock-link').addEventListener('input', async () => {
   const link = parseStockLink($('stock-link').value);
+  if (link && link.unsupported === 'unsplash-page') {
+    stockNote(UNSPLASH_PAGE_HELP, true);
+    return;                                   // leave it in the box to edit
+  }
   if (!link) {
     stockNote($('stock-link').value.trim() ? 'Not a Pexels or Unsplash link.' : '');
     return;
@@ -2470,6 +2480,14 @@ window.addEventListener('paste', async (e) => {
   if (!files.length) {
     const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
     const link = parseStockLink(text);
+    if (link && link.unsupported === 'unsplash-page') {
+      // **Not a silent drop.** The paste still lands wherever it was aimed —
+      // no `preventDefault` — but the reason is said out loud, and the note is
+      // brought into view because the photo area is often below the fold.
+      stockNote(UNSPLASH_PAGE_HELP, true);
+      $('stock-note').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
     if (!link) return;                    // anything else stays ignored, silently
     e.preventDefault();
     freshIfUntouched();
