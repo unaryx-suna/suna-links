@@ -678,7 +678,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v22';
+const BUILD = 'field-v23';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -3457,13 +3457,20 @@ async function ensureSession() {
   return false;
 }
 
-/** **Never a policy name.** "new row violates row-level security policy for
- *  table landmarks" is a sentence for us, not for whoever is standing in the
- *  street holding a phone. */
 const SIGNED_OUT_MESSAGE = 'You’re signed out — sign in to send these';
 
+/** **An RLS refusal is NOT a sign-out, and calling it one cost an evening.**
+ *
+ *  All four stuck captures failed with "new row violates row-level security
+ *  policy for table landmarks" while the session was perfectly live and signed
+ *  in as an admin. Treating that string as an auth failure sent the whole
+ *  investigation at token refresh, which was never the problem.
+ *
+ *  This now matches ONLY the things that actually mean "there is no usable
+ *  token". A permissions refusal is a permissions refusal and is reported as
+ *  one, with the table and the operation, because that is what identifies it. */
 function looksLikeAuthFailure(message) {
-  return /row-level security|violates row-level|jwt|not authenticated|invalid (?:token|claim)|expired|401|permission denied/i
+  return /jwt (?:expired|is invalid|malformed)|not authenticated|invalid (?:token|claim)|refresh token|\b401\b/i
     .test(String(message || ''));
 }
 
@@ -3527,6 +3534,9 @@ async function drainQueue() {
         // **An auth failure costs no attempt, anywhere.** It is not a bad
         // capture, it is a bad token, and burning the budget on it is what
         // turned a re-sign-in into four dead items.
+        // Only a genuinely absent token parks the queue. Everything else —
+        // including a permissions refusal — is an ordinary failure and is
+        // reported with the table and the operation that produced it.
         if (looksLikeAuthFailure(message)) {
           item.state = 'signed_out';
           item.lastError = null;
@@ -3592,8 +3602,15 @@ async function uploadOne(item) {
   // **Upsert on the client-generated id.** A queued save that actually
   // succeeded before the connection dropped, and gets retried, updates its own
   // row instead of creating a second one (§6).
+  // **Say which write this was.** `upsert` on an existing id is an
+  // INSERT ... ON CONFLICT DO UPDATE, and the two arms fail for completely
+  // different reasons — so "landmarks: <pg message>" was not enough to tell
+  // them apart. `existed` is what the row's own history says, not a guess.
+  const op = item.editing ? 'update-on-conflict' : 'insert';
   const { error: rowErr } = await db.from('landmarks').upsert(row, { onConflict: 'id' });
-  if (rowErr) throw new Error('landmarks: ' + rowErr.message);
+  if (rowErr) {
+    throw new Error('landmarks · ' + op + ' · ' + rowErr.message);
+  }
 
   // The rest go to the media strip. **The uid MUST be the first path segment**
   // — the delete policy is `(storage.foldername(name))[1] = auth.uid()`, so a
