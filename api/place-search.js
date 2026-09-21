@@ -50,9 +50,20 @@ export default async function handler(req, res) {
   // keeps it a bias rather than a hard filter, so a place just outside the box
   // still appears — below the local ones, because Nominatim ranks by relevance
   // within the viewbox first.
+  //
+  // **And no viewbox at all when the caller sends no coordinate.** That is the
+  // panel's "Anywhere" centre: at a desk, adding a place abroad, a near-home
+  // box ranks the wrong continent first. The caller decides which posture it is
+  // in; this route just honours it.
+  //
+  // `span` carries the panel's chosen width — the field posture stays at 0.35,
+  // a named city widens to match MapKit's region so the two providers are
+  // biased to the same place.
   let viewbox = '';
   if (isFinite(lat) && isFinite(lon)) {
-    const d = 0.35;   // ~39 km of latitude; wider in longitude near the equator
+    const asked = parseFloat((req.query && req.query.span) || '');
+    // Half the span, because a span is the full width and this is a radius.
+    const d = isFinite(asked) ? Math.min(Math.max(asked / 2, 0.05), 5) : 0.35;
     viewbox = `&viewbox=${lon - d},${lat + d},${lon + d},${lat - d}&bounded=0`;
   }
 

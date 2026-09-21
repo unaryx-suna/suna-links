@@ -74,6 +74,9 @@
   .locline > .body { flex: 1; min-width: 0; }
   .locline .why { color: var(--dim); font-size: 12px; display: block; margin-top: 2px; }
   .locline.warn { border-color: rgba(255,107,107,.5); }
+  /* §2 — a pin with no city near it is not a partial success: the row would be
+     invisible to everyone but its creator. */
+  .opt.warn { border-color: rgba(255,107,107,.55); color: var(--danger); }
   .chev { color: var(--sand); font-size: 19px; line-height: 1.1; flex: none; }
   .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .thumb { position: relative; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; background: #000; }
@@ -523,6 +526,21 @@
     <label for="opt-search">Search for it by name</label>
     <input id="opt-search" type="text" inputmode="search" autocomplete="off"
            autocapitalize="words" placeholder="Two words is usually enough">
+    <!-- §1 — the panel was built for one posture, standing in front of the
+         place, and every path assumed it. This is the second posture: at a
+         desk, adding somewhere abroad. Near me stays the default. -->
+    <p class="note" id="centre-line" style="margin:6px 0 0"></p>
+    <div id="centre-picker" hidden style="margin:8px 0 0">
+      <div class="chips">
+        <button class="chip" data-centre="near" aria-pressed="true">Near me</button>
+        <button class="chip" data-centre="anywhere" aria-pressed="false">Anywhere</button>
+        <button class="chip" data-centre="place" aria-pressed="false">A city…</button>
+      </div>
+      <input id="centre-place" type="text" inputmode="search" autocomplete="off"
+             autocapitalize="words" placeholder="City or country code" hidden
+             style="margin-top:8px">
+      <p class="note" id="centre-hint" style="margin:6px 0 0"></p>
+    </div>
     <p class="note" id="opt-search-note" style="margin:6px 0 0"></p>
     <div id="opt-search-results" style="margin-top:8px"></div>
 
@@ -588,7 +606,9 @@
 <div class="sheet" id="city-sheet" hidden>
   <div>
     <h1 style="margin-top:0">Which city?</h1>
-    <p class="sub">The five nearest to this place's coordinate.</p>
+    <p class="sub">Nearest to this place's coordinate. Type to search them all.</p>
+    <input id="city-filter" type="text" inputmode="search" autocomplete="off"
+           placeholder="Filter by city or country code" hidden style="margin-bottom:10px">
     <div id="city-options"></div>
     <button class="linkish" id="city-sheet-close" style="margin-top:8px">Close</button>
   </div>
@@ -641,7 +661,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v18';
+const BUILD = 'field-v19';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1359,17 +1379,53 @@ function nearestCities(lat, lon, n = 5) {
 /** Derived from §4.2's coordinate, so it cannot be computed until one exists —
  *  shown as pending until then rather than guessed from the device. At a hotel
  *  in another city, guessing would file a day trip under where he slept. */
+/** **A city has to be near the pin to be its city.** There was no distance
+ *  limit: a pin in Beijing, with Beijing missing from the cached list, silently
+ *  took the nearest city the panel happened to know — about 1,900km away from
+ *  Hong Kong. `renderCity` printed the distance, but nothing stopped the save
+ *  and nothing drew the eye. 21 visible rows carry a city further than 100km
+ *  today, and this is one of the ways they got there. */
+const CITY_MAX_KM = 100;
+
 function pickNearestCity() {
-  if (cap.lat == null || !cities.length) { cap.cityId = null; cap.cityName = null; return; }
+  if (cap.lat == null || !cities.length) {
+    cap.cityId = null; cap.cityName = null; cap.cityDistanceKm = null;
+    return;
+  }
   const best = nearestCities(cap.lat, cap.lon, 1)[0];
-  if (!best) return;
+  if (!best || best.km > CITY_MAX_KM) {
+    cap.cityId = null; cap.cityName = null;
+    // Kept so the chip can say HOW far the nearest one was, which is the
+    // difference between "no city" and "you are nowhere near your cities".
+    cap.cityDistanceKm = best ? best.km : null;
+    // §3 — a stale list is the usual cause; check a fresh one before insisting.
+    if (navigator.onLine) {
+      ensureCitiesFresh().then((changed) => {
+        if (!changed || cap.lat == null || cap.cityId) return;
+        const retry = nearestCities(cap.lat, cap.lon, 1)[0];
+        if (retry && retry.km <= CITY_MAX_KM) {
+          cap.cityId = retry.id; cap.cityName = retry.name; cap.cityDistanceKm = retry.km;
+          renderCity(); renderSaveState();
+        }
+      }).catch(() => {});
+    }
+    return;
+  }
   cap.cityId = best.id; cap.cityName = best.name; cap.cityDistanceKm = best.km;
 }
 
 function renderCity() {
   const el = $('city-chip');
   if (cap.lat == null) { el.textContent = 'Waiting for a location…'; return; }
-  if (!cap.cityId) { el.textContent = 'No city found — tap to choose'; return; }
+  if (!cap.cityId) {
+    el.className = 'opt warn';
+    el.textContent = (cap.cityDistanceKm != null)
+      ? 'No city within ' + CITY_MAX_KM + ' km — nearest is '
+        + Math.round(cap.cityDistanceKm) + ' km away · tap to choose'
+      : 'No city found — tap to choose';
+    return;
+  }
+  el.className = 'opt';
   // **A city id the cached list does not know about still has to render.**
   // `openExisting` sets `cityId` from the row and then looks the name up in
   // `cities`; a miss left `cityName`/`cityDistanceKm` null and this threw
@@ -1388,20 +1444,53 @@ function renderCity() {
 
 $('city-chip').onclick = () => {
   if (cap.lat == null) return;
-  const opts = nearestCities(cap.lat, cap.lon, 5);
-  $('city-options').innerHTML = '';
+  // **Ten when the nearest is beyond the cap**, because five nearest cities are
+  // all useless at that range — and a filter, because a city 2,000km away
+  // cannot be found by scrolling a list sorted by distance from the wrong end.
+  const far = cap.cityId == null;
+  $('city-filter').hidden = !far;
+  $('city-filter').value = '';
+  renderCityOptions('');
+  $('city-sheet').hidden = false;
+  if (far) $('city-filter').focus();
+};
+
+function renderCityOptions(filter) {
+  const box = $('city-options');
+  box.innerHTML = '';
+  const q = (filter || '').trim().toLowerCase();
+  const far = cap.cityId == null;
+  let opts;
+  if (q) {
+    // Filtering searches the WHOLE list, then orders by distance — otherwise
+    // "Beijing" is unreachable from Hong Kong however much you type.
+    opts = cities
+      .filter((c) => (c.name || '').toLowerCase().includes(q)
+                  || (c.country_code || '').toLowerCase() === q)
+      .map((c) => ({ ...c, km: haversineKm(cap.lat, cap.lon, c.latitude, c.longitude) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 20);
+  } else {
+    opts = nearestCities(cap.lat, cap.lon, far ? 10 : 5);
+  }
+  if (!opts.length) {
+    box.innerHTML = '<p class="sub">No city matches that.</p>';
+    return;
+  }
   opts.forEach((c) => {
     const b = document.createElement('button');
     b.className = 'opt';
-    b.innerHTML = c.name + '<small>' + c.km.toFixed(1) + ' km · ' + (c.country_code || '') + '</small>';
+    b.innerHTML = escapeHtml(c.name) + '<small>'
+      + (c.km < 1000 ? c.km.toFixed(1) + ' km' : Math.round(c.km) + ' km')
+      + ' · ' + escapeHtml(c.country_code || '') + '</small>';
     b.onclick = () => {
       cap.cityId = c.id; cap.cityName = c.name; cap.cityDistanceKm = c.km;
       $('city-sheet').hidden = true; renderCity(); renderSaveState();
     };
-    $('city-options').appendChild(b);
+    box.appendChild(b);
   });
-  $('city-sheet').hidden = false;
-};
+}
+$('city-filter').addEventListener('input', () => renderCityOptions($('city-filter').value));
 $('city-sheet-close').onclick = () => { $('city-sheet').hidden = true; };
 
 // 00:00 → 00:00 on every day: the shape the existing 24-hour rows use.
@@ -1431,6 +1520,9 @@ function openLocationSheet() {
   $('opt-search').disabled = !navigator.onLine;
   $('opt-search').value = '';
   $('opt-search-results').innerHTML = '';
+  // The centre persists for the capture; the picker itself starts closed.
+  $('centre-picker').hidden = true;
+  renderCentreLine();
   searchNote(navigator.onLine ? '' : 'No signal, so search is off. The other options below still work.');
   $('opt-exif').hidden = !exifCandidate;
   if (exifCandidate) {
@@ -1449,6 +1541,11 @@ function openLocationSheet() {
 }
 $('loc-sheet-close').onclick = () => { $('loc-sheet').hidden = true; };
 
+$('centre-picker').querySelectorAll('.chip').forEach((b) => {
+  b.onclick = () => setCentreMode(b.dataset.centre);
+});
+$('centre-place').addEventListener('input', () => resolveCentrePlace($('centre-place').value));
+
 /* ── Search by name — PANEL-SEARCH-BY-NAME.md ──────────────────────────
  *
  * The primary way in now. Google's iOS share link carries a name and an
@@ -1460,6 +1557,90 @@ $('loc-sheet-close').onclick = () => { $('loc-sheet').hidden = true; };
  * typing coordinates: it never silently overrides a proposal, it wins because
  * he tapped it.
  */
+
+/* ── §1 — where to search ───────────────────────────────────────────────
+ *
+ * **Near me stays the default and stays correct.** "Wing fat" in Hong Kong must
+ * not return Vancouver, and without a region MapKit does exactly that. What was
+ * missing is a way to say *I am not there* — at a desk, adding a place abroad,
+ * the near-me bias fights every query and MapKit honours a region strongly
+ * enough that a Beijing search from Hong Kong returns local noise or nothing.
+ *
+ * `anywhere` drops the region entirely and omits lat/lon from the OSM route, so
+ * both providers search globally. `place` resolves a typed city against the
+ * cached list — no geocoder call, because the 650 rows are already here — and
+ * searches there with a wider span. **A miss falls back to `anywhere`**, never
+ * silently back to near me, because silently searching the wrong continent is
+ * the defect this exists to fix.
+ */
+const SPAN_NEAR = 0.7;       // ~75km, the field posture
+const SPAN_CITY = 2.0;       // ~220km, a named city and its region
+
+let searchCentreMode = 'near';   // 'near' | 'anywhere' | 'place'
+let searchCentrePlace = null;    // a cities row when mode is 'place'
+
+/** The centre a query should use, and the span MapKit should hold it to. */
+function currentCentre() {
+  if (searchCentreMode === 'anywhere') return null;
+  if (searchCentreMode === 'place') {
+    return searchCentrePlace
+      ? { lat: searchCentrePlace.latitude, lon: searchCentrePlace.longitude, span: SPAN_CITY }
+      : null;                                    // unresolved -> global, not home
+  }
+  const c = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : (liveFix || lastSavedFix);
+  return c ? { lat: c.lat, lon: c.lon, span: SPAN_NEAR } : null;
+}
+
+/** Said above the results, always, so it is never ambiguous which box answered. */
+function renderCentreLine() {
+  const el = $('centre-line');
+  let where;
+  if (searchCentreMode === 'anywhere') where = 'Searching anywhere';
+  else if (searchCentreMode === 'place') {
+    where = searchCentrePlace
+      ? 'Searching near ' + searchCentrePlace.name
+      : 'Searching anywhere — no city matched';
+  } else {
+    where = (cap.lat != null) ? 'Searching near this pin'
+          : (liveFix || lastSavedFix) ? 'Searching near me' : 'Searching anywhere — no fix yet';
+  }
+  el.innerHTML = escapeHtml(where)
+    + ' · <button class="linkish" id="centre-change" style="font-size:12px;padding:0">change</button>';
+  $('centre-change').onclick = () => {
+    const p = $('centre-picker');
+    p.hidden = !p.hidden;
+    if (!p.hidden && searchCentreMode === 'place') $('centre-place').focus();
+  };
+}
+
+function setCentreMode(mode) {
+  searchCentreMode = mode;
+  $('centre-picker').querySelectorAll('.chip').forEach((c) =>
+    c.setAttribute('aria-pressed', String(c.dataset.centre === mode)));
+  $('centre-place').hidden = mode !== 'place';
+  $('centre-hint').textContent = '';
+  if (mode !== 'place') searchCentrePlace = null;
+  renderCentreLine();
+  const q = $('opt-search').value.trim();
+  if (q.length >= SEARCH_MIN_CHARS && mode !== 'place') runSearch(q);
+}
+
+/** One pass over the cached list — a hit costs nothing, a miss says so. */
+function resolveCentrePlace(text) {
+  const q = (text || '').trim().toLowerCase();
+  if (!q) { searchCentrePlace = null; $('centre-hint').textContent = ''; renderCentreLine(); return; }
+  const exact = cities.find((c) => (c.name || '').toLowerCase() === q);
+  const starts = cities.filter((c) => (c.name || '').toLowerCase().startsWith(q));
+  const byCode = cities.filter((c) => (c.country_code || '').toLowerCase() === q);
+  searchCentrePlace = exact || starts[0] || byCode[0] || null;
+  $('centre-hint').textContent = searchCentrePlace
+    ? ('Centred on ' + searchCentrePlace.name
+       + (searchCentrePlace.country_code ? ' · ' + searchCentrePlace.country_code : ''))
+    : 'No city by that name in the list — searching anywhere instead.';
+  renderCentreLine();
+  const s = $('opt-search').value.trim();
+  if (s.length >= SEARCH_MIN_CHARS) runSearch(s);
+}
 
 /** Their floor is one request a second; 350ms of quiet is the client half. */
 const SEARCH_DEBOUNCE_MS = 350;
@@ -1515,7 +1696,11 @@ async function runSearch(q) {
   // **Bias to where he is** — the coordinate already set if there is one,
   // otherwise the live fix. "Wing fat" in Hong Kong must not return Vancouver,
   // and without a region MapKit does exactly that.
-  const centre = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : (liveFix || lastSavedFix);
+  // §1 — whichever centre the capture is set to. After a result is chosen,
+  // `chooseSearchResult` calls `setLocation`, so `cap.lat` is that result's
+  // coordinate and 'near' follows it rather than the device.
+  const centre = currentCentre();
+  renderCentreLine();
 
   try {
     // **Apple first, OSM second, and the union is the point of having two.**
@@ -1540,7 +1725,9 @@ async function runSearch(q) {
 
 async function searchOSM(q, centre) {
   let url = '/api/place-search?q=' + encodeURIComponent(q);
-  if (centre) url += '&lat=' + centre.lat + '&lon=' + centre.lon;
+  // No lat/lon at all when searching anywhere — the route skips the viewbox.
+  if (centre) url += '&lat=' + centre.lat + '&lon=' + centre.lon
+                   + (centre.span ? '&span=' + centre.span : '');
   const r = await fetch(url);
   if (!r.ok) return [];
   const rows = await r.json();
@@ -1643,10 +1830,13 @@ async function searchApple(q, centre) {
       const opts = {};
       if (centre) {
         // Roughly the same box stage one passes to Nominatim, so the two
-        // providers are biased to the same place.
+        // providers are biased to the same place. **No region at all when the
+        // centre is "anywhere"** — MapKit honours one strongly enough that a
+        // Beijing query from Hong Kong comes back with local noise or nothing.
+        const span = centre.span || SPAN_NEAR;
         opts.region = new mapkit.CoordinateRegion(
           new mapkit.Coordinate(centre.lat, centre.lon),
-          new mapkit.CoordinateSpan(0.7, 0.7)
+          new mapkit.CoordinateSpan(span, span)
         );
       }
       const search = new mapkit.Search(opts);
@@ -2685,7 +2875,11 @@ function renderSaveState() {
   if (!cap.name.trim()) why.push('a name');
   if (cap.lat == null) why.push(liveFix ? 'a location' : 'a location (waiting for GPS)');
   if (!cap.category) why.push('a category');
-  if (!cap.cityId && cap.lat != null) why.push('a city');
+  if (!cap.cityId && cap.lat != null) {
+    why.push(cap.cityDistanceKm != null
+      ? ('a city — the nearest is ' + Math.round(cap.cityDistanceKm) + ' km away')
+      : 'a city');
+  }
   if (!cap.photos.length && cap.hadCover !== true) why.push('a photo');
 
   const btn = $('btn-save');
@@ -2716,7 +2910,11 @@ function renderSaveState() {
     return;
   }
 
-  const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category;
+  // **A city is now a save-time requirement, not only a completeness one.**
+  // `landmarks_near` filters `city_id IS NOT NULL`, so a row without one is
+  // invisible to everyone but its creator — saving it is not a partial success.
+  const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category
+    && (cap.cityId != null || cap.onServer);
   btn.disabled = !canSave;
   btn.textContent = isComplete() ? 'Save place' : 'Save as incomplete';
   $('save-why').textContent = !canSave
@@ -2966,6 +3164,9 @@ function resetForm() {
   $('f-featured').innerHTML = '☆ Feature this place on its country screen'
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   categoryHint('');
+  // A new capture starts from the field posture again.
+  searchCentreMode = 'near'; searchCentrePlace = null;
+  citiesRefetchedForPin = false;
   // The photo-mode chrome belongs to a run or a shot, not to a blank form. It
   // used to survive a reset, leaving a "More" disclosure over an empty capture.
   soloShot = false;
@@ -4720,14 +4921,38 @@ $('update-bar').onclick  = () => forceUpdate($('update-bar'));
 $('menu-update').onclick = () => forceUpdate($('menu-update'));
 
 /** 650 rows, ~30KB. Cached and refreshed when older than seven days AND online. */
+/** Refreshed daily rather than weekly. 650 rows and ~30KB, so the request is
+ *  cheap and a week of not knowing about a new city is the more expensive half
+ *  of that trade — a city the panel has not heard of is how a pin ends up
+ *  attached to one 1,900km away. */
+const CITIES_TTL_MS = 24 * 3600e3;
+
 async function loadCities() {
   const cached = await cacheGet('cities');
   if (cached) cities = cached.value;
-  const stale = !cached || (Date.now() - cached.at) > 7 * 864e5;
-  if (navigator.onLine && stale) {
-    const { data } = await db.from('cities').select('id,name,latitude,longitude,country_code').limit(2000);
-    if (data && data.length) { cities = data; await cacheSet('cities', cities); }
-  }
+  const stale = !cached || (Date.now() - cached.at) > CITIES_TTL_MS;
+  if (navigator.onLine && stale) await refetchCities();
+}
+
+async function refetchCities() {
+  if (!navigator.onLine) return false;
+  const { data } = await db.from('cities')
+    .select('id,name,latitude,longitude,country_code').limit(2000);
+  if (data && data.length) { cities = data; await cacheSet('cities', cities); return true; }
+  return false;
+}
+
+/** **Refetch once before declaring there is no city.** The common cause of
+ *  "nothing within 100km" is a list cached before that city existed, not a
+ *  genuine gap — so the expensive answer is checked against a fresh list before
+ *  it is given. Once per capture; a second miss is a real miss. */
+let citiesRefetchedForPin = false;
+async function ensureCitiesFresh() {
+  if (citiesRefetchedForPin) return false;
+  citiesRefetchedForPin = true;
+  const before = cities.length;
+  const ok = await refetchCities();
+  return ok && cities.length !== before;
 }
 
 async function loadProfile() {
