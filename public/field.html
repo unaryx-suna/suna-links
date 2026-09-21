@@ -691,7 +691,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v25';
+const BUILD = 'field-v26';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -3113,25 +3113,44 @@ function scheduleNameSearch() {
 
 /** Our catalogue, matched on the name alone.
  *
- *  PostgREST cannot express the comparison above, so the server does the coarse
- *  work — any row containing any one of the typed words — and the fine work
- *  happens here on at most 60 rows. `is_hidden` is not filtered: a place parked
- *  in "Finish these" is precisely the one worth reopening rather than
- *  re-capturing. */
+ *  PostgREST cannot express the comparison above, so the server does a coarse
+ *  pass and the fine work happens here. `is_hidden` is not filtered: a place
+ *  parked in "Finish these" is precisely the one worth reopening rather than
+ *  re-capturing.
+ *
+ *  **The coarse pass ANDs the words; ORing them was measured and it failed.**
+ *  A single `or=name.ilike.%temple%,name.ilike.%heaven%` for "Temple of
+ *  Heaven" came back with 60 rows — Tal Barahi Temple, Tua Pek Kong Temple,
+ *  Hualien Chenghuang Temple — and not the one row asked for, because the
+ *  catalogue holds hundreds of temples, PostgREST returns them in no
+ *  particular order, and the limit is spent long before the match is reached.
+ *  Requiring every typed word narrows it to the row itself.
+ *
+ *  The OR survives as a SECOND pass, run only when the first comes back thin.
+ *  That is the case it was right for: a bilingual `English\n中文` name where
+ *  the typed words are split across the two halves and no single row contains
+ *  them all. */
 async function searchCatalogue(q) {
   const words = normaliseName(q).split(' ').filter((w) => w.length >= 2).slice(0, 4);
   if (!words.length) return [];
-  // PostgREST `or=` is comma-separated, so a comma inside a value would split
-  // the filter. `normaliseName` has already removed every character that is
-  // not a letter or a digit, so there is nothing left to escape.
-  const or = words.map((w) => 'name.ilike.%' + w + '%').join(',');
-  const { data, error } = await db.from('landmarks')
-    .select('id,name,latitude,longitude,cover_image_url,category,city_id,is_hidden')
-    .or(or)
-    .limit(60);
-  if (error) return [];
+  const SEL = 'id,name,latitude,longitude,cover_image_url,category,city_id,is_hidden';
+  // `normaliseName` has already removed every character that is not a letter
+  // or a digit, so there is nothing left to escape in either filter.
+  let narrow = db.from('landmarks').select(SEL);
+  words.forEach((w) => { narrow = narrow.ilike('name', '%' + w + '%'); });
+  const first = await narrow.limit(40);
+  if (first.error) return [];
+  const rows = first.data || [];
+
+  if (rows.length < 6 && words.length > 1) {
+    const or = words.map((w) => 'name.ilike.%' + w + '%').join(',');
+    const { data } = await db.from('landmarks').select(SEL).or(or).limit(60);
+    const seen = new Set(rows.map((r) => r.id));
+    (data || []).forEach((r) => { if (!seen.has(r.id)) rows.push(r); });
+  }
+
   const centre = currentCentre();
-  return (data || [])
+  return rows
     .filter((r) => nameMatchesStored(q, r.name))
     .map((r) => ({
       ...r,
