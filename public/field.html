@@ -323,6 +323,11 @@
       </button>
     </div>
     <p class="shotsrc" id="shot-source" hidden></p>
+    <!-- §4 — shown before the photos send, whenever this capture is going onto
+         a place that already exists: the place's NAME and what will happen.
+         Never who owns it — "this is booak55's place" is not something the
+         operator can act on. -->
+    <p class="shotsrc verified" id="existing-place" hidden></p>
 
     <!-- §1 — the run's counter and controls. Hidden outside a run. -->
     <div class="runbar" id="run-bar" hidden>
@@ -678,7 +683,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v23';
+const BUILD = 'field-v24';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2804,6 +2809,7 @@ async function pickExistingPlace(id) {
   cap.photos = photos;
   if (takenAt) cap.locTakenAt = takenAt;
   soloShot = true;
+  showExistingPlaceNote(cap.name);
   $('shot-source').textContent = sourceLine;
   $('shot-source').className = sourceClass;
   $('shot-source').hidden = false;
@@ -3373,6 +3379,7 @@ function resetForm() {
   // The photo-mode chrome belongs to a run or a shot, not to a blank form. It
   // used to survive a reset, leaving a "More" disclosure over an empty capture.
   soloShot = false;
+  showExistingPlaceNote(null);
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
   $('pane-capture').classList.remove('photo-run', 'show-all');
@@ -3569,6 +3576,27 @@ async function uploadOne(item) {
   const photos = item.photos || [];
   const uid = session.user.id;
 
+  /* ── §4 — A PHOTO RUN NEVER WRITES THE LANDMARK ROW ──────────────────
+   *
+   * Decided 21 Sep, and it settles the whole class of failure:
+   *
+   *   place does not exist  → create it, exactly as before
+   *   place exists          → write `landmark_media` only; never touch the row
+   *   existing has no cover → set `cover_image_url` from the first photo
+   *   existing HAS a cover  → leave it; a run never replaces one
+   *
+   * The upsert was the bug. `upsert` on an existing id is
+   * INSERT ... ON CONFLICT DO UPDATE, so adding a photograph made the panel
+   * re-assert name, category, coordinate, origin and submitted_by on a row it
+   * had not edited — against a row somebody else owns. Four captures failed on
+   * exactly that, and "add a photo" was never the same operation as "edit a
+   * place" in the first place.
+   *
+   * It also removes the ownership question entirely: a targeted column update
+   * cannot take a row from its author.
+   */
+  if (item.editing) return uploadPhotosToExistingPlace(item, row, photos, uid);
+
   // **Cover first**, because the row carries its URL. `landmark-covers` at
   // `<landmark_id>/cover.jpg` — that bucket's policies key on the bucket, not
   // on a uid path segment.
@@ -3705,6 +3733,70 @@ async function uploadOne(item) {
       AppLoggerNoop(e);
     }
   }
+}
+
+/** Photographs onto a place that already exists.
+ *
+ *  Writes `landmark_media`, and the cover ONLY when the place has none. No
+ *  upsert, no identity columns, nothing the run did not actually change.
+ *
+ *  The cover read is done here rather than trusted from the queue, because the
+ *  queued item may be hours old and somebody else may have covered the place in
+ *  the meantime — and "never replace an existing cover" has to be true at the
+ *  moment of writing, not at the moment of capturing.
+ */
+async function uploadPhotosToExistingPlace(item, row, photos, uid) {
+  if (!photos.length) return;
+
+  const { data: current, error: readErr } = await db.from('landmarks')
+    .select('cover_image_url').eq('id', row.id).maybeSingle();
+  if (readErr) throw new Error('landmarks · read · ' + readErr.message);
+  if (!current) throw new Error('landmarks · read · that place no longer exists');
+
+  const hasCover = !!(current.cover_image_url || '').trim();
+
+  // **Every photograph goes to the media strip, including the first.** On the
+  // create path the first becomes the cover and is not duplicated into media;
+  // here the cover is a copy of one of them, so all of them belong in the strip.
+  for (const p of photos) {
+    if (!profile.username) break;             // `landmark_media.username` is NOT NULL
+    const path = uid + '/' + row.id + '/' + p.photoId + '.jpg';
+    const { error: uErr } = await db.storage.from('user-landmark-photos')
+      .upload(path, p.blob, { contentType: 'image/jpeg', upsert: true });
+    if (uErr) throw new Error('user-landmark-photos · upload · ' + uErr.message);
+    const url = db.storage.from('user-landmark-photos').getPublicUrl(path).data.publicUrl;
+    const { error: mErr } = await db.from('landmark_media').upsert({
+      id: p.photoId,                          // same id on a retry — idempotent
+      landmark_id: row.id,
+      user_id: uid,
+      username: profile.username,
+      media_url: url,
+      media_type: 'image',
+      is_private: false,
+      width: p.width,
+      height: p.height,
+    }, { onConflict: 'id' });
+    if (mErr) throw new Error('landmark_media · insert · ' + mErr.message);
+  }
+
+  if (hasCover) return;                       // never replace one
+
+  const coverPath = row.id + '/cover.jpg';
+  const { error: cErr } = await db.storage.from('landmark-covers')
+    .upload(coverPath, photos[0].blob, { contentType: 'image/jpeg', upsert: true });
+  if (cErr && !(await coverAlreadyLanded(cErr, coverPath, photos[0].blob))) {
+    throw new Error('landmark-covers · upload · ' + cErr.message);
+  }
+  const coverURL = db.storage.from('landmark-covers').getPublicUrl(coverPath).data.publicUrl;
+
+  // **One column, and its provenance. Nothing else.** Guarded by
+  // `cover_image_url is null` server-side as well, so two devices racing cannot
+  // both win.
+  const patch = { cover_image_url: coverURL, cover_source: 'user' };
+  if (profile.username) patch.photographer_name = profile.username;
+  const { error: upErr } = await db.from('landmarks')
+    .update(patch).eq('id', row.id).is('cover_image_url', null);
+  if (upErr) throw new Error('landmarks · update cover · ' + upErr.message);
 }
 
 /** **Did the cover actually land?**
@@ -4251,12 +4343,23 @@ async function openRunRow() {
   const row = finishRows[runAt];
   if (!row) return endRun('That place is no longer in the list.');
   await openExisting(row.id);
+  showExistingPlaceNote(cap.name);
   applyRunChrome();
 }
 
 /** Collapse the form to what the run needs. **Nothing is removed and nothing is
  *  cleared** — every hidden field keeps whatever the row already had, and
  *  "More" puts them all back. */
+/** §4 — says what will happen, before it happens. */
+function showExistingPlaceNote(name) {
+  const el = $('existing-place');
+  if (!el) return;
+  if (!name) { el.hidden = true; el.textContent = ''; return; }
+  el.textContent = '“' + name + '” — this place is already in Suna, '
+    + 'your photos will be added to it.';
+  el.hidden = false;
+}
+
 function applyRunChrome() {
   const pane = $('pane-capture');
   pane.classList.toggle('photo-run', photoMode());
