@@ -89,6 +89,12 @@
     position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6);
     font-size: 9px; text-align: center; padding: 2px 0; color: var(--sand);
   }
+  /* §4 — stock has to be visibly stock, not something he photographed. */
+  .thumb .credit {
+    position: absolute; left: 0; right: 0; top: 0; background: rgba(0,0,0,.65);
+    font-size: 8px; text-align: center; padding: 2px 1px; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .addphoto {
     width: 72px; height: 72px; border-radius: 12px; border: 1px dashed var(--line);
     background: none; color: var(--dim); font-size: 12px; padding: 0;
@@ -345,6 +351,13 @@
       </div>
       <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
       <input id="in-library" type="file" accept="image/*" multiple hidden>
+      <!-- §4 — an invisible paste handler is not a feature anyone finds.
+           Pasting anywhere on the page still works; this is the version you
+           can see. -->
+      <input id="stock-link" type="text" inputmode="url" autocomplete="off"
+             autocapitalize="off" style="margin-top:8px"
+             placeholder="…or paste a Pexels or Unsplash link">
+      <p class="note" id="stock-note" style="margin:6px 0 0" hidden></p>
     </div>
 
     <div class="fg fg-hide">
@@ -661,7 +674,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v19';
+const BUILD = 'field-v20';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -701,6 +714,9 @@ const blank = () => ({
   /** ONE field. `description` is gone: both boxes wrote to
    *  `landmarks.description` and only one of them survived. */
   note: '', address: '', building: '', dishes: '',
+  /** §3 — provenance is DERIVED from the cover photo itself (`coverStock()`),
+   *  never held alongside it. Parallel state would survive deleting the
+   *  photograph, and the row would then claim a Pexels cover it does not have. */
   /** §1 — `{ [day 0-6]: { open: boolean, periods: [{from:'09:00', to:'18:00'}] } }`.
    *  **Day 0 is Sunday**, matching `periods[].day`; `weekdayDescriptions` is
    *  Monday-first and is a different index entirely. A day ABSENT from this map
@@ -2324,13 +2340,142 @@ $('in-library').onchange = async (e) => {
   if (shootFirst) { shootFirst = false; await afterShutter(); }
 };
 
+/* ── §1–§3 — a pasted stock-photo link ─────────────────────────────────
+ *
+ * The paste handler took clipboard FILES only, and a copied URL arrives as
+ * `kind === 'string'`, so it was dropped before anything looked at it.
+ *
+ * **Two shapes, because the address bar gives the second.** The direct image
+ * URL and the photo page both carry the id; anything else pasted stays ignored
+ * and silent. This is not a "paste any URL" field, and making it one would make
+ * every stray clipboard string a request.
+ */
+function parseStockLink(text) {
+  const s = String(text || '').trim();
+  if (!s || s.length > 500) return null;
+  let u;
+  try { u = new URL(s); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  const host = u.hostname.toLowerCase();
+  const path = u.pathname;
+
+  // Pexels — images.pexels.com/photos/<id>/… or www.pexels.com/photo/<slug>-<id>/
+  if (host === 'images.pexels.com') {
+    const m = path.match(/\/photos\/(\d{1,12})\//);
+    if (m) return { provider: 'pexels', id: m[1] };
+  }
+  if (host === 'pexels.com' || host === 'www.pexels.com') {
+    const m = path.match(/\/photo\/[^/]*?(\d{4,12})\/?$/) || path.match(/\/photo\/(\d{4,12})\/?$/);
+    if (m) return { provider: 'pexels', id: m[1] };
+  }
+
+  // Unsplash — images.unsplash.com/photo-<id> or unsplash.com/photos/<slug>-<id>
+  if (host === 'images.unsplash.com') {
+    const m = path.match(/\/photo-([A-Za-z0-9_-]{5,64})/);
+    if (m) return { provider: 'unsplash', id: m[1] };
+  }
+  if (host === 'unsplash.com' || host === 'www.unsplash.com') {
+    // **The id is the LAST hyphen-separated token, not a regex group.** An
+    // Unsplash id may itself contain `-`, so a character class that includes
+    // the hyphen swallows the whole slug:
+    // `a-view-of-a-mountain-range-Ki0dpxp01Sg` came back as
+    // `view-of-a-mountain-range-Ki0dpxp01Sg`, which is not an id and fetches
+    // nothing. Splitting is unambiguous where matching is not.
+    const parts = path.split('/').filter(Boolean);
+    if (parts[0] === 'photos' && parts[1]) {
+      const slug = parts[1];
+      const id = slug.includes('-') ? slug.slice(slug.lastIndexOf('-') + 1) : slug;
+      if (/^[A-Za-z0-9_-]{8,32}$/.test(id)) return { provider: 'unsplash', id };
+    }
+  }
+  return null;
+}
+
+function stockNote(msg, bad) {
+  const el = $('stock-note');
+  el.textContent = msg || '';
+  el.className = 'note' + (bad ? ' err' : '');
+  el.hidden = !msg;
+}
+
+/** Fetch it, re-encode it, and attach it like any other photograph.
+ *
+ * §3 — through the SAME `reencode()` every other capture uses, so a pasted
+ * link produces the same JPEG as a camera shot: same max edge, same 0.82. The
+ * covers bucket does not need another 1,807 KB average.
+ */
+async function addStockPhoto(link) {
+  stockNote('Fetching the photo…');
+  try {
+    const r = await fetch('/api/fetch-stock-image?provider=' + encodeURIComponent(link.provider)
+                          + '&id=' + encodeURIComponent(link.id));
+    if (!r.ok) {
+      stockNote('That photo could not be fetched. Check the link, or save the image and upload it.', true);
+      return false;
+    }
+    const raw = await r.blob();
+    const provider = r.headers.get('X-Stock-Provider') || link.provider;
+    const photographerRaw = r.headers.get('X-Stock-Photographer');
+    const photographer = photographerRaw ? decodeURIComponent(photographerRaw) : null;
+
+    // `reencode` only needs a Blob — and because the bytes came from OUR origin
+    // rather than the provider's CDN, the canvas is not tainted and `toBlob`
+    // works. Fetching the image in the page would have failed here, quietly,
+    // after everything else appeared to succeed.
+    const { blob, width, height } = await reencode(raw);
+    cap.photos.push({
+      photoId: crypto.randomUUID(), blob, width, height,
+      // §3 — what gets written beside the upload.
+      stock: { provider, ref: provider + ':' + link.id, photographer },
+    });
+    // **The credit belongs to the photographer, never to him.** `buildRow`
+    // otherwise stamps `profile.username`, and `bootstrap-city` stamps "Suna" —
+    // neither is a credit for someone else's photograph.
+    markTouched('cover');
+
+    renderThumbs();
+    renderSaveState();
+    stockNote(photographer
+      ? ('Added — ' + capitalise(provider) + ' · ' + photographer)
+      : ('Added from ' + capitalise(provider) + '. No photographer name came back; the id is stored so it can be credited later.'));
+    return true;
+  } catch {
+    stockNote('That photo could not be fetched.', true);
+    return false;
+  }
+}
+
+function capitalise(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }
+
+$('stock-link').addEventListener('input', async () => {
+  const link = parseStockLink($('stock-link').value);
+  if (!link) {
+    stockNote($('stock-link').value.trim() ? 'Not a Pexels or Unsplash link.' : '');
+    return;
+  }
+  $('stock-link').value = '';
+  freshIfUntouched();
+  await addStockPhoto(link);
+});
+
 /** At a desk, the fastest thing is ⌘V. Same flow as the upload button. */
 window.addEventListener('paste', async (e) => {
   if ($('app').hidden) return;
   const items = [...((e.clipboardData && e.clipboardData.items) || [])];
   const files = items.filter((i) => i.kind === 'file' && /^image\//.test(i.type))
                      .map((i) => i.getAsFile()).filter(Boolean);
-  if (!files.length) return;
+
+  // **Bytes behave exactly as before.** Only a paste with no image files falls
+  // through to the text branch.
+  if (!files.length) {
+    const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+    const link = parseStockLink(text);
+    if (!link) return;                    // anything else stays ignored, silently
+    e.preventDefault();
+    freshIfUntouched();
+    await addStockPhoto(link);
+    return;
+  }
   e.preventDefault();
   freshIfUntouched();
   await addPhotos(files);
@@ -2768,6 +2913,15 @@ function renderThumbs() {
     img.src = URL.createObjectURL(p.blob);
     img.onload = () => URL.revokeObjectURL(img.src);
     d.appendChild(img);
+    // §4 — obvious at a glance that this is stock rather than his own shot.
+    if (p.stock) {
+      const cr = document.createElement('div');
+      cr.className = 'credit';
+      cr.textContent = capitalise(p.stock.provider)
+        + (p.stock.photographer ? ' · ' + p.stock.photographer : '');
+      cr.title = cr.textContent;
+      d.appendChild(cr);
+    }
     if (i === 0) {
       const c = document.createElement('div');
       c.className = 'cov'; c.textContent = 'COVER';
@@ -2958,7 +3112,13 @@ function buildRow() {
     // an `order` hint says more and renders under "Suna Tips & Hints". NOT NULL
     // with a `'{}'` default, so an empty array is what "untouched" looks like.
     signature_dishes: [],
-    photographer_name: profile.username || null,
+    // **A credit, not a stamp.** A stock cover carries its photographer's name
+    // — or null when the provider API was unreachable, which is a backfillable
+    // state because `cover_source_ref` keeps the id. His username belongs here
+    // only on a photograph he took.
+    photographer_name: coverStock()
+      ? (coverStock().photographer || null)
+      : (profile.username || null),
     // REQUIRED — it is half the UPDATE policy, so a null here means he cannot
     // edit his own capture from a non-admin session. Preserved rather than
     // overwritten when an admin opens somebody else's row: re-stamping it would
@@ -3004,7 +3164,23 @@ function buildRow() {
       : (cap.editing ? (cap.wasApproval || 'pending') : 'pending'),
     is_hidden: complete ? false : (cap.editing ? (cap.wasHidden !== false) : true),
   };
+  // **Provenance only when this save actually carries a cover.** On an edit
+  // that adds nothing, writing nulls here would erase the credit on a cover
+  // somebody else contributed.
+  if (cap.photos.length) {
+    const stock = coverStock();
+    row.cover_source = stock ? stock.provider : 'user';
+    row.cover_source_ref = stock ? stock.ref : null;
+  }
   return cap.editing ? onlyWhatWasEdited(row) : row;
+}
+
+/** The stock provenance of the photograph that will BECOME the cover — the
+ *  first one — or null when that is his own. Derived on every read, so
+ *  deleting or reordering the photographs cannot leave a stale claim behind. */
+function coverStock() {
+  const first = cap.photos[0];
+  return (first && first.stock) ? first.stock : null;
 }
 
 /** **On an existing row, write what was edited and nothing else.**
@@ -3028,6 +3204,9 @@ function buildRow() {
 const ALWAYS_WRITE = new Set([
   'id', 'submitted_by', 'origin', 'place_kind', 'approval_status', 'is_hidden',
   'photographer_name', 'coordinate_verified_at', 'last_verified_at',
+  // The cover and its provenance travel together or not at all — a cover with
+  // neither a photographer nor a ref is what §3 refuses.
+  'cover_source', 'cover_source_ref',
 ]);
 const EDIT_KEYS = {
   name: ['name'],
@@ -3164,6 +3343,8 @@ function resetForm() {
   $('f-featured').innerHTML = '☆ Feature this place on its country screen'
     + '<small>Fills the Top Places block. Added after the place uploads.</small>';
   categoryHint('');
+  stockNote('');
+  $('stock-link').value = '';
   // A new capture starts from the field posture again.
   searchCentreMode = 'near'; searchCentrePlace = null;
   citiesRefetchedForPin = false;
