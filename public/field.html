@@ -79,6 +79,14 @@
   .opt.warn { border-color: rgba(255,107,107,.55); color: var(--danger); }
   .chev { color: var(--sand); font-size: 19px; line-height: 1.1; flex: none; }
   .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  /* NAME-FIRST §2 — the cover, large enough to judge. A 72px tile answers
+     "is there a picture"; only this answers "is it this place". */
+  .coverblock { margin: 0 0 8px; }
+  .coverblock img {
+    display: block; width: 100%; max-height: 190px; object-fit: cover;
+    border-radius: 12px; background: #000;
+  }
+  .coverblock .row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
   .thumb { position: relative; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; background: #000; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .thumb .x {
@@ -361,7 +369,15 @@
       <!-- NAME-FIRST §2 — what the place already holds, and where it came
            from. Until now the only way to find out a cover was wrong was to
            notice it in the app. -->
-      <p class="note" id="cover-info" style="margin:0 0 6px" hidden></p>
+      <div class="coverblock" id="cover-block" hidden>
+        <img id="cover-img" alt="The cover this place is showing today">
+        <p class="note" id="cover-info" style="margin:6px 0 0"></p>
+        <div class="row">
+          <button class="ghost" id="cover-reject">Not this place</button>
+          <button class="ghost" id="dupe-report">Same as another place</button>
+        </div>
+        <p class="note" id="flag-result" style="margin:6px 0 0" hidden></p>
+      </div>
       <div class="thumbs" id="f-thumbs">
         <button class="addphoto" id="btn-camera">📷<br>Camera</button>
         <button class="addphoto" id="btn-library">🖼<br>Library</button>
@@ -691,7 +707,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v26';
+const BUILD = 'field-v27';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2944,7 +2960,12 @@ function renderThumbs() {
     const d = document.createElement('div');
     d.className = 'thumb';
     const img = document.createElement('img');
-    img.src = entry.media_url;
+    img.src = sizedURL(entry.media_url, 72);
+    img.loading = 'lazy';
+    // The transform endpoint can refuse a file it cannot decode. Falling back
+    // to the original keeps a real photograph on screen rather than a blank
+    // tile, which is the one thing §2 must not produce.
+    img.onerror = () => { if (img.src !== entry.media_url) img.src = entry.media_url; };
     d.appendChild(img);
     const tag = document.createElement('div');
     tag.className = 'cov';
@@ -3105,7 +3126,13 @@ function scheduleNameSearch() {
   // **Not while editing an existing row, and not during a photo run.** Both
   // already know which place they are on; offering to open a different one
   // there would be a trapdoor, and in a run the field is read-only anyway.
-  if (cap.editing || photoMode() || !navigator.onLine) { clearNameResults(); return; }
+  //
+  // The duplicate picker (§3) is the one exception: it runs ON an open row,
+  // and the list it needs is the same list. What changes is what a tap does,
+  // which is decided in `renderNameResults`, not here.
+  if ((cap.editing && !dupePickTarget) || photoMode() || !navigator.onLine) {
+    clearNameResults(); return;
+  }
   if (q.length < NAME_SEARCH_MIN_CHARS) { clearNameResults(); return; }
   if (normaliseName(q) === normaliseName(nameSearchSettled)) { clearNameResults(); return; }
   nameSearchTimer = setTimeout(() => runNameSearch(q), NAME_SEARCH_DEBOUNCE_MS);
@@ -3180,16 +3207,23 @@ function renderNameResults(ours, theirs, q, stillLooking) {
   const box = $('name-results');
   box.innerHTML = '';
 
+  const picking = !!dupePickTarget;
+
   ours.forEach((r) => {
+    // In pick mode the row being reported is not a candidate for being its
+    // own duplicate.
+    if (picking && r.id === dupePickTarget.id) return;
     const b = document.createElement('button');
     b.className = 'opt';
     const bits = [];
     if (r.km != null) bits.push(r.km < 1 ? Math.round(r.km * 1000) + ' m away' : r.km.toFixed(1) + ' km away');
     bits.push(r.cover_image_url ? 'has a cover' : 'no cover — worth a photo');
     if (r.is_hidden) bits.push('unfinished');
-    b.innerHTML = '<strong>Already in Suna</strong> · ' + escapeHtml(r.name || 'Unnamed')
+    b.innerHTML = (picking ? '<strong>Report as the same place</strong> · ' : '<strong>Already in Suna</strong> · ')
+      + escapeHtml(r.name || 'Unnamed')
       + '<small>' + escapeHtml(bits.join(' · ')) + '</small>';
     b.onclick = () => {
+      if (picking) { reportDuplicate(r); return; }
       // **Ours OPENS. It does not prefill.** Choosing a place we already hold
       // and then starting a fresh capture of it is the duplicate this whole
       // section exists to prevent.
@@ -3200,7 +3234,9 @@ function renderNameResults(ours, theirs, q, stillLooking) {
     box.appendChild(b);
   });
 
-  theirs.forEach((r) => {
+  // **No MapKit while picking.** A duplicate is another row WE hold; an Apple
+  // result has no id to point `details.duplicate_of` at.
+  (picking ? [] : theirs).forEach((r) => {
     const b = document.createElement('button');
     b.className = 'opt';
     b.innerHTML = escapeHtml(r.name)
@@ -3210,7 +3246,11 @@ function renderNameResults(ours, theirs, q, stillLooking) {
   });
 
   box.hidden = !box.children.length;
-  if (stillLooking) {
+  if (picking) {
+    nameResultsNote(box.children.length
+      ? 'Choose the place this one duplicates.'
+      : 'No other place by that name. Try fewer words, or tap “Same as another place” again to stop.');
+  } else if (stillLooking) {
     nameResultsNote(ours.length ? 'Also checking Apple Maps…' : 'Checking Apple Maps…');
   } else if (!box.children.length) {
     nameResultsNote('Nothing by that name yet — carry on and this becomes a new place.');
@@ -3660,6 +3700,8 @@ function resetForm() {
   soloShot = false;
   showExistingPlaceNote(null);
   nameSearchSettled = '';
+  dupePickTarget = null;            // NAME-FIRST §3
+  flagResult('');
   clearNameResults();               // NAME-FIRST §1
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
@@ -5078,6 +5120,8 @@ async function openExisting(id) {
   // Opening a place settles the name, so the search list does not reopen over
   // the row that was just chosen.
   nameSearchSettled = cap.name;
+  dupePickTarget = null;
+  flagResult('');
   clearNameResults();
   renderCoverInfo();
   await loadStoredMedia(id);
@@ -5090,30 +5134,220 @@ async function openExisting(id) {
   window.scrollTo(0, 0);
 }
 
-/** §2 — the cover, said out loud: where it came from and who took it.
+/* ════════════════════════════════════════════════════════════════════════
+   11b. What a place already holds, and how to report it wrong
+        — PANEL-NAME-FIRST §2 and §3
+   ════════════════════════════════════════════════════════════════════════ */
+
+/** §2 — the cover, SHOWN, and then said out loud.
+ *
+ *  The first version of this printed "Cover: from Pexels · by …" and rendered
+ *  no image, which Brian caught immediately: *"without the picture, 'is this
+ *  correct?' is unanswerable."* Temple of Heaven is the case — it holds a
+ *  cover and no `landmark_media`, so the whole screen was one sentence of text
+ *  about a photograph nobody could see.
+ *
+ *  Sized, like every other image the tool draws: the covers in
+ *  `landmark-covers` are 2000px JPEGs and this box is at most 190 points tall.
  *
  *  A cover with a `cover_source_ref` and no photographer is fine and
  *  backfillable from the id. A cover with neither is the one worth looking at,
  *  because nothing records where it came from — most of the catalogue, since
- *  those two columns only exist from 20260921000002 onwards.
- *
- *  There is no "Not this place" control here yet. §3 of the brief specifies
- *  one, and it needs an RLS path that does not exist: `flagged_places` has no
- *  INSERT policy at all — only `service_role` ALL, plus admin SELECT and
- *  UPDATE — so the write would be refused for every operator including an
- *  admin. Reported rather than written, per §3's own instruction. */
+ *  those columns only exist from 20260921000002 onwards. */
 function renderCoverInfo() {
-  const el = $('cover-info');
-  if (!el) return;
-  if (!cap.editing || !cap.coverURL) { el.hidden = true; el.textContent = ''; return; }
+  const block = $('cover-block');
+  const img = $('cover-img');
+  const line = $('cover-info');
+  if (!block) return;
+  // The block carries "Same as another place" too, which is about the PLACE
+  // and not about its cover — so it shows for any opened row, with the cover
+  // half hidden when there is nothing to show.
+  if (!cap.editing) { block.hidden = true; flagResult(''); return; }
+  block.hidden = false;
+  $('cover-reject').hidden = !cap.coverURL;
+
+  if (!cap.coverURL) {
+    img.hidden = true;
+    img.removeAttribute('src');
+    line.textContent = 'No cover yet — the first photo you add becomes one.';
+    return;
+  }
+  img.hidden = false;
+  img.src = sizedURL(cap.coverURL, 360);
+  img.onerror = () => { if (img.src !== cap.coverURL) img.src = cap.coverURL; };
+
   const bits = [];
   if (cap.coverSource) bits.push('from ' + capitalise(cap.coverSource));
   if (cap.photographer) bits.push('by ' + cap.photographer);
   if (cap.coverSourceRef) bits.push(cap.coverSourceRef);
-  el.textContent = bits.length
+  line.textContent = bits.length
     ? 'Cover: ' + bits.join(' · ')
-    : 'Cover: this place has one, and nothing records where it came from.';
-  el.hidden = false;
+    : 'Cover: nothing records where this one came from.';
+}
+
+function flagResult(msg, bad) {
+  const el = $('flag-result');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = bad ? 'var(--bad, #e88)' : '';
+  el.hidden = !msg;
+}
+
+/* ── §3 — report a problem; never resolve one ────────────────────────────
+ *
+ * **R1 applies: nothing is deleted.** A rejected cover is unset and recorded,
+ * a duplicate is reported and left standing. Merging is an admin decision with
+ * reference-counting behind it (`admin_decide_place`, `p_merge_into`); the
+ * field tool's job is to report.
+ *
+ * Both controls write `flagged_places`, and TODAY BOTH ARE REFUSED — the table
+ * has no INSERT policy at all, only `service_role` ALL plus admin SELECT and
+ * UPDATE. `supabase/migrations/20260922000001_flagged_places_operator_insert.sql`
+ * adds one and is deliberately NOT deployed: an RLS change needs Brian's yes
+ * in the moment (invariant 25). Until it is applied these buttons fail with
+ * the message below, which is the honest outcome rather than a button that
+ * pretends.
+ */
+
+/** The four reasons the policy admits. Kept here so the panel and the policy
+ *  are refutable against each other rather than drifting quietly. */
+const FLAG_REASONS = ['wrong_cover', 'near_duplicate',
+                      'missing_entry_point', 'no_sourceable_content'];
+
+/**
+ * One report, shaped exactly as the policy allows.
+ *
+ * `status: 'pending'` and no suggested coordinate are not defaults — they are
+ * the two clauses that make this a report rather than a decision.
+ *
+ * There is no `flagged_by` column on the table, so the reporter goes in
+ * `details`. That is a record, not an authorisation: anything that needs to
+ * trust who reported a thing needs a real column first.
+ */
+async function reportProblem(reason, details) {
+  if (!FLAG_REASONS.includes(reason)) throw new Error('unknown reason ' + reason);
+  const { error } = await db.from('flagged_places').insert({
+    place_id: cap.id,
+    source_table: 'landmarks',
+    status: 'pending',
+    flag_reasons: [reason],
+    original_latitude: cap.lat,
+    original_longitude: cap.lon,
+    suspected_problem: reason,
+    details: Object.assign({
+      reported_by: session.user.id,
+      reported_via: 'suna-panel',
+      reported_at: new Date().toISOString(),
+      place_name: cap.name || null,
+    }, details || {}),
+  });
+  if (!error) return { ok: true };
+
+  // **`uq_flagged_place UNIQUE (place_id, source_table)` is one row per
+  // place, and 3,830 places already have one** — mostly `approved`, left by
+  // the geocode audit. Roughly one report in three lands on an occupied slot.
+  // Adding the reason to the existing row is an UPDATE and stays admin-only,
+  // so the operator is told rather than having the report silently dropped.
+  if (error.code === '23505') {
+    return { ok: false, msg: 'This place is already in the review queue, and a place can only hold one report. Yours was not added — tell Brian if it is a different problem.' };
+  }
+  if (error.code === '42501' || /row-level security/i.test(error.message || '')) {
+    return { ok: false, msg: 'Reporting is not switched on yet — the database still refuses it. Nothing was changed.' };
+  }
+  return { ok: false, msg: 'Could not send that report. Nothing was changed.' };
+}
+
+/** "Not this place" — the cover is wrong.
+ *
+ *  **The report is written FIRST, then the cover is cleared.** If the order
+ *  were reversed a refused clear would leave a rejection nobody recorded, and
+ *  a cleared cover with no record is exactly how the same wrong image gets
+ *  re-selected for the same place on the next pass.
+ *
+ *  Clearing `cover_image_url` is a `landmarks` UPDATE, which today is allowed
+ *  by `Admins can update landmarks` (is_admin) or `submitted_by = auth.uid()`.
+ *  It works for Brian on any row and for anyone else only on their own — so
+ *  the two halves can come apart, and the message says which half happened. */
+async function rejectCover() {
+  if (!cap.editing || !cap.id || !cap.coverURL) return;
+  flagResult('Reporting…');
+  const rejected = cap.coverURL;
+  const res = await reportProblem('wrong_cover', {
+    rejected_cover_url: rejected,
+    cover_source: cap.coverSource || null,
+    // The ref is the point: it is what a later pass matches on to know this
+    // image has already been refused for this place.
+    cover_source_ref: cap.coverSourceRef || null,
+  });
+  if (!res.ok) { flagResult(res.msg, true); return; }
+
+  const { error } = await db.from('landmarks')
+    .update({ cover_image_url: null, cover_source: null,
+              cover_source_ref: null, photographer_name: null })
+    .eq('id', cap.id);
+  if (error) {
+    flagResult('Reported, but the cover is still showing — this row is not yours to edit. Brian can clear it.', true);
+    return;
+  }
+  cap.coverURL = null; cap.coverSource = null;
+  cap.coverSourceRef = null; cap.photographer = null;
+  cap.hadCover = false;
+  renderCoverInfo();
+  renderSaveState();
+  flagResult('Reported, and the cover is cleared. This place falls back to the stock pool until something better lands.');
+}
+
+/* ── "Same as another place" ──────────────────────────────────────────────
+ *
+ * The operator picks the other row from the name search rather than typing an
+ * id. While picking, our catalogue rows STOP opening and start reporting —
+ * MapKit results are hidden entirely, because a duplicate can only be another
+ * row we already hold.
+ */
+let dupePickTarget = null;      // the row being reported, while picking
+
+function startDuplicatePick() {
+  if (!cap.editing || !cap.id) return;
+  dupePickTarget = { id: cap.id, name: cap.name };
+  // The name field holds this place's own name and `nameSearchSettled`
+  // suppresses the search for exactly that string — clear it, or the picker
+  // opens onto a field that refuses to search.
+  nameSearchSettled = '';
+  $('f-name').value = '';
+  $('f-name').focus();
+  flagResult('Pick the other place: type its name above and choose it from the list. Nothing is merged — this reports it for review.');
+  clearNameResults();
+}
+
+function cancelDuplicatePick() {
+  if (!dupePickTarget) return;
+  $('f-name').value = dupePickTarget.name || '';
+  nameSearchSettled = dupePickTarget.name || '';
+  dupePickTarget = null;
+  clearNameResults();
+  flagResult('');
+}
+
+async function reportDuplicate(other) {
+  const target = dupePickTarget;
+  if (!target) return;
+  if (other.id === target.id) { flagResult('That is the same row. Pick the other one.', true); return; }
+  // `reportProblem` reads `cap`, and `cap` is still the place being reported
+  // — the picker never opened the other row, which is the point.
+  flagResult('Reporting…');
+  const res = await reportProblem('near_duplicate', {
+    duplicate_of: other.id,
+    duplicate_of_name: other.name || null,
+    duplicate_of_latitude: other.latitude,
+    duplicate_of_longitude: other.longitude,
+  });
+  dupePickTarget = null;
+  $('f-name').value = target.name || '';
+  nameSearchSettled = target.name || '';
+  clearNameResults();
+  if (!res.ok) { flagResult(res.msg, true); return; }
+  flagResult('Reported as the same place as “' + (other.name || 'that row')
+    + '”. It goes to the admin queue — nothing was merged or deleted here.');
 }
 
 /** One box that grows, rather than two that disagreed about which one counts. */
@@ -5121,6 +5355,25 @@ function growNote() {
   const el = $('f-note');
   el.style.height = 'auto';
   el.style.height = Math.max(76, Math.min(el.scrollHeight, 320)) + 'px';
+}
+
+/** Supabase Storage object URL → the render endpoint, at the width we draw.
+ *
+ *  The same rewrite the app does in `PlaceStockLibrary.sized`. Measured here
+ *  on Cafe Giảng: the ten thumbnails in the strip are 72 points each and every
+ *  one of them was pulling its 1080px original, because an `<img>` downloads
+ *  what you point it at and then throws the pixels away. Non-Supabase URLs
+ *  come back untouched, which is what a Pexels or Unsplash cover needs. */
+function sizedURL(url, pointWidth) {
+  const u = String(url || '');
+  if (!u.includes('/storage/v1/object/public/')) return u;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const px = Math.max(1, Math.min(Math.round(pointWidth * dpr), 2000));
+  const rendered = u.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+  // `resize=contain`, matching the app — without it the transform squashes a
+  // non-square source to the requested box.
+  return rendered + (rendered.includes('?') ? '&' : '?')
+    + 'width=' + px + '&quality=80&resize=contain';
 }
 
 function escapeHtml(s) {
@@ -5608,6 +5861,11 @@ $('f-featured').onclick = () => {
 /* ════════════════════════════════════════════════════════════════════════
    12. Boot
    ════════════════════════════════════════════════════════════════════════ */
+
+$('cover-reject').onclick = () => rejectCover();
+$('dupe-report').onclick = () => {
+  if (dupePickTarget) cancelDuplicatePick(); else startDuplicatePick();
+};
 
 ['f-name','f-note','f-address','f-building'].forEach((id) => {
   $(id).addEventListener('input', () => {
