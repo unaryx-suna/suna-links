@@ -353,6 +353,10 @@
            first, so the link and the address stop being the toll gate. -->
       <div id="name-results" hidden></div>
       <p class="note" id="name-results-note" style="margin:4px 0 0" hidden></p>
+      <!-- The name search is off while a row is open, deliberately. This is
+           the way back out of that, and it is a button rather than a trick
+           with an empty field, because nobody discovers a trick. -->
+      <button class="linkish" id="leave-editing" style="margin:6px 0 0" hidden></button>
     </div>
 
     <!-- §2 — one disclosure for everything the photo run is not editing. -->
@@ -707,7 +711,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v28';
+const BUILD = 'field-v29';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1568,7 +1572,7 @@ function openLocationSheet() {
   // broken. Re-enabled whenever the sheet is opened with a signal.
   $('opt-search').disabled = !navigator.onLine;
   $('opt-search').value = '';
-  $('opt-search-results').innerHTML = '';
+  clearSearchResults();
   // The centre persists for the capture; the picker itself starts closed.
   $('centre-picker').hidden = true;
   renderCentreLine();
@@ -1696,6 +1700,17 @@ const SEARCH_DEBOUNCE_MS = 350;
 const SEARCH_MIN_CHARS = 3;
 let searchTimer = null, searchSeq = 0;
 
+/** The location sheet's version of `clearNameResults`, and it existed as four
+ *  copies of `innerHTML = ''` with the same defect in each: the DOM was
+ *  emptied and an in-flight `runSearch` repainted over it. `chooseSearchResult`
+ *  is the one that shows — pick a result, the sheet closes, and the list it
+ *  came from is repainted underneath by the OSM leg that was still running. */
+function clearSearchResults() {
+  clearTimeout(searchTimer);
+  searchSeq++;
+  $('opt-search-results').innerHTML = '';
+}
+
 /** Set to the harvested name while a search was started BY a pasted link, so a
  *  zero-result answer can tell the whole story rather than the half of it the
  *  search field knows about. Cleared the moment he types. */
@@ -1705,7 +1720,7 @@ $('opt-search').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchFromLink = null;
   const q = $('opt-search').value.trim();
-  $('opt-search-results').innerHTML = '';
+  clearSearchResults();
 
   if (!navigator.onLine) {
     // **A plain reason, not a spinner that never resolves.** Everything else in
@@ -1729,7 +1744,7 @@ function searchFromName(name, note) {
   clearTimeout(searchTimer);
   $('loc-sheet-error').hidden = true;
   $('opt-search').value = name;
-  $('opt-search-results').innerHTML = '';
+  clearSearchResults();
   searchFromLink = note ? name : null;
   if (!navigator.onLine) {
     searchNote('No signal, so search is off. The other options below still work.');
@@ -2103,7 +2118,7 @@ function chooseSearchResult(r) {
   if (r.source === 'apple') suggestCategoryFromApple(r.poi);
   offerOSMHours(r.lat, r.lon);
   $('opt-search').value = '';
-  $('opt-search-results').innerHTML = '';
+  clearSearchResults();
   searchFromLink = null;
   searchNote('');
   $('loc-sheet').hidden = true;
@@ -3107,8 +3122,21 @@ function nameMatchesStored(query, stored) {
   return false;
 }
 
+/** Clear the list AND abandon anything already in flight.
+ *
+ *  **The sequence bump is the whole fix.** This used to clear the timer and
+ *  the DOM only, which stops a search that has not started and does nothing at
+ *  all to one that has. `runNameSearch` awaits two legs and re-checks `seq`
+ *  after each; with the counter untouched its check still passed, so a request
+ *  issued before the operator picked a result repainted the list a moment
+ *  after it was cleared. The slow leg is MapKit, which is why the ghost list
+ *  always arrived a beat late and always looked like Apple results.
+ *
+ *  Incrementing the counter invalidates every outstanding `seq` at once, so
+ *  both guards fail and neither leg renders. */
 function clearNameResults() {
   clearTimeout(nameSearchTimer);
+  nameSearchSeq++;
   $('name-results').innerHTML = '';
   $('name-results').hidden = true;
   $('name-results-note').hidden = true;
@@ -3118,6 +3146,46 @@ function nameResultsNote(msg) {
   const el = $('name-results-note');
   el.textContent = msg || '';
   el.hidden = !msg;
+}
+
+/* ── Leaving an opened row — §1 follow-up ────────────────────────────────
+ *
+ * `openExisting` sets `cap.editing = true` and `scheduleNameSearch` refuses to
+ * search while it is set. That guard is right — offering to open a different
+ * place from inside an open one is a trapdoor — but it had no exit, so the
+ * name field went permanently dead and the only way to look up a second place
+ * was to reload the page.
+ *
+ * Two ways out, and both are here on purpose. The button is the one that
+ * teaches; clearing the field is the one an operator does by reflex before
+ * reading anything. Relying on the reflex alone would be relying on discovery.
+ *
+ * Leaving discards unsaved edits, which is what `leaveRun` already does for a
+ * photo run. The difference is that a run only holds photographs, and an
+ * opened row can hold a typed note — so when something has actually been
+ * touched the button asks once instead of doing it silently. No modal: this
+ * tool has never used one and a confirm() blocks a PWA hard.
+ */
+let leaveArmed = false;
+
+function renderLeaveEditing() {
+  const b = $('leave-editing');
+  if (!b) return;
+  // Not during a photo run, which has "Back to list" for this, and not while
+  // picking a duplicate, which is a mode with its own way out.
+  const show = !!cap.editing && !photoMode() && !dupePickTarget;
+  b.hidden = !show;
+  if (!show) { leaveArmed = false; return; }
+  b.textContent = leaveArmed
+    ? 'Discard those edits and start a new capture?'
+    : 'Done with this place — search for another';
+}
+
+function leaveEditing() {
+  leaveArmed = false;
+  resetForm();
+  renderSaveState();
+  $('f-name').focus();
 }
 
 function scheduleNameSearch() {
@@ -3711,8 +3779,10 @@ function resetForm() {
   showExistingPlaceNote(null);
   nameSearchSettled = '';
   dupePickTarget = null;            // NAME-FIRST §3
+  leaveArmed = false;
   flagResult('');
   clearNameResults();               // NAME-FIRST §1
+  renderLeaveEditing();
   $('run-more').hidden = true;
   $('f-name').readOnly = false;
   $('pane-capture').classList.remove('photo-run', 'show-all');
@@ -4705,6 +4775,7 @@ function applyRunChrome() {
   $('f-name').readOnly = photoMode();
   $('run-bar').hidden = !runActive();
   $('another-nearby').hidden = true;
+  renderLeaveEditing();
   renderRunCount();
   renderSaveState();
   window.scrollTo(0, 0);
@@ -5131,9 +5202,11 @@ async function openExisting(id) {
   // the row that was just chosen.
   nameSearchSettled = cap.name;
   dupePickTarget = null;
+  leaveArmed = false;
   flagResult('');
   clearNameResults();
   renderCoverInfo();
+  renderLeaveEditing();
   await loadStoredMedia(id);
   renderThumbs();
   renderHours();
@@ -5326,6 +5399,7 @@ function startDuplicatePick() {
   $('f-name').value = '';
   $('f-name').focus();
   flagResult('Pick the other place: type its name above and choose it from the list. Nothing is merged — this reports it for review.');
+  renderLeaveEditing();
   clearNameResults();
 }
 
@@ -5336,6 +5410,7 @@ function cancelDuplicatePick() {
   dupePickTarget = null;
   clearNameResults();
   flagResult('');
+  renderLeaveEditing();
 }
 
 async function reportDuplicate(other) {
@@ -5872,6 +5947,16 @@ $('f-featured').onclick = () => {
    12. Boot
    ════════════════════════════════════════════════════════════════════════ */
 
+$('leave-editing').onclick = () => {
+  // Touched means the operator changed something this session — `openExisting`
+  // fills the form without marking anything, so a row merely looked at leaves
+  // without a question.
+  if (cap.touched && cap.touched.size && !leaveArmed) {
+    leaveArmed = true; renderLeaveEditing(); return;
+  }
+  leaveEditing();
+};
+
 $('cover-reject').onclick = () => rejectCover();
 $('dupe-report').onclick = () => {
   if (dupePickTarget) cancelDuplicatePick(); else startDuplicatePick();
@@ -5885,6 +5970,16 @@ $('dupe-report').onclick = () => {
     markTouched(key);
     if (id === 'f-note') growNote();
     if (id === 'f-name') {
+      // **Emptying the name of an opened row leaves the row.** The assignments
+      // above landed on the `cap` that is about to be replaced, which is
+      // harmless — `resetForm` mints a new one. Not while picking a duplicate:
+      // the picker empties this field itself, and leaving there would throw
+      // away the report half-made.
+      if (cap.editing && !dupePickTarget && !photoMode()
+          && !$('f-name').value.trim()) {
+        leaveEditing();
+        return;
+      }
       dupeDismissed = false;
       scheduleDuplicateCheck();
       scheduleNameSearch();          // NAME-FIRST §1
