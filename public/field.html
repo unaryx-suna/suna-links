@@ -707,7 +707,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v27';
+const BUILD = 'field-v28';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -3141,9 +3141,16 @@ function scheduleNameSearch() {
 /** Our catalogue, matched on the name alone.
  *
  *  PostgREST cannot express the comparison above, so the server does a coarse
- *  pass and the fine work happens here. `is_hidden` is not filtered: a place
- *  parked in "Finish these" is precisely the one worth reopening rather than
- *  re-capturing.
+ *  pass and the fine work happens here.
+ *
+ *  **Only visible rows can ever come back, and not because this asks for
+ *  them.** `landmarks`' single SELECT policy opens with `is_hidden = false`
+ *  and has no admin or owner branch, so a hidden row is unreadable by any
+ *  client, including Brian's. Measured 22 Sep: `select … where is_hidden =
+ *  true` returns 0 rows for an admin session against 180 that exist. So the
+ *  duplicate picker can only ever point at a visible row, which is the right
+ *  answer anyway — reporting that a visible place duplicates one nobody can
+ *  see is not a report anyone can action.
  *
  *  **The coarse pass ANDs the words; ORing them was measured and it failed.**
  *  A single `or=name.ilike.%temple%,name.ilike.%heaven%` for "Temple of
@@ -3218,6 +3225,9 @@ function renderNameResults(ours, theirs, q, stillLooking) {
     const bits = [];
     if (r.km != null) bits.push(r.km < 1 ? Math.round(r.km * 1000) + ' m away' : r.km.toFixed(1) + ' km away');
     bits.push(r.cover_image_url ? 'has a cover' : 'no cover — worth a photo');
+    // Kept, though it cannot fire today: the SELECT policy above filters every
+    // hidden row out before this sees it. It is here so the label exists the
+    // day that policy gains an owner branch, not as a claim that it shows.
     if (r.is_hidden) bits.push('unfinished');
     b.innerHTML = (picking ? '<strong>Report as the same place</strong> · ' : '<strong>Already in Suna</strong> · ')
       + escapeHtml(r.name || 'Unnamed')
