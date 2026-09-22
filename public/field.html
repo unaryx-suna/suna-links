@@ -98,6 +98,14 @@
     font-size: 9px; text-align: center; padding: 2px 0; color: var(--sand);
   }
   /* §4 — stock has to be visibly stock, not something he photographed. */
+  /* Replace sits opposite the delete ×, so the destructive control and the
+     non-destructive one are never next to each other under a thumb. */
+  .thumb .rep {
+    position: absolute; left: 3px; top: 3px; z-index: 2;
+    width: 22px; height: 22px; line-height: 20px; text-align: center;
+    border-radius: 999px; border: 0; cursor: pointer;
+    background: rgba(0,0,0,.62); color: #fff; font-size: 13px; padding: 0;
+  }
   .thumb .credit {
     position: absolute; left: 0; right: 0; top: 0; background: rgba(0,0,0,.65);
     font-size: 8px; text-align: center; padding: 2px 1px; color: #fff;
@@ -377,6 +385,7 @@
         <img id="cover-img" alt="The cover this place is showing today">
         <p class="note" id="cover-info" style="margin:6px 0 0"></p>
         <div class="row">
+          <button class="ghost" id="cover-replace">Replace this image</button>
           <button class="ghost" id="cover-reject">Not this place</button>
           <button class="ghost" id="dupe-report">Same as another place</button>
         </div>
@@ -388,6 +397,12 @@
       </div>
       <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
       <input id="in-library" type="file" accept="image/*" multiple hidden>
+      <!-- Replace — single file, and video is allowed because a media row can
+           already be one. `capture` only on the camera input, so Library still
+           offers the roll. -->
+      <input id="in-replace-cam" type="file" accept="image/*" capture="environment" hidden>
+      <input id="in-replace-lib" type="file" accept="image/*,video/*" hidden>
+
       <!-- §4 — an invisible paste handler is not a feature anyone finds.
            Pasting anywhere on the page still works; this is the version you
            can see. -->
@@ -546,6 +561,24 @@
       <p class="sub" id="app-sheet-sub">From the shared library.</p>
       <div id="app-options"></div>
       <button class="linkish" id="app-sheet-close" style="margin-top:8px">Close</button>
+    </div>
+  </div>
+
+  <!-- Replacement source picker. One sheet for the cover and for any media
+       thumbnail; `replaceTarget` says which. Lives out here with the other
+       sheets rather than inside the Photos field group, which a photo run
+       collapses. -->
+  <div class="sheet" id="replace-sheet" hidden>
+    <div>
+      <h1 style="margin-top:0" id="replace-title">Replace this image</h1>
+      <p class="sub" id="replace-what"></p>
+      <button class="opt" id="replace-cam">Take a new photo<small>Camera</small></button>
+      <button class="opt" id="replace-lib">Choose a file<small>Photo or video from this device</small></button>
+      <label for="replace-link" style="margin-top:10px">Or paste a stock link</label>
+      <input id="replace-link" type="text" inputmode="url" autocomplete="off"
+             autocapitalize="off" placeholder="A Pexels or Unsplash link">
+      <p class="note" id="replace-note" style="margin:6px 0 0" hidden></p>
+      <button class="linkish" id="replace-close" style="margin-top:10px">Close</button>
     </div>
   </div>
 
@@ -711,7 +744,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v29';
+const BUILD = 'field-v30';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2951,12 +2984,14 @@ async function loadStoredMedia(landmarkId) {
 async function deleteStored(entry) {
   try {
     if (entry.path) {
-      const { error } = await db.storage.from('user-landmark-photos').remove([entry.path]);
+      const { error } = await authedWrite(() =>
+        db.storage.from('user-landmark-photos').remove([entry.path]));
       // A refusal here is the uid-path bug, and it must be loud rather than
       // leaving an orphaned object behind a deleted row.
       if (error) throw new Error('storage: ' + error.message);
     }
-    const { error: rErr } = await db.from('landmark_media').delete().eq('id', entry.id);
+    const { error: rErr } = await authedWrite(() =>
+      db.from('landmark_media').delete().eq('id', entry.id));
     if (rErr) throw new Error('landmark_media: ' + rErr.message);
     cap.stored = cap.stored.filter((e) => e.id !== entry.id);
     renderThumbs();
@@ -3007,6 +3042,21 @@ function renderThumbs() {
       x.onclick = () => deleteStored(entry);
       d.appendChild(x);
     }
+    // Replace is offered on every item, yours or not, because the operator
+    // cannot tell from the picture whose it is — and refusing at the click with
+    // the reason is more use than a control that is silently absent.
+    const rep = document.createElement('button');
+    rep.className = 'rep'; rep.textContent = '⟳';
+    rep.title = 'Replace this file';
+    rep.onclick = () => {
+      if (!entry.mine) {
+        flagResult('That photo belongs to ' + (entry.username || 'another user')
+          + ' — landmark_media can only be updated by its owner. Use “Not this place” to report it.', true);
+        return;
+      }
+      openReplaceSheet({ kind: 'media', entry });
+    };
+    d.appendChild(rep);
     box.insertBefore(d, $('btn-camera'));
   });
 
@@ -3869,6 +3919,43 @@ async function ensureSession() {
 }
 
 const SIGNED_OUT_MESSAGE = 'You’re signed out — sign in to send these';
+
+/* ── Every direct write goes through here ────────────────────────────────
+ *
+ * **supabase-js does not fail when there is no session. It downgrades.**
+ * Measured on the live page, 22 Sep, by intercepting `fetch` and reading the
+ * header that actually went out:
+ *
+ *   client WITH a session      Authorization: Bearer <user JWT>
+ *   client with NO session     Authorization: Bearer sb_publishable_…
+ *
+ * The second is the publishable key used as a bearer token. PostgREST accepts
+ * it, resolves the role to `anon`, `auth.uid()` is null, and every RLS policy
+ * that asks who you are refuses with 42501 — `new row violates row-level
+ * security policy`. Reproduced exactly against `landmark_media` with a second,
+ * session-less client using the same key. That is the whole of "the panel's
+ * writes reach Postgres as anon": not a stripped header, a substituted one.
+ *
+ * The service worker is not involved and can be ruled out from the source:
+ * `field-sw.js:73` returns on any non-GET, so it never sees a write at all.
+ *
+ * `drainQueue` already asks `ensureSession()` once before the first upload —
+ * that is why queued captures recovered. Every DIRECT write bypassed it:
+ * deleting a stored photo, writing a hint, reporting a place, clearing a
+ * cover. Each one silently became an anonymous request the moment a
+ * backgrounded PWA lost its refresh timer, which is the documented way this
+ * session dies.
+ *
+ * So the gate lives in one place and every direct write states its table.
+ */
+async function authedWrite(fn) {
+  if (!(await ensureSession())) {
+    showSignedOut(true);
+    return { error: { code: 'signed_out', message: SIGNED_OUT_MESSAGE } };
+  }
+  showSignedOut(false);
+  return fn();
+}
 
 /** **An RLS refusal is NOT a sign-out, and calling it one cost an evening.**
  *
@@ -5309,7 +5396,7 @@ const FLAG_REASONS = ['wrong_cover', 'near_duplicate',
  */
 async function reportProblem(reason, details) {
   if (!FLAG_REASONS.includes(reason)) throw new Error('unknown reason ' + reason);
-  const { error } = await db.from('flagged_places').insert({
+  const { error } = await authedWrite(() => db.from('flagged_places').insert({
     place_id: cap.id,
     source_table: 'landmarks',
     status: 'pending',
@@ -5323,8 +5410,9 @@ async function reportProblem(reason, details) {
       reported_at: new Date().toISOString(),
       place_name: cap.name || null,
     }, details || {}),
-  });
+  }));
   if (!error) return { ok: true };
+  if (error.code === 'signed_out') return { ok: false, msg: error.message };
 
   // **`uq_flagged_place UNIQUE (place_id, source_table)` is one row per
   // place, and 3,830 places already have one** — mostly `approved`, left by
@@ -5364,10 +5452,10 @@ async function rejectCover() {
   });
   if (!res.ok) { flagResult(res.msg, true); return; }
 
-  const { error } = await db.from('landmarks')
+  const { error } = await authedWrite(() => db.from('landmarks')
     .update({ cover_image_url: null, cover_source: null,
               cover_source_ref: null, photographer_name: null })
-    .eq('id', cap.id);
+    .eq('id', cap.id));
   if (error) {
     flagResult('Reported, but the cover is still showing — this row is not yours to edit. Brian can clear it.', true);
     return;
@@ -5434,6 +5522,226 @@ async function reportDuplicate(other) {
   flagResult('Reported as the same place as “' + (other.name || 'that row')
     + '”. It goes to the admin queue — nothing was merged or deleted here.');
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   11c. Replacing an image that is already on a place
+   ════════════════════════════════════════════════════════════════════════
+
+   **The path is versioned, never overwritten.** `uploadOne` writes
+   `landmark-covers/<id>/cover.jpg` with `upsert: true`, which is right for a
+   first capture and destructive for a replacement: the previous bytes are gone
+   the moment the new ones land. A replacement writes
+   `<id>/cover-<epoch>.jpg` and repoints `cover_image_url` at it, so the old
+   object stays exactly where it was.
+
+   That is R1 — nothing is deleted — and it hands us an undo for free: the
+   previous URL is still a live object, so putting it back is one UPDATE.
+
+   It also keeps the storage permissions trivial. A versioned write only ever
+   needs INSERT on the bucket; overwriting would need UPDATE, which for
+   `user-landmark-photos` is scoped to your own uid folder and would have
+   failed for anything of anyone else's.
+*/
+
+/** `{ kind: 'cover' }` or `{ kind: 'media', entry }`. */
+let replaceTarget = null;
+
+function replaceNote(msg, bad) {
+  const el = $('replace-note');
+  el.textContent = msg || '';
+  el.className = 'note' + (bad ? ' err' : '');
+  el.hidden = !msg;
+}
+
+function openReplaceSheet(target) {
+  replaceTarget = target;
+  $('replace-link').value = '';
+  replaceNote('');
+  const isCover = target.kind === 'cover';
+  $('replace-title').textContent = isCover ? 'Replace this cover' : 'Replace this photo';
+  $('replace-what').textContent = isCover
+    ? 'The new image becomes the cover. The one it replaces is kept — only the link moves.'
+    : 'The new file replaces this item in the strip. The old file is kept.';
+  // Video only makes sense where a media row can hold one; a cover is an image.
+  $('in-replace-lib').setAttribute('accept', isCover ? 'image/*' : 'image/*,video/*');
+  $('replace-sheet').hidden = false;
+}
+
+function closeReplaceSheet() {
+  replaceTarget = null;
+  $('replace-sheet').hidden = true;
+}
+
+/** A versioned object name. The timestamp is what makes it a new object rather
+ *  than a new version of an old one — Supabase Storage has no versioning, so
+ *  "keep the previous bytes" has to mean "write somewhere else". */
+const stamp = () => Date.now().toString(36);
+
+function extensionFor(type) {
+  if (/^video\//.test(type)) return (type.split('/')[1] || 'mp4').replace(/[^a-z0-9]/g, '') || 'mp4';
+  return 'jpg';
+}
+
+/**
+ * Turn whatever the operator chose into bytes we are willing to store.
+ *
+ * An image goes through the same `reencode()` as every other capture — same
+ * 2000px max edge, same 0.82 — so a replacement matches everything else in the
+ * bucket rather than being the one 6MB original in it.
+ *
+ * A video does NOT: `reencode` is a canvas, and a canvas cannot read a video
+ * file. It is uploaded as it came, which is also why the library input is the
+ * only one that offers video.
+ */
+async function bytesForReplacement(file) {
+  if (/^video\//.test(file.type)) {
+    return { blob: file, type: file.type, width: null, height: null, isVideo: true };
+  }
+  const { blob, width, height } = await reencode(file);
+  return { blob, type: 'image/jpeg', width, height, isVideo: false };
+}
+
+/** The cover, replaced. Storage first, then the row — an object with nothing
+ *  pointing at it is litter; a row pointing at an object that does not exist is
+ *  a broken image on every surface in the app. */
+async function replaceCover(bytes, provenance) {
+  const path = cap.id + '/cover-' + stamp() + '.jpg';
+  const up = await authedWrite(() => db.storage.from('landmark-covers')
+    .upload(path, bytes.blob, { contentType: bytes.type, upsert: false }));
+  if (up.error) return { ok: false, msg: uploadMessage(up.error, 'landmark-covers') };
+  const url = db.storage.from('landmark-covers').getPublicUrl(path).data.publicUrl;
+
+  // **Provenance on every replacement, with no exceptions.** 1,420 covers
+  // carry no attribution at all, and every one of them got there by something
+  // writing a URL and not writing where it came from.
+  const patch = {
+    cover_image_url: url,
+    cover_source: provenance.source,
+    cover_source_ref: provenance.ref,
+    photographer_name: provenance.photographer,
+  };
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id));
+  if (res.error) {
+    return { ok: false, msg: res.error.code === 'signed_out' ? res.error.message
+      : 'The image uploaded, but this row is not yours to edit, so the cover still points at the old one. Nothing was lost.' };
+  }
+  cap.coverURL = url;
+  cap.coverSource = provenance.source;
+  cap.coverSourceRef = provenance.ref;
+  cap.photographer = provenance.photographer;
+  cap.hadCover = true;
+  renderCoverInfo();
+  renderSaveState();
+  return { ok: true, msg: 'Cover replaced. The previous image is still stored — nothing was deleted.' };
+}
+
+/** A media item, replaced, keeping whose it is and what kind it is. */
+async function replaceMedia(entry, bytes) {
+  if (!entry.mine) {
+    return { ok: false, msg: 'This photo belongs to ' + (entry.username || 'another user')
+      + ', and landmark_media can only be updated by its owner. Report it with “Not this place” instead.' };
+  }
+  const uid = session.user.id;
+  const ext = extensionFor(bytes.type);
+  const path = uid + '/' + cap.id + '/' + entry.id + '-' + stamp() + '.' + ext;
+  const up = await authedWrite(() => db.storage.from('user-landmark-photos')
+    .upload(path, bytes.blob, { contentType: bytes.type, upsert: false }));
+  if (up.error) return { ok: false, msg: uploadMessage(up.error, 'user-landmark-photos') };
+  const url = db.storage.from('user-landmark-photos').getPublicUrl(path).data.publicUrl;
+
+  // **The type follows the new file.** Replacing a video with a video keeps
+  // `video`, which is the case that matters — a row typed `image` that holds an
+  // mp4 renders as a broken picture everywhere.
+  const patch = { media_url: url, media_type: bytes.isVideo ? 'video' : 'image' };
+  if (bytes.width) { patch.width = bytes.width; patch.height = bytes.height; }
+  const res = await authedWrite(() =>
+    db.from('landmark_media').update(patch).eq('id', entry.id));
+  if (res.error) {
+    return { ok: false, msg: res.error.code === 'signed_out' ? res.error.message
+      : 'The file uploaded but the row still points at the old one. Nothing was lost.' };
+  }
+  entry.media_url = url;
+  renderThumbs();
+  return { ok: true, msg: 'Replaced. The previous file is still stored — nothing was deleted.' };
+}
+
+function uploadMessage(error, bucket) {
+  const m = String((error && error.message) || '');
+  if (error && error.code === 'signed_out') return m;
+  if (/row-level security|not authorized|403/i.test(m)) {
+    return 'The upload was refused for ' + bucket + '. Nothing was changed.';
+  }
+  return 'Could not upload that file. Nothing was changed.';
+}
+
+/** One entry point for every source, so the three of them cannot drift. */
+async function applyReplacement(file, provenance) {
+  const target = replaceTarget;
+  if (!target) return;
+  replaceNote('Working…');
+  let bytes;
+  try { bytes = await bytesForReplacement(file); }
+  catch { replaceNote('That file could not be read.', true); return; }
+
+  if (target.kind === 'cover' && bytes.isVideo) {
+    replaceNote('A cover has to be an image.', true); return;
+  }
+  const res = target.kind === 'cover'
+    ? await replaceCover(bytes, provenance)
+    : await replaceMedia(target.entry, bytes);
+  if (!res.ok) { replaceNote(res.msg, true); return; }
+  closeReplaceSheet();
+  flagResult(res.msg);
+}
+
+/** A camera or library file: ours, so the credit is the operator's username and
+ *  the ref names the object rather than being left null. A replacement with no
+ *  provenance is the thing this feature exists to stop creating. */
+function ownProvenance() {
+  return {
+    source: 'user',
+    ref: 'user:' + session.user.id + ':' + stamp(),
+    photographer: profile.username || null,
+  };
+}
+
+$('cover-replace').onclick = () => openReplaceSheet({ kind: 'cover' });
+$('replace-close').onclick = () => closeReplaceSheet();
+$('replace-cam').onclick = () => $('in-replace-cam').click();
+$('replace-lib').onclick = () => $('in-replace-lib').click();
+
+for (const id of ['in-replace-cam', 'in-replace-lib']) {
+  $(id).onchange = async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = '';                        // so the same file can be picked twice
+    if (file) await applyReplacement(file, ownProvenance());
+  };
+}
+
+$('replace-link').addEventListener('input', async () => {
+  const raw = $('replace-link').value;
+  const link = parseStockLink(raw);
+  if (link && link.unsupported === 'unsplash-page') { replaceNote(UNSPLASH_PAGE_HELP, true); return; }
+  if (!link) { replaceNote(raw.trim() ? 'Not a Pexels or Unsplash link.' : ''); return; }
+  $('replace-link').value = '';
+  replaceNote('Fetching the photo…');
+  try {
+    const r = await fetch('/api/fetch-stock-image?provider=' + encodeURIComponent(link.provider)
+                          + '&id=' + encodeURIComponent(link.id));
+    if (!r.ok) { replaceNote('That photo could not be fetched.', true); return; }
+    const blob = await r.blob();
+    const provider = r.headers.get('X-Stock-Provider') || link.provider;
+    const photographerRaw = r.headers.get('X-Stock-Photographer');
+    // **Never the operator's name on someone else's photograph.** A null
+    // photographer with a populated ref is fine and backfillable from the id.
+    await applyReplacement(new File([blob], 'stock.jpg', { type: blob.type || 'image/jpeg' }), {
+      source: provider,
+      ref: provider + ':' + link.id,
+      photographer: photographerRaw ? decodeURIComponent(photographerRaw) : null,
+    });
+  } catch { replaceNote('That photo could not be fetched.', true); }
+});
 
 /** One box that grows, rather than two that disagreed about which one counts. */
 function growNote() {
@@ -5609,7 +5917,7 @@ $('btn-add-hint').onclick = async () => {
     source_tier: profile.is_admin ? 'authored' : 'community',
   };
   try {
-    const { error } = await db.from('place_hints').insert(row);
+    const { error } = await authedWrite(() => db.from('place_hints').insert(row));
     if (error) throw new Error(error.message);
   } catch (err) {
     // The place may not be on the server yet — a hint on a queued capture has
@@ -5644,7 +5952,8 @@ async function loadPlaceHints() {
     x.style.fontSize = '12px';
     x.onclick = async () => {
       // `place_hints_delete_own` allows this for the author.
-      const { error } = await db.from('place_hints').delete().eq('id', h.id);
+      const { error } = await authedWrite(() =>
+        db.from('place_hints').delete().eq('id', h.id));
       if (error) { hintError(error.message); return; }
       await loadPlaceHints();
     };
