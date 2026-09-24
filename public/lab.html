@@ -289,7 +289,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v3';
+const BUILD = 'lab-v4';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -833,6 +833,9 @@ async function ask({ chip, request }) {
         if (event === 'stage')  setStatus(stageLabel(d.stage), true);
         if (event === 'token')  { streamed += d.t; inner.textContent = streamed; scroll(); }
         if (event === 'capped') { inner.textContent = d.message; }
+        // A transient upstream failure. The tester sees a sentence, not a
+        // status code; the code is in the function log.
+        if (event === 'unavailable') { inner.textContent = d.message; }
         if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
         if (event === 'done')   { await renderAnswer(holder, inner, d); }
       }
