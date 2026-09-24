@@ -132,6 +132,32 @@
   }
   .fb .rep[aria-pressed="true"] { color: var(--sand); }
   .fb .dot { color: var(--dim); font-size: 13px; }
+  /* §0 the ref, small and muted, tap to copy */
+  .ref { margin-top: 8px; font-size: 12px; color: var(--dim); background: none;
+         padding: 4px 0; letter-spacing: .04em; }
+  .ref:active { color: var(--sand); }
+  /* R2/§1 the follow-up chip rows */
+  .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .kinds button { font-size: 13px; padding: 10px 12px; min-height: 44px;
+                  background: rgba(255,255,255,.08); }
+  .kinds button[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .kinds .lbl { font-size: 12px; color: var(--dim); width: 100%; margin-bottom: 2px; }
+  /* §2 did-you-go, above everything else on the next visit */
+  .askback { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+             padding: 14px; margin-bottom: 24px; }
+  .askback p { margin: 0 0 10px; font-size: 15px; }
+  /* §4 the check-in */
+  .checkin { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+             padding: 14px; margin-bottom: 24px; }
+  .checkin p { margin: 0 0 8px; font-size: 14px; }
+  .checkin .q { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  /* §0a the topic divider — visible without being loud */
+  .topic { display: flex; align-items: center; gap: 10px; margin: 8px 0 24px; }
+  .topic .rule { flex: 1; height: 1px; background: var(--line); }
+  .topic .what { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .topic button { background: none; color: var(--sand); font-size: 12px;
+                  text-decoration: underline; padding: 6px 0; }
+  .readonly { text-align: center; font-size: 12px; color: var(--sand); padding: 10px 0; }
   .reason { margin-top: 8px; display: flex; gap: 8px; }
   /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
      so without this the why field is on screen before Yes or No is tapped. */
@@ -289,7 +315,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v4';
+const BUILD = 'lab-v6';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -302,13 +328,23 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 // outside this list is dropped by the edge function rather than passed through,
 // so offering one here would silently do nothing.
 const PREF_KEYS = ['transport', 'company', 'budget', 'pace', 'diet', 'interests',
-                   'avoid', 'accessibility', 'accommodation', 'time_of_day', 'other'];
+                   'avoid', 'accessibility', 'accommodation', 'time_of_day', 'other',
+                   // §1. The No chips write these. They were added server-side
+                   // first and missing here, so every "Been there" tap was
+                   // silently dropped by addPref's vocabulary check.
+                   'visited', 'max_travel', 'answer_length'];
 
 let tester = null;
 let location_ = null;
 let busy = false;
 let lastQuestion = null;      // drives the answer chips in §4
 let weather_ = null;          // {temp_c, conditions, at} — see refreshWeather
+// §0. One session per thread: new on page load, new on New chat. Every answer
+// in the thread carries it, so a report traces back to the conversation.
+let sessionId = crypto.randomUUID();
+let readOnly = false;         // set when opened via ?ref=
+let answersThisSession = 0;
+let currentTopic = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -354,6 +390,140 @@ async function openApp() {
   if (tester.last_location) location_ = tester.last_location;
   renderContext();
   renderChips();
+
+  // §0. `?ref=A-0042` opens that session read-only, scrolled to that answer —
+  // a failure in the report becomes one click to the thread that caused it.
+  const wanted = new URLSearchParams(location.search).get('ref');
+  if (wanted) { await openSession(wanted.toUpperCase()); return; }
+
+  // §2 comes before anything else on a new visit, then §4.
+  await maybeAskDidGo();
+  await maybeCheckIn();
+}
+
+/// Replays a stored thread. Read-only: the composer is hidden, because this is
+/// somebody reading a failure, not continuing the conversation that caused it.
+async function openSession(ref) {
+  const { data: target } = await db.from('lab_answers')
+    .select('session_id').eq('ref', ref).maybeSingle();
+  if (!target) {
+    $('#convo-col').append(sunaTurn(`No answer ${ref} — it may belong to another tester.`));
+    return;
+  }
+  const { data: rows } = await db.from('lab_answers')
+    .select('id, ref, mode, request, response, created_at')
+    .eq('session_id', target.session_id).order('created_at');
+
+  readOnly = true;
+  sessionId = target.session_id;
+  $('#dock').style.display = 'none';
+  $('#convo-col').innerHTML = '';
+  $('#convo-col').append(el('div', 'readonly', `Session for ${ref} — read only`));
+
+  let anchor = null;
+  for (const row of (rows ?? [])) {
+    $('#convo-col').append(meTurn(row.request || ''));
+    const holder = el('div', 'turn suna');
+    const bubble = el('div', 'bubble');
+    const r = row.response ?? {};
+    bubble.textContent = r.text ?? r.context ?? '(no text)';
+    holder.append(bubble);
+    const tag = el('div', 'ref', row.ref + (row.ref === ref ? ' · this one' : ''));
+    holder.append(tag);
+    if (row.ref === ref) anchor = holder;
+    $('#convo-col').append(holder);
+  }
+  (anchor ?? $('#convo-col').lastElementChild)?.scrollIntoView({ block: 'center' });
+}
+
+/// §2. One line, worded as a friend remembering. Asked once per suggestion,
+/// ever — `did_go_asked_at` is written the moment it is shown, so a reload or
+/// a new session cannot ask again.
+async function maybeAskDidGo() {
+  const { data: rows } = await db.from('lab_feedback')
+    .select('id, answer_id, answer_ref, would_go, did_go, did_go_asked_at, created_at')
+    .eq('tester_id', tester.id).eq('would_go', true)
+    .is('did_go', null).is('did_go_asked_at', null)
+    .order('created_at').limit(1);
+  const fb = rows?.[0];
+  if (!fb) return;
+
+  const { data: ans } = await db.from('lab_answers')
+    .select('response').eq('id', fb.answer_id).maybeSingle();
+  const place = (ans?.response?.place_ids ?? [])[0]
+    ?? (ans?.response?.text ?? '').split(/[.!?]/)[0]?.trim();
+  if (!place) return;
+
+  // Written before it is answered: asked-once has to survive a closed tab.
+  await db.from('lab_feedback').update({ did_go_asked_at: new Date().toISOString() }).eq('id', fb.id);
+
+  const box = el('div', 'askback');
+  box.append(el('p', null, `Last time I suggested ${place}. Did you go?`));
+  const row = el('div', 'kinds');
+  for (const [value, label] of [['yes','Yes'],['no','No'],['not_yet','Not yet']]) {
+    const b = el('button', null, label);
+    b.onclick = async () => {
+      await db.from('lab_feedback').update({ did_go: value }).eq('id', fb.id);
+      box.replaceChildren(el('p', null, value === 'yes' ? 'Good — noted.' : 'Noted, thanks.'));
+      setTimeout(() => box.remove(), 1600);
+    };
+    row.append(b);
+  }
+  box.append(row);
+  $('#convo-col').prepend(box);
+}
+
+/// §4. After the 5th answer, once. Skippable in one tap, and the skip is
+/// recorded — a skip rate is a finding.
+async function maybeCheckIn() {
+  const { count } = await db.from('lab_answers')
+    .select('id', { count: 'exact', head: true }).eq('tester_id', tester.id);
+  if ((count ?? 0) < 5) return;
+  const { data: existing } = await db.from('lab_checkins')
+    .select('id').eq('tester_id', tester.id).maybeSingle();
+  if (existing) return;
+
+  const answers = { speed: null, use_again: null, one_thing: null };
+  const box = el('div', 'checkin');
+  box.append(el('p', null, 'Two quick questions, then back to it.'));
+
+  const q1 = el('div', 'q', "Compared with how you'd normally decide — Google Maps, TikTok, asking a friend — was this:");
+  const r1 = el('div', 'kinds');
+  for (const [v, l] of [['faster','Faster'],['same','About the same'],['slower','Slower']]) {
+    const b = el('button', null, l);
+    b.onclick = () => { answers.speed = v; r1.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); };
+    r1.append(b);
+  }
+  const q2 = el('div', 'q', 'Would you use it again this week?');
+  const r2 = el('div', 'kinds');
+  for (const [v, l] of [['yes','Yes'],['maybe','Maybe'],['no','No']]) {
+    const b = el('button', null, l);
+    b.onclick = () => { answers.use_again = v; r2.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); };
+    r2.append(b);
+  }
+  const q3 = el('div', 'q', "One thing you'd change?");
+  const r3 = el('div', 'reason');
+  const one = el('input'); one.type = 'text'; one.placeholder = 'Optional';
+  r3.append(one);
+
+  const actions = el('div', 'kinds');
+  const done = el('button', null, 'Done');
+  const skip = el('button', null, 'Skip');
+  done.onclick = async () => {
+    await db.from('lab_checkins').upsert({
+      tester_id: tester.id, speed: answers.speed, use_again: answers.use_again,
+      one_thing: one.value.trim() || null, skipped: false,
+    }, { onConflict: 'tester_id' });
+    box.remove();
+  };
+  skip.onclick = async () => {
+    await db.from('lab_checkins').upsert({ tester_id: tester.id, skipped: true }, { onConflict: 'tester_id' });
+    box.remove();
+  };
+  actions.append(done, skip);
+
+  box.append(q1, r1, q2, r2, q3, r3, actions);
+  $('#convo-col').prepend(box);
 }
 
 // ── §3 "Right now" — read fresh every request ──────────────────────────────
@@ -700,6 +870,10 @@ $('#p-reset').addEventListener('click', async () => {
 $('#new-chat').addEventListener('click', () => {
   $('#convo-col').innerHTML = '';
   lastQuestion = null;
+  sessionId = crypto.randomUUID();
+  readOnly = false;
+  $('#dock').style.display = '';
+  history.replaceState(null, '', location.pathname);
   renderChips();
 });
 
@@ -772,6 +946,7 @@ $('#box').addEventListener('focus', () => {
 const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip: 'Plan a trip' };
 
 async function ask({ chip, request }) {
+  if (readOnly) return;
   busy = true; setBusy(true);
   const shown = request || CHIP_TEXT[chip] || '';
   $('#convo-col').append(meTurn(shown));
@@ -803,6 +978,7 @@ async function ask({ chip, request }) {
       },
       body: JSON.stringify({
         chip, request,
+        session_id: sessionId,
         now: nowString(),
         location: location_,
         tz_offset_minutes: new Date().getTimezoneOffset(),
@@ -830,6 +1006,9 @@ async function ask({ chip, request }) {
         let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
 
         if (event === 'mode')   setStatus(d.mode === 'A' ? 'Suna is typing' : 'Working on it', true);
+        // §0a. The divider is the tester's only signal that we have re-scoped,
+        // so it shows before the answer rather than after it.
+        if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
         if (event === 'stage')  setStatus(stageLabel(d.stage), true);
         if (event === 'token')  { streamed += d.t; inner.textContent = streamed; scroll(); }
         if (event === 'capped') { inner.textContent = d.message; }
@@ -848,6 +1027,25 @@ async function ask({ chip, request }) {
     $('#status').classList.remove('slow');
     busy = false; setBusy(false); renderChips(); scroll();
   }
+}
+
+/// A small divider when the topic changes, and a way to say the guess was
+/// wrong. Inserted above the answer it belongs to.
+function showTopicDivider(d, before) {
+  const row = el('div', 'topic');
+  row.append(el('span', 'rule'));
+  row.append(el('span', 'what', `New: ${d.label ?? 'something else'}`));
+  const fresh = el('button', null, 'Start fresh');
+  fresh.title = 'Not what you meant? Start a clean topic.';
+  fresh.onclick = () => {
+    // A clean topic without clearing the thread on screen: the next request
+    // opens one because the session id moved.
+    sessionId = crypto.randomUUID();
+    currentTopic = null;
+    row.replaceChildren(el('span', 'rule'), el('span', 'what', 'Starting fresh'), el('span', 'rule'));
+  };
+  row.append(fresh, el('span', 'rule'));
+  before.parentNode.insertBefore(row, before);
 }
 
 function stageLabel(stage) {
@@ -903,7 +1101,7 @@ async function renderAnswer(holder, bubble, d) {
   const chips = chipsForQuestion(r.question, assumption);
   lastQuestion = chips.length ? { chips, assumptionIndex } : null;
 
-  (holder.lastElementChild ?? holder).append(feedbackBar(d.answer_id));
+  (holder.lastElementChild ?? holder).append(feedbackBar(d));
   renderContext();
   scroll();
 }
@@ -1052,57 +1250,161 @@ function list(items) {
   return ul.children.length ? ul : null;
 }
 
-// ── §5 feedback ────────────────────────────────────────────────────────────
-function feedbackBar(answerId) {
+// ── §5 feedback, plus the Wrong kinds (R2) and the No chips (R3 §1) ────────
+//
+// A boolean wrong-rate is not a finding. "8% wrong" cannot be acted on;
+// "six of the eight were closed places" says the time-of-day filter is the
+// problem and the writing is fine — the opposite conclusion.
+const WRONG_KINDS = [
+  ['couldnt_find', "Couldn't find it"],
+  ['was_shut',     'It was shut'],
+  ['too_far',      'Too far'],
+  ['details_off',  'Details were off'],
+];
+// 'been_there' is the one chip that is not a complaint. It marks the place
+// visited and must never count toward any failure rate.
+const NO_KINDS = [
+  ['been_there',       'Been there'],
+  ['not_my_thing',     'Not my thing'],
+  ['too_far',          'Too far'],
+  ['too_long_to_read', 'Too long to read'],
+];
+const NO_KIND_TO_PREF = {
+  been_there:       (place) => ({ key: 'visited', value: place ?? 'somewhere suggested' }),
+  not_my_thing:     (place) => ({ key: 'avoid',   value: place ?? 'that kind of place' }),
+  too_far:          ()      => ({ key: 'max_travel',    value: 'prefers somewhere closer' }),
+  too_long_to_read: ()      => ({ key: 'answer_length', value: 'prefers shorter answers' }),
+};
+
+function feedbackBar(d) {
+  const answerId = d.answer_id;
   const holder = el('div', 'fb');
   if (!answerId) return holder;
-  const state = { would_go: null, too_long: false, wrong: false };
+
+  const places = placesNamed(d);
+  const state = { would_go: null, too_long: false, wrong: false, wrong_place: places[0] ?? null };
 
   const save = async (patch) => {
     Object.assign(state, patch);
     const { error } = await db.from('lab_feedback').upsert({
       answer_id: answerId, tester_id: tester.id,
-      would_go: state.would_go, too_long: state.too_long,
-      wrong: state.wrong, reason: state.reason ?? null, wrong_detail: state.wrong_detail ?? null,
+      session_id: d.session_id ?? sessionId, answer_ref: d.ref ?? null,
+      // §0a. Feedback inherits the topic, so every comment in the report
+      // traces answer → topic → session.
+      topic_id: d.topic_id ?? null,
+      would_go: state.would_go, too_long: state.too_long, wrong: state.wrong,
+      reason: state.reason ?? null, wrong_detail: state.wrong_detail ?? null,
+      wrong_kind: state.wrong_kind ?? null, wrong_place: state.wrong_place ?? null,
+      no_kind: state.no_kind ?? null,
     }, { onConflict: 'answer_id' });
     if (error) console.warn('[lab] feedback', error.message);
   };
 
-  // Line 1 is the measurement.
   const line1 = el('div', 'line1');
   line1.append(el('span', 'ask', 'Would you go?'));
   const yes = el('button', 'yn', 'Yes');
   const no = el('button', 'yn', 'No');
   line1.append(yes, no);
 
-  // Line 2 is a report about the answer, not an answer to the question.
   const line2 = el('div', 'line2');
   const tooLong = el('button', 'rep', 'Too long');
   const wrong = el('button', 'rep', 'Wrong');
   line2.append(tooLong, el('span', 'dot', '·'), wrong);
 
+  const follow = el('div');                 // the kind chips live here
   const reasonRow = el('div', 'reason'); reasonRow.hidden = true;
   const reasonIn = el('input'); reasonIn.type = 'text'; reasonIn.placeholder = 'Why? (optional)';
   const reasonGo = el('button', 'ghost', 'Save');
   reasonRow.append(reasonIn, reasonGo);
 
+  const showReason = (placeholder) => {
+    reasonRow.hidden = false;
+    reasonIn.placeholder = placeholder;
+    reasonIn.focus();
+  };
+
+  /// One row of options, then the optional text box. The tap is already
+  /// recorded before any option is chosen, so drop-off is visible.
+  const kindRow = (label, kinds, onPick) => {
+    follow.innerHTML = '';
+    const row = el('div', 'kinds');
+    row.append(el('span', 'lbl', label));
+    for (const [value, text] of kinds) {
+      const b = el('button', null, text);
+      b.onclick = async () => {
+        row.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        await onPick(value);
+      };
+      row.append(b);
+    }
+    follow.append(row);
+  };
+
+  /// If the answer named more than one place, which one went wrong. Only that
+  /// place's research is refreshed — one bad line currently re-researches the
+  /// good ones alongside it.
+  const placeRow = () => {
+    if (places.length < 2) return;
+    const row = el('div', 'kinds');
+    row.append(el('span', 'lbl', 'Which one?'));
+    for (const name of places) {
+      const b = el('button', null, name);
+      if (name === state.wrong_place) b.setAttribute('aria-pressed', 'true');
+      b.onclick = async () => {
+        row.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        await save({ wrong_place: name });
+      };
+      row.append(b);
+    }
+    follow.append(row);
+  };
+
   const pick = async (v, btn, other) => {
     btn.setAttribute('aria-pressed', 'true');
     other.setAttribute('aria-pressed', 'false');
-    await save({ would_go: v });
-    reasonRow.hidden = false;
-    reasonIn.placeholder = v ? 'What made it a yes? (optional)' : 'What made it a no? (optional)';
-    reasonIn.focus();                       // appears already focused, still skippable
+    await save({ would_go: v, no_kind: null });
+    if (v) {
+      follow.innerHTML = '';
+      showReason('What made it a yes? (optional)');
+    } else {
+      kindRow('What put you off?', NO_KINDS, async (kind) => {
+        await save({ no_kind: kind });
+        // Every chip updates the profile, through the §3 boundary: a fixed
+        // vocabulary key and a short value, never pasted prose.
+        const entry = NO_KIND_TO_PREF[kind](state.wrong_place);
+        await addPref(entry.key, entry.value, 'stated', true);
+        showReason('Anything else? (optional)');
+      });
+      showReason('What made it a no? (optional)');
+    }
   };
   yes.onclick = () => pick(true, yes, no);
   no.onclick = () => pick(false, no, yes);
-  tooLong.onclick = async () => { const v = !state.too_long; tooLong.setAttribute('aria-pressed', String(v)); await save({ too_long: v }); };
+
+  tooLong.onclick = async () => {
+    const v = !state.too_long;
+    tooLong.setAttribute('aria-pressed', String(v));
+    await save({ too_long: v });
+  };
+
   wrong.onclick = async () => {
     const v = !state.wrong;
     wrong.setAttribute('aria-pressed', String(v));
-    await save({ wrong: v });
-    if (v) { reasonRow.hidden = false; reasonIn.placeholder = 'What was wrong? (optional)'; reasonIn.focus(); }
+    // Recorded on the tap, before a kind is chosen — otherwise a tester who
+    // taps Wrong and stops is invisible, and the drop-off is the finding.
+    await save({ wrong: v, wrong_kind: v ? state.wrong_kind ?? null : null });
+    if (!v) { follow.innerHTML = ''; return; }
+    kindRow('Which kind?', WRONG_KINDS, async (kind) => {
+      await save({ wrong_kind: kind });
+      await refreshPlaceResearch(state.wrong_place);
+      showReason('What happened? (optional)');
+    });
+    placeRow();
+    showReason('What happened? (optional)');
   };
+
   reasonGo.onclick = async () => {
     const t = reasonIn.value.trim();
     await save(state.wrong ? { wrong_detail: t } : { reason: t });
@@ -1110,8 +1412,48 @@ function feedbackBar(answerId) {
     setTimeout(() => { reasonGo.textContent = 'Save'; }, 1500);
   };
 
-  holder.append(line1, line2, reasonRow);
+  holder.append(line1, line2, follow, reasonRow);
+
+  // §0. The ref, small and muted, tap to copy — it is how a tester says which
+  // answer they mean.
+  if (d.ref) {
+    const r = el('button', 'ref', d.ref);
+    r.onclick = async () => {
+      try { await navigator.clipboard.writeText(d.ref); r.textContent = d.ref + ' · copied'; }
+      catch { r.textContent = d.ref; }
+      setTimeout(() => { r.textContent = d.ref; }, 1500);
+    };
+    holder.append(r);
+  }
   return holder;
+}
+
+/// Names the answer actually used, for the "which one?" picker.
+function placesNamed(d) {
+  const r = d.response ?? {};
+  const out = [];
+  if (Array.isArray(r.place_ids)) for (const p of r.place_ids) if (typeof p === 'string') out.push(p);
+  for (const block of (r.plan ?? [])) {
+    for (const day of (block.days ?? [])) {
+      for (const item of (day.items ?? [])) if (item?.name) out.push(item.name);
+    }
+  }
+  if (r.stay?.area) out.push(r.stay.area);
+  return [...new Set(out)].slice(0, 6);
+}
+
+/// Only the reported place is re-researched. Refreshing every place an answer
+/// used means one bad line throws away two good ones.
+async function refreshPlaceResearch(place) {
+  if (!place) return;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/lab-place-research`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ place_name: place, city: location_?.name ?? null, force: true }),
+    });
+  } catch (e) { console.warn('[lab] research refresh', e.message); }
 }
 
 // ── odds and ends ──────────────────────────────────────────────────────────
