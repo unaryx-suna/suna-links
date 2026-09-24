@@ -315,7 +315,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v6';
+const BUILD = 'lab-v7';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -958,6 +958,12 @@ async function ask({ chip, request }) {
   holder.append(inner);
   $('#convo-col').append(holder);
 
+  // §2, Ether 25 Sep: a stage line on screen within 1 second of sending. Shown
+  // by the page the instant the tester sends — waiting for the server's first
+  // event puts it behind a network round trip and the whole facts step, which
+  // is exactly the silence that reads as broken.
+  setStatus("Checking what's open", true);
+
   const slowTimer = setTimeout(() => {
     $('#status').classList.add('slow');
     $('#status').textContent = 'This one is taking a while — still going';
@@ -965,6 +971,7 @@ async function ask({ chip, request }) {
 
   const { data: { session } } = await db.auth.getSession();
   let streamed = '';
+  let modeKnown = null;
 
   try {
     await refreshWeather();
@@ -1005,12 +1012,18 @@ async function ask({ chip, request }) {
         if (!line.startsWith('data:')) continue;
         let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
 
-        if (event === 'mode')   setStatus(d.mode === 'A' ? 'Suna is typing' : 'Working on it', true);
+        // The page is already showing "Checking what's open"; the mode event
+        // arrives before the facts step finishes, so it must not replace a
+        // true stage line with a vaguer one.
+        if (event === 'mode') modeKnown = d.mode;
         // §0a. The divider is the tester's only signal that we have re-scoped,
         // so it shows before the answer rather than after it.
         if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
         if (event === 'stage')  setStatus(stageLabel(d.stage), true);
-        if (event === 'token')  { streamed += d.t; inner.textContent = streamed; scroll(); }
+        if (event === 'token')  {
+          if (!streamed) setStatus('Suna is typing', true);
+          streamed += d.t; inner.textContent = streamed; scroll();
+        }
         if (event === 'capped') { inner.textContent = d.message; }
         // A transient upstream failure. The tester sees a sentence, not a
         // status code; the code is in the function log.
