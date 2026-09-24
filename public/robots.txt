@@ -34,6 +34,12 @@ Disallow: /trip/
 Disallow: /field
 Disallow: /field.html
 
+# The prompt lab. Private tool on a public domain, same posture as /field: a
+# sign-in form and nothing else without a Supabase session, plus a `noindex`
+# meta on the page itself.
+Disallow: /lab
+Disallow: /lab.html
+
 # Apple's association file. Fetched directly by iOS, never by a search crawler,
 # and not a page.
 Disallow: /.well-known/

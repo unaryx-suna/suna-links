@@ -20,6 +20,10 @@
       "destination": "/field.html"
     },
     {
+      "source": "/lab",
+      "destination": "/lab.html"
+    },
+    {
       "source": "/place/:path*",
       "destination": "/api/place"
     },

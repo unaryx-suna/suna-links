@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Private tool on a public domain, same as field.html: robots.txt disallows
+     it too, because a meta tag is ignored on a page a crawler was told not to
+     fetch and the disallow is ignored by crawlers that do not read it. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Suna Lab">
+<title>Suna Lab</title>
+<style>
+  :root {
+    --ink: #111111; --card: #1b1b1b; --line: #292929; --sand: #F6CB94;
+    --text: #ffffff; --muted: #C2C2C2; --dim: rgba(255,255,255,.55);
+    --danger: #FF6B6B; --ok: #6FCF97;
+    /* §1. The whole desktop fix. Everything else is for the phone. */
+    --col: 680px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--ink); color: var(--text); }
+  body {
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    /* dvh, not vh: on iOS Safari vh ignores the toolbar and the composer ends
+       up underneath it. */
+    height: 100dvh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  /* 320px is the floor. Nothing may scroll sideways there. */
+  .col { width: 100%; max-width: var(--col); margin-inline: auto; padding-inline: 16px; }
+
+  button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 12px 18px; color: var(--text); }
+  .primary { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .primary[disabled] { opacity: .45; }
+  .ghost { background: rgba(255,255,255,.10); }
+  .linkish { background: none; color: var(--sand); padding: 0; text-decoration: underline; font-size: 13px; }
+  input[type=text], input[type=email], textarea, select {
+    width: 100%; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px;
+    /* 16px or iOS zooms the page when the field focuses. */
+    font-size: 16px; font-family: inherit;
+  }
+  textarea { resize: none; min-height: 48px; max-height: 140px; line-height: 1.4; }
+
+  /* ── band 1: context bar, sticky top ──────────────────────────────────── */
+  #bar { flex: none; border-bottom: 1px solid var(--line); background: var(--ink); }
+  #bar .col { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-height: 52px; }
+  #ctx-btn {
+    background: none; padding: 8px 0; text-align: left; flex: 1; min-width: 0;
+    font-size: 13px; color: var(--muted); line-height: 1.35;
+  }
+  #ctx-btn b { color: var(--text); font-weight: 500; }
+  #ctx-btn .chev { color: var(--dim); }
+  #new-chat { background: rgba(255,255,255,.08); font-size: 13px; padding: 9px 13px; flex: none; }
+
+  /* ── band 2: the conversation, scrolls ────────────────────────────────── */
+  #convo { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  #convo .col { padding-top: 20px; padding-bottom: 8px; }
+  /* §6. 24px between messages. */
+  .turn { display: flex; margin-bottom: 24px; }
+  .turn.me { justify-content: flex-end; }
+  .bubble {
+    max-width: 88%; padding: 12px 14px; border-radius: 16px;
+    background: var(--card); border: 1px solid var(--line);
+    font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .turn.me .bubble { background: var(--sand); color: var(--ink); border-color: transparent; }
+  .suna { display: block; }
+  .suna > .bubble { max-width: 88%; }
+
+  /* §2. The link lives inside the bubble, bottom-left. */
+  .why-link { display: block; margin-top: 12px; }
+
+  /* §2. Indented, with a rule, so it reads as subordinate to the answer. */
+  .details {
+    margin: 12px 0 0 0; padding-left: 12px; border-left: 2px solid var(--line);
+    font-size: 14px; color: var(--muted);
+  }
+  .details .grp { margin-bottom: 12px; }
+  .details .grp:last-child { margin-bottom: 0; }
+  .details .lbl {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--dim); margin-bottom: 4px;
+  }
+  .details ul { margin: 0; padding-left: 16px; }
+  .details li { margin-bottom: 8px; }
+  .details li:last-child { margin-bottom: 0; }
+  .tag {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; margin-left: 6px; white-space: nowrap;
+  }
+  .side { display: block; margin-top: 4px; }
+
+  /* ── Mode B cards ─────────────────────────────────────────────────────── */
+  details.card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    margin: 8px 0; overflow: hidden;
+  }
+  details.card > summary {
+    list-style: none; cursor: pointer; padding: 12px 14px; min-height: 44px;
+    display: flex; gap: 10px; align-items: baseline;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  .cap { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); flex: none; }
+  .one { font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details.card[open] .one { white-space: normal; }
+  .cardbody { padding: 0 14px 14px; font-size: 14px; color: var(--muted); }
+  .cardbody ul { margin: 6px 0; padding-left: 18px; }
+  .cardbody li { margin: 8px 0; }
+  .daylabel { color: var(--sand); font-size: 12px; margin-top: 12px; letter-spacing: .04em; }
+
+  /* ── §5 feedback, two lines ───────────────────────────────────────────── */
+  .fb { margin-top: 12px; }
+  .fb .line1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .fb .ask { font-size: 13px; color: var(--muted); }
+  .fb .yn {
+    min-height: 44px; font-size: 14px; padding: 11px 20px;
+    background: rgba(255,255,255,.08);
+  }
+  .fb .yn[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  /* Reports about the answer, not answers to the question — so, quieter. */
+  .fb .line2 { margin-top: 8px; display: flex; gap: 4px; align-items: center; }
+  .fb .rep {
+    background: none; color: var(--dim); font-size: 13px;
+    min-height: 44px; padding: 11px 6px; text-decoration: underline;
+  }
+  .fb .rep[aria-pressed="true"] { color: var(--sand); }
+  .fb .dot { color: var(--dim); font-size: 13px; }
+  .reason { margin-top: 8px; display: flex; gap: 8px; }
+  /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
+     so without this the why field is on screen before Yes or No is tapped. */
+  .reason[hidden] { display: none; }
+  .reason input { flex: 1; }
+  .reason button { min-height: 44px; }
+
+  /* ── band 3: composer, pinned ─────────────────────────────────────────── */
+  #dock { flex: none; border-top: 1px solid var(--line); background: var(--ink); }
+  /* Without the inset the input sits under the home bar on any iPhone
+     without a home button. */
+  #dock .col { padding-top: 10px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  #status { font-size: 13px; color: var(--dim); min-height: 18px; margin-bottom: 6px; }
+  #status.slow { color: var(--sand); }
+  .dots::after { content: '…'; animation: blink 1.2s steps(4, end) infinite; }
+  @keyframes blink { 0% { opacity: .2 } 50% { opacity: 1 } 100% { opacity: .2 } }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    white-space: nowrap; background: rgba(255,255,255,.08);
+    border-radius: 999px; padding: 10px 14px; font-size: 14px; min-height: 44px; flex: none;
+  }
+  .chip[disabled] { opacity: .4; }
+  .chip.answer { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row button { flex: none; min-height: 48px; }
+
+  /* ── sheets ───────────────────────────────────────────────────────────── */
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 20; }
+  .sheet[data-open="1"] { display: flex; align-items: flex-end; justify-content: center; }
+  .sheet > .inner {
+    background: var(--ink); width: 100%; max-width: var(--col); max-height: 88dvh; overflow-y: auto;
+    border-radius: 18px 18px 0 0; border-top: 1px solid var(--line);
+    padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+  }
+  .sheet h2 { font-size: 17px; margin: 0 0 4px; }
+  .sheet p.sub { color: var(--dim); font-size: 13px; margin: 0 0 16px; }
+  .seclbl {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--dim); margin: 20px 0 8px;
+  }
+  .kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { text-align: right; }
+  .kv .v.unset { color: var(--dim); font-style: italic; }
+  .prow { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .prow .top { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+  .prow .val { font-size: 14px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .prow .src { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .prow .acts { display: flex; gap: 6px; flex: none; }
+  .prow .acts button { min-height: 44px; padding: 10px 12px; font-size: 13px; background: rgba(255,255,255,.08); }
+  .prow .acts button.yes[aria-pressed="true"] { background: var(--ok); color: var(--ink); }
+  .empty { color: var(--dim); font-size: 13px; font-style: italic; padding: 8px 0; }
+  .danger { background: none; color: var(--danger); opacity: .8; font-size: 14px; width: 100%; min-height: 44px; }
+  .pref-edit { display: flex; gap: 8px; margin: 8px 0; }
+  .pref-edit select { flex: none; width: 38%; }
+  .pref-edit input { flex: 1; }
+
+  .gate { max-width: 420px; margin: 12vh auto; padding: 0 20px; }
+  .gate h1 { font-size: 22px; margin: 0 0 6px; }
+  .gate p { color: var(--dim); font-size: 14px; margin: 0 0 18px; }
+  .err { color: var(--danger); font-size: 13px; margin-top: 10px; }
+  .stamp { font-size: 11px; color: rgba(255,255,255,.25); margin-top: 16px; }
+  /* `#app` carries an inline `display: contents` so its children are direct
+     flex items of <body>. An inline style outranks the UA's `[hidden] {
+     display: none }`, so without this the shell renders behind the gate. */
+  #app[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ── sign in ─────────────────────────────────────────────────────────── -->
+<div id="gate" class="gate" hidden>
+  <h1>Suna Lab</h1>
+  <p>Sign in with your email. We'll send you a code.</p>
+  <input id="g-email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email">
+  <div style="height:10px"></div>
+  <input id="g-code" type="text" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" hidden>
+  <div style="height:10px"></div>
+  <button id="g-go" class="primary" style="width:100%">Send code</button>
+  <div id="g-err" class="err"></div>
+</div>
+
+<!-- ── the lab ─────────────────────────────────────────────────────────── -->
+<div id="app" hidden style="display:contents">
+  <div id="bar">
+    <div class="col">
+      <button id="ctx-btn"><span id="ctx">…</span> <span class="chev">›</span></button>
+      <button id="new-chat">New chat</button>
+    </div>
+  </div>
+
+  <div id="convo"><div class="col" id="convo-col"></div></div>
+
+  <div id="dock">
+    <div class="col">
+      <div id="status"></div>
+      <div class="chips" id="chips"></div>
+      <div class="row">
+        <textarea id="box" rows="1" placeholder="Ask Suna…"></textarea>
+        <button id="send" class="primary">Go</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── where are you (only after a permission denial) ──────────────────── -->
+<div class="sheet" id="loc-sheet"><div class="inner">
+  <h2>Where are you?</h2>
+  <p class="sub">Your browser said no to location. Type a city and we'll remember it.</p>
+  <input id="loc-input" type="text" placeholder="Kuala Lumpur" autocomplete="address-level2">
+  <div style="height:12px"></div>
+  <button id="loc-save" class="primary" style="width:100%">Save</button>
+</div></div>
+
+<!-- ── §3 what Suna knows ──────────────────────────────────────────────── -->
+<div class="sheet" id="panel"><div class="inner">
+  <h2>What Suna knows</h2>
+  <p class="sub">If any of this is wrong, fix it. Otherwise we're testing our guesses, not your taste.</p>
+
+  <div class="seclbl">Right now</div>
+  <div id="p-now"></div>
+
+  <div class="seclbl">You told us</div>
+  <div id="p-stated"></div>
+  <div class="pref-edit">
+    <select id="p-key"></select>
+    <input id="p-val" type="text" placeholder="e.g. night markets" maxlength="80">
+  </div>
+  <button id="p-add" class="ghost" style="width:100%">Add</button>
+
+  <div class="seclbl">We assumed</div>
+  <div id="p-assumed"></div>
+
+  <div class="seclbl">From your answers</div>
+  <div id="p-derived"></div>
+
+  <div style="height:22px"></div>
+  <button id="p-close" class="ghost" style="width:100%">Close</button>
+  <div style="height:10px"></div>
+  <button id="p-reset" class="danger">Reset profile</button>
+  <div class="stamp" id="stamp"></div>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script type="module">
+/**
+ * Suna Lab — one static file, same pattern as field.html. No package.json, no
+ * build step, no framework.
+ *
+ * There is deliberately NO service worker here. field.html has one and pairs
+ * `BUILD` with `CACHE_VERSION` in field-sw.js; the lab is a page testers open a
+ * handful of times over a fortnight, so an offline cache buys nothing and a
+ * stale-cache bug during a prompt test would look like a prompt regression.
+ * BUILD below is a display stamp with nothing to pair with — if a service
+ * worker is ever added here, that rule comes back with it.
+ */
+const BUILD = 'lab-v3';
+
+const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+// Must match PREFERENCE_KEYS in supabase/functions/lab-answer/logic.ts. A key
+// outside this list is dropped by the edge function rather than passed through,
+// so offering one here would silently do nothing.
+const PREF_KEYS = ['transport', 'company', 'budget', 'pace', 'diet', 'interests',
+                   'avoid', 'accessibility', 'accommodation', 'time_of_day', 'other'];
+
+let tester = null;
+let location_ = null;
+let busy = false;
+let lastQuestion = null;      // drives the answer chips in §4
+let weather_ = null;          // {temp_c, conditions, at} — see refreshWeather
+
+// ── sign in ────────────────────────────────────────────────────────────────
+async function boot() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) return openApp();
+  $('#gate').hidden = false;
+}
+
+$('#g-go').addEventListener('click', async () => {
+  const email = $('#g-email').value.trim();
+  const code = $('#g-code').value.trim();
+  const err = $('#g-err'); err.textContent = '';
+  if (!email) { err.textContent = 'Email first.'; return; }
+  if ($('#g-code').hidden) {
+    // shouldCreateUser:false is half the allow-list; the other half is having a
+    // lab_testers row, which only we can create.
+    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (error) { err.textContent = error.message; return; }
+    $('#g-code').hidden = false; $('#g-go').textContent = 'Sign in';
+    err.textContent = 'Check your email.';
+    return;
+  }
+  const { error } = await db.auth.verifyOtp({ email, token: code, type: 'email' });
+  if (error) { err.textContent = error.message; return; }
+  openApp();
+});
+
+async function openApp() {
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+  $('#stamp').textContent = 'Build ' + BUILD;
+  for (const k of PREF_KEYS) $('#p-key').append(new Option(k.replace(/_/g, ' '), k));
+
+  const { data, error } = await db.from('lab_testers')
+    .select('id, name, home_city, last_location, preferences, daily_cap_usd').maybeSingle();
+  if (error || !data) {
+    $('#convo-col').append(sunaTurn("You're signed in, but you're not on the lab list yet. Tell Brian and he'll add you."));
+    $('#dock').style.display = 'none';
+    return;
+  }
+  tester = data;
+  if (!Array.isArray(tester.preferences)) tester.preferences = [];
+  if (tester.last_location) location_ = tester.last_location;
+  renderContext();
+  renderChips();
+}
+
+// ── §3 "Right now" — read fresh every request ──────────────────────────────
+
+/// Derived from month and latitude sign. Nothing else computes this, and it
+/// changes whether "walk the lake" is a sensible thing to say.
+function seasonOf(date, lat) {
+  if (lat == null) return null;                 // no hemisphere, no season
+  const names = ['Winter', 'Spring', 'Summer', 'Autumn'];
+  const i = Math.floor(((date.getMonth() + 1) % 12) / 3);
+  return lat >= 0 ? names[i] : names[(i + 2) % 4];
+}
+
+/// Open-Meteo: no key, no account, no quota to manage, and CORS-open — which
+/// is what makes it usable from a static page with no server of its own. The
+/// temperature row was the one thing in §3 that could never be filled, and an
+/// answer that cannot see 34° and rain will cheerfully suggest a two-hour walk.
+///
+/// Cached for 15 minutes in memory: the weather does not change between two
+/// questions asked a minute apart, and each request is a real network call the
+/// tester waits on.
+///
+/// On any failure this returns null and the field is OMITTED from the request
+/// entirely — never sent as `unknown`, per CORE.
+const WEATHER_TTL_MS = 15 * 60 * 1000;
+
+function wmoConditions(code) {
+  const map = {
+    0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast',
+    45: 'fog', 48: 'freezing fog',
+    51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle',
+    56: 'freezing drizzle', 57: 'freezing drizzle',
+    61: 'light rain', 63: 'rain', 65: 'heavy rain',
+    66: 'freezing rain', 67: 'freezing rain',
+    71: 'light snow', 73: 'snow', 75: 'heavy snow', 77: 'snow grains',
+    80: 'showers', 81: 'showers', 82: 'heavy showers',
+    85: 'snow showers', 86: 'snow showers',
+    95: 'thunderstorms', 96: 'thunderstorms with hail', 99: 'thunderstorms with hail',
+  };
+  return map[code] ?? null;
+}
+
+async function refreshWeather() {
+  if (location_?.lat == null || location_?.lng == null) return null;
+  if (weather_ && Date.now() - weather_.at < WEATHER_TTL_MS) return weather_;
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${location_.lat}`
+            + `&longitude=${location_.lng}&current=temperature_2m,weather_code`;
+    const r = await fetch(u);
+    if (!r.ok) return null;
+    const cur = (await r.json())?.current;
+    if (cur?.temperature_2m == null) return null;
+    weather_ = {
+      temp_c: Math.round(cur.temperature_2m),
+      conditions: wmoConditions(cur.weather_code),
+      at: Date.now(),
+    };
+    return weather_;
+  } catch { return null; }
+}
+
+/// The string CORE expects: `weather: {{temp_c}}, {{conditions}}`.
+function weatherLine() {
+  if (!weather_) return null;
+  return weather_.conditions ? `${weather_.temp_c}\u00B0C, ${weather_.conditions}` : `${weather_.temp_c}\u00B0C`;
+}
+
+function localTimeLabel(d = new Date()) {
+  return d.toLocaleDateString(undefined, { weekday: 'long' }) + ' ' +
+         d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function isLocalNow() {
+  if (!tester?.home_city || !location_?.name) return null;
+  return location_.name.toLowerCase().includes(tester.home_city.toLowerCase().split(',')[0].trim());
+}
+
+/// Everything the panel shows and the request sends, in one place, so the two
+/// can never disagree about what Suna knows.
+function rightNow() {
+  const d = new Date();
+  return {
+    location: location_?.name ?? null,
+    local_time: localTimeLabel(d),
+    temperature: weather_ ? (weather_.conditions ? `${weather_.temp_c}\u00B0, ${weather_.conditions}` : `${weather_.temp_c}\u00B0`) : null,
+    season: seasonOf(d, location_?.lat ?? null),
+    home_city: tester?.home_city ?? null,
+    local_or_visiting: isLocalNow() === null ? null : (isLocalNow() ? 'Local' : 'Visiting'),
+  };
+}
+
+function renderContext() {
+  const n = rightNow();
+  const where = n.location ? `<b>${escapeHtml(n.location)}</b>` : '<b>somewhere</b>';
+  $('#ctx').innerHTML = `${escapeHtml(n.local_time)} in ${where}`;
+}
+
+// ── location: asked on first chip tap, never on page load ──────────────────
+async function ensureLocation() {
+  if (location_) return location_;
+  const got = await new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: +p.coords.latitude.toFixed(4), lng: +p.coords.longitude.toFixed(4), name: null }),
+      () => resolve(null),
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  });
+  if (got) {
+    got.name = await reverseName(got.lat, got.lng);
+    location_ = got;
+    await saveTester({ last_location: location_ });
+    await refreshWeather();
+    renderContext();
+    return location_;
+  }
+  return await new Promise((resolve) => {
+    const sheet = $('#loc-sheet');
+    sheet.dataset.open = '1';
+    $('#loc-input').focus();
+    $('#loc-save').onclick = async () => {
+      const name = $('#loc-input').value.trim();
+      if (!name) return;
+      sheet.dataset.open = '0';
+      location_ = { name };
+      await saveTester({ last_location: location_ });
+      renderContext();
+      resolve(location_);
+    };
+  });
+}
+
+/// Names the coordinate without a paid geocode: the label is for the context
+/// line, and the model gets the raw lat/lng anyway.
+async function reverseName(lat, lng) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`,
+      { headers: { 'Accept-Language': 'en' } });
+    if (!r.ok) return null;
+    const a = (await r.json()).address ?? {};
+    return a.city || a.town || a.state || a.country || null;
+  } catch { return null; }
+}
+
+async function saveTester(patch) {
+  Object.assign(tester, patch);
+  const { error } = await db.from('lab_testers').update(patch).eq('id', tester.id);
+  if (error) console.warn('[lab] saveTester', error.message);
+}
+
+// ── §3 preferences ─────────────────────────────────────────────────────────
+const nowIso = () => new Date().toISOString();
+
+function prefs() { return Array.isArray(tester?.preferences) ? tester.preferences : []; }
+
+async function setPrefs(next) { await saveTester({ preferences: next }); renderPanel(); }
+
+async function addPref(key, value, source, confirmed) {
+  if (!PREF_KEYS.includes(key)) return;
+  const v = String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!v) return;
+  const next = prefs().slice();
+  const at = next.findIndex((e) => e.key === key && e.source === source && !e.confirmed);
+  const entry = { key, value: v, source, confirmed: !!confirmed, created_at: nowIso() };
+  if (at >= 0) next[at] = entry; else next.push(entry);
+  await setPrefs(next);
+}
+
+async function confirmPref(i, yes, newValue) {
+  const next = prefs().slice();
+  if (!next[i]) return;
+  if (yes) {
+    // A confirmed assumption becomes something they told us, and only then is
+    // it allowed anywhere near the next prompt.
+    next[i] = { ...next[i], source: 'stated', confirmed: true, created_at: nowIso() };
+    if (newValue) next[i].value = String(newValue).slice(0, 80);
+  } else if (newValue) {
+    next[i] = { ...next[i], value: String(newValue).slice(0, 80), source: 'stated', confirmed: true, created_at: nowIso() };
+  } else {
+    next.splice(i, 1);
+  }
+  await setPrefs(next);
+}
+
+/// §3. The model states its assumption in prose — there is no structured field
+/// for it in master prompt v1.1 and this round may not change the prompt — so
+/// the page reads it back out of `text`.
+function extractAssumptions(text) {
+  const out = [];
+  const pats = [
+    /I(?:'ve|’ve| have)\s+assumed\s+(?:that\s+)?(?:you(?:'re|’re| are)\s+)?([^.?!\n]{2,70})/gi,
+    /assuming\s+(?:that\s+)?you(?:'re|’re| are)\s+([^.?!\n]{2,70})/gi,
+  ];
+  for (const re of pats) {
+    for (const m of String(text ?? '').matchAll(re)) {
+      const phrase = m[1].trim().replace(/\s+/g, ' ');
+      if (phrase) out.push({ key: keyForPhrase(phrase), value: phrase });
+    }
+  }
+  return out;
+}
+
+function keyForPhrase(p) {
+  const s = p.toLowerCase();
+  // Stems, not whole words: the phrase is "taking a cab" / "driving" /
+  // "cycling", and a \b...\b list never matches an inflected verb.
+  if (/(taxi|\bcab\b|grab|driv|\bcar\b|subway|metro|train|\bbus\b|walk|cycl|bike|rideshare|\bmrt\b|\blrt\b|uber|scooter|public transport)/.test(s)) return 'transport';
+  if (/(alone|solo|friend|family|kids|partner|couple|group)/.test(s)) return 'company';
+  if (/(budget|cheap|splurge|spend|expensive)/.test(s)) return 'budget';
+  if (/(veg|vegan|halal|kosher|allerg|gluten)/.test(s)) return 'diet';
+  if (/(slow|rush|relax|packed|pace)/.test(s)) return 'pace';
+  return 'other';
+}
+
+/// §4. The answer's question becomes one or two tap-to-answer chips.
+/// "Taking the subway instead?" → [Subway] [Taxi]
+function chipsForQuestion(question, assumption) {
+  if (!question) return [];
+  const q = String(question).trim();
+  const alt = /([A-Za-z][A-Za-z\s-]{1,28}?)\s+instead\s*\?/i.exec(q);
+  if (alt) {
+    const other = titleish(alt[1]);
+    const keep = assumption ? titleish(assumption.value) : null;
+    return keep && keep.toLowerCase() !== other.toLowerCase()
+      ? [{ label: other, reply: other, confirm: 'correct' }, { label: keep, reply: keep, confirm: 'keep' }]
+      : [{ label: other, reply: other, confirm: 'correct' }];
+  }
+  if (/^(do|are|is|would|should|can|will|have|did|any)\b/i.test(q)) {
+    return [{ label: 'Yes', reply: 'Yes', confirm: 'keep' }, { label: 'No', reply: 'No', confirm: 'reject' }];
+  }
+  return [];
+}
+
+function titleish(s) {
+  // Strips repeatedly: "Taking the subway" has two leading words to lose
+  // before the chip reads as a one-tap answer rather than a sentence fragment.
+  let t = String(s).trim().replace(/\s+/g, ' ');
+  let prev;
+  do { prev = t; t = t.replace(/^(the|a|an|taking|going|getting|by|on|using)\s+/i, ''); } while (t !== prev);
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+// ── the panel ──────────────────────────────────────────────────────────────
+$('#ctx-btn').addEventListener('click', async () => { await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1'; });
+$('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; });
+
+async function renderPanel() {
+  const n = rightNow();
+  const now = $('#p-now'); now.innerHTML = '';
+  const rows = [
+    ['Location', n.location], ['Local time', n.local_time], ['Temperature', n.temperature],
+    ['Season', n.season], ['Home city', n.home_city], ['Local or visiting', n.local_or_visiting],
+  ];
+  for (const [k, v] of rows) {
+    const r = el('div', 'kv');
+    r.append(el('span', 'k', k));
+    // An absent value shows as `not set`, greyed — never as a value, and never
+    // sent to the model. The tester can then see why an answer was thin.
+    r.append(el('span', v ? 'v' : 'v unset', v ?? 'not set'));
+    now.append(r);
+  }
+
+  const list = prefs();
+  fillGroup($('#p-stated'), list.map((e, i) => [e, i]).filter(([e]) => e.source === 'stated'), false);
+  fillGroup($('#p-assumed'), list.map((e, i) => [e, i]).filter(([e]) => e.source === 'assumed'), true);
+
+  // Derived from Yes/No feedback. RLS means this only ever sees own rows.
+  const d = $('#p-derived'); d.innerHTML = '';
+  const { data: fb } = await db.from('lab_feedback').select('would_go, too_long, wrong').eq('tester_id', tester.id);
+  const yes = (fb ?? []).filter((f) => f.would_go === true).length;
+  const no = (fb ?? []).filter((f) => f.would_go === false).length;
+  const tl = (fb ?? []).filter((f) => f.too_long).length;
+  const wr = (fb ?? []).filter((f) => f.wrong).length;
+  if (!fb || fb.length === 0) d.append(el('div', 'empty', 'Nothing yet — rate an answer and this fills in.'));
+  else {
+    const r = el('div', 'kv'); r.append(el('span', 'k', 'Would go / wouldn’t'), el('span', 'v', `${yes} / ${no}`));
+    const r2 = el('div', 'kv'); r2.append(el('span', 'k', 'Too long / wrong'), el('span', 'v', `${tl} / ${wr}`));
+    d.append(r, r2);
+  }
+}
+
+function fillGroup(host, pairs, isAssumption) {
+  host.innerHTML = '';
+  if (!pairs.length) {
+    host.append(el('div', 'empty', isAssumption ? 'Nothing assumed yet.' : 'Nothing yet.'));
+    return;
+  }
+  for (const [e, i] of pairs) {
+    const row = el('div', 'prow');
+    const top = el('div', 'top');
+    const body = el('div');
+    body.append(el('div', 'val', `${e.key.replace(/_/g, ' ')}: ${e.value}`));
+    const when = e.created_at ? new Date(e.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    body.append(el('div', 'src', `${e.confirmed && e.source === 'stated' ? 'confirmed' : e.source} · ${when}`));
+    top.append(body);
+
+    const acts = el('div', 'acts');
+    if (isAssumption) {
+      const y = el('button', 'yes', 'Yes'); y.onclick = () => confirmPref(i, true);
+      const nb = el('button', null, 'No'); nb.onclick = () => confirmPref(i, false);
+      acts.append(y, nb);
+    } else {
+      // Every row is editable or removable — a tester who can't correct a wrong
+      // preference is being measured against our guesses.
+      const ed = el('button', null, 'Edit');
+      ed.onclick = async () => {
+        const v = prompt_(`${e.key.replace(/_/g, ' ')}`, e.value);
+        if (v === null) return;
+        const next = prefs().slice();
+        if (!v.trim()) next.splice(i, 1); else next[i] = { ...e, value: v.trim().slice(0, 80), created_at: nowIso() };
+        await setPrefs(next);
+      };
+      const rm = el('button', null, 'Remove');
+      rm.onclick = async () => { const next = prefs().slice(); next.splice(i, 1); await setPrefs(next); };
+      acts.append(ed, rm);
+    }
+    top.append(acts);
+    row.append(top);
+    host.append(row);
+  }
+}
+
+/// window.prompt is a blocking dialog, which is fine here (a tester editing
+/// their own row) and avoids a second sheet for a one-field edit.
+function prompt_(label, value) { return window.prompt(label, value); }
+
+$('#p-add').addEventListener('click', async () => {
+  const key = $('#p-key').value;
+  const val = $('#p-val').value.trim();
+  if (!val) return;
+  await addPref(key, val, 'stated', true);
+  $('#p-val').value = '';
+});
+
+// §4. Clears the profile and the derived counts. Never touches lab_answers or
+// lab_feedback — the run data survives, or the metrics are worthless.
+$('#p-reset').addEventListener('click', async () => {
+  if (!window.confirm('Clear everything Suna has learned about you?')) return;
+  await setPrefs([]);
+});
+
+// §4. Clears the thread on screen only. Keeps the profile and every logged
+// answer, and needs no confirmation — a tester will use it constantly.
+$('#new-chat').addEventListener('click', () => {
+  $('#convo-col').innerHTML = '';
+  lastQuestion = null;
+  renderChips();
+});
+
+// ── chips ──────────────────────────────────────────────────────────────────
+const START_CHIPS = [
+  { chip: 'hours', label: "I've got a few hours" },
+  { chip: 'weekend', label: 'This weekend' },
+  { chip: 'trip', label: 'Plan a trip' },
+];
+
+function renderChips() {
+  const host = $('#chips'); host.innerHTML = '';
+  // An answer's question replaces the starters until it is answered, so the
+  // one-tap reply is the obvious next move rather than a fourth option.
+  if (lastQuestion?.chips?.length) {
+    for (const c of lastQuestion.chips) {
+      const b = el('button', 'chip answer', c.label);
+      b.onclick = () => answerChip(c);
+      host.append(b);
+    }
+    const skip = el('button', 'chip', 'Skip');
+    skip.onclick = () => { lastQuestion = null; renderChips(); };
+    host.append(skip);
+    return;
+  }
+  for (const s of START_CHIPS) {
+    const b = el('button', 'chip', s.label);
+    b.dataset.chip = s.chip;
+    b.disabled = busy;
+    b.onclick = async () => {
+      await ensureLocation();
+      if (s.chip === 'trip') { $('#box').focus(); ask({ chip: s.chip, request: $('#box').value.trim() }); }
+      else ask({ chip: s.chip, request: '' });
+    };
+    host.append(b);
+  }
+}
+
+/// Tapping a question chip both sends the reply and settles the assumption it
+/// came from — the round trip §3 exists to make visible.
+async function answerChip(c) {
+  const q = lastQuestion;
+  lastQuestion = null;
+  renderChips();
+  if (q?.assumptionIndex != null && q.assumptionIndex >= 0) {
+    if (c.confirm === 'keep') await confirmPref(q.assumptionIndex, true);
+    else if (c.confirm === 'correct') await confirmPref(q.assumptionIndex, true, c.reply);
+    else await confirmPref(q.assumptionIndex, false);
+  }
+  await ensureLocation();
+  ask({ chip: null, request: c.reply });
+}
+
+// ── asking ─────────────────────────────────────────────────────────────────
+$('#send').addEventListener('click', async () => {
+  const text = $('#box').value.trim();
+  if (!text || busy) return;
+  await ensureLocation();
+  ask({ chip: null, request: text });
+});
+$('#box').addEventListener('input', (e) => {
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+});
+// Don't fight the keyboard with viewport maths — dvh plus this is enough.
+$('#box').addEventListener('focus', () => {
+  setTimeout(() => { const l = $('#convo-col').lastElementChild; l?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, 250);
+});
+
+const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip: 'Plan a trip' };
+
+async function ask({ chip, request }) {
+  busy = true; setBusy(true);
+  const shown = request || CHIP_TEXT[chip] || '';
+  $('#convo-col').append(meTurn(shown));
+  $('#box').value = ''; $('#box').style.height = 'auto';
+  scroll();
+
+  const holder = el('div', 'turn suna');
+  const inner = el('div', 'bubble');
+  holder.append(inner);
+  $('#convo-col').append(holder);
+
+  const slowTimer = setTimeout(() => {
+    $('#status').classList.add('slow');
+    $('#status').textContent = 'This one is taking a while — still going';
+  }, 45000);
+
+  const { data: { session } } = await db.auth.getSession();
+  let streamed = '';
+
+  try {
+    await refreshWeather();
+    const n = rightNow();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chip, request,
+        now: nowString(),
+        location: location_,
+        tz_offset_minutes: new Date().getTimezoneOffset(),
+        // Absent fields are omitted, never sent as `unknown`.
+        weather: weatherLine() ?? undefined,
+        // Season is derived here and passed as a computed fact (§3).
+        facts: n.season ? { season: n.season } : undefined,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', event = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (line.startsWith('event:')) { event = line.slice(6).trim(); continue; }
+        if (!line.startsWith('data:')) continue;
+        let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
+
+        if (event === 'mode')   setStatus(d.mode === 'A' ? 'Suna is typing' : 'Working on it', true);
+        if (event === 'stage')  setStatus(stageLabel(d.stage), true);
+        if (event === 'token')  { streamed += d.t; inner.textContent = streamed; scroll(); }
+        if (event === 'capped') { inner.textContent = d.message; }
+        if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
+        if (event === 'done')   { await renderAnswer(holder, inner, d); }
+      }
+    }
+  } catch (e) {
+    inner.textContent = `That didn't work: ${e.message}`;
+  } finally {
+    clearTimeout(slowTimer);
+    setStatus('');
+    $('#status').classList.remove('slow');
+    busy = false; setBusy(false); renderChips(); scroll();
+  }
+}
+
+function stageLabel(stage) {
+  if (stage === 'checking_hours') return "Checking what's open";
+  if (stage === 'sorting_days') return 'Sorting the days';
+  if (stage?.startsWith('researching:')) return `Looking up ${stage.slice(12)}`;
+  return 'Working on it';
+}
+function setStatus(text, dots) {
+  const s = $('#status');
+  s.textContent = text || '';
+  s.className = dots && text ? 'dots' : '';
+}
+function setBusy(on) {
+  $('#send').disabled = on;
+  document.querySelectorAll('#chips .chip').forEach((c) => { c.disabled = on; });
+}
+
+// ── rendering the answer ───────────────────────────────────────────────────
+async function renderAnswer(holder, bubble, d) {
+  const r = d.response ?? {};
+
+  if (d.mode === 'A') {
+    // §0. The master prompt puts the closing question inside `text` AND in
+    // `question`. Render `text` only, or it appears twice on screen. `question`
+    // drives the chips instead.
+    let body = (bubble.textContent || r.text || '').trim();
+    if (r.question && !/[?？]\s*$/.test(body)) body += (body ? ' ' : '') + String(r.question).trim();
+    bubble.textContent = body;
+
+    const det = detailsOf(r.details);
+    if (det) attachWhy(bubble, det);
+  } else {
+    bubble.remove();
+    const host = el('div');
+    holder.append(host);
+    renderPlan(host, r, d.research);
+  }
+
+  // §3. An assumption stated in the answer lands in the panel as unconfirmed.
+  //
+  // Measured: the model does not reliably put it in `text`. On a run of four it
+  // put "I've assumed you're taking a cab" in `question` instead, so scanning
+  // only `text` found nothing and the keep-chip never appeared. Scan every
+  // field the sentence can land in.
+  let assumptionIndex = -1;
+  const assumptionSource = [r.text, r.context, r.question].filter(Boolean).join(' ');
+  for (const a of extractAssumptions(assumptionSource)) {
+    await addPref(a.key, a.value, 'assumed', false);
+    assumptionIndex = prefs().findIndex((e) => e.source === 'assumed' && !e.confirmed && e.key === a.key);
+  }
+  const assumption = assumptionIndex >= 0 ? prefs()[assumptionIndex] : null;
+  const chips = chipsForQuestion(r.question, assumption);
+  lastQuestion = chips.length ? { chips, assumptionIndex } : null;
+
+  (holder.lastElementChild ?? holder).append(feedbackBar(d.answer_id));
+  renderContext();
+  scroll();
+}
+
+/// §2. Inside the bubble, bottom-left, quiet. Labelled `why this` when closed.
+function attachWhy(bubble, det) {
+  const link = el('button', 'linkish why-link', 'why this');
+  const box = el('div', 'details'); box.hidden = true; box.append(det);
+  link.onclick = () => { box.hidden = !box.hidden; link.textContent = box.hidden ? 'why this' : 'less'; scroll(); };
+  bubble.append(link, box);
+}
+
+/// §2. Four labelled groups, in order, skipping any that are empty.
+///
+/// Sources are deliberately NOT rendered, anywhere. Measured 24 Sep: the
+/// streaming path returns `grounded=false` while the model still emits
+/// source-shaped strings, so a citation here would be recalled rather than
+/// looked up — checkable-looking and not actually checked. Brian's call, 24
+/// Sep: stream, never show source. The strings stay in
+/// `lab_answers.response` for analysis.
+function detailsOf(details) {
+  if (!details) return null;
+  const f = document.createDocumentFragment();
+
+  if (details.why) f.append(group('Why', el('div', null, details.why)));
+
+  if (details.claims?.length) {
+    const ul = el('ul');
+    for (const c of details.claims) {
+      if (!c?.text) continue;
+      const li = el('li');
+      li.append(document.createTextNode(c.text));
+      if (c.type) li.append(el('span', 'tag', c.type));
+      ul.append(li);
+    }
+    if (ul.children.length) f.append(group('Claims', ul));
+  }
+
+  if (details.conflicts?.length) {
+    const ul = el('ul');
+    for (const c of details.conflicts) {
+      const li = el('li');
+      if (c.topic) li.append(el('div', null, c.topic));
+      // Separate lines. Run together with a slash this is the least readable
+      // block on the screen, and it is the most useful one for judging an answer.
+      if (c.a) li.append(el('span', 'side', `· ${c.a}`));
+      if (c.b) li.append(el('span', 'side', `· ${c.b}`));
+      ul.append(li);
+    }
+    if (ul.children.length) f.append(group('Sources disagree', ul));
+  }
+
+  if (details.unknowns?.length) {
+    const ul = el('ul');
+    for (const u of details.unknowns) if (u) ul.append(el('li', null, u));
+    if (ul.children.length) f.append(group("Couldn't find", ul));
+  }
+
+  return f.childNodes.length ? f : null;
+}
+
+function group(label, node) {
+  const g = el('div', 'grp');
+  g.append(el('div', 'lbl', label), node);
+  return g;
+}
+
+function renderPlan(inner, r, research) {
+  const add = (cap, one, bodyBuilder) => {
+    if (!one) return;
+    const d = el('details', 'card');
+    const s = el('summary');
+    s.append(el('span', 'cap', cap), el('span', 'one', one));
+    d.append(s);
+    const b = el('div', 'cardbody');
+    const built = bodyBuilder?.();
+    if (built) { b.append(built); d.append(b); }
+    inner.append(d);
+  };
+
+  if (r.title || r.context) {
+    const head = el('div', 'bubble');
+    head.textContent = [r.title, r.context, r.meta].filter(Boolean).join('\n');
+    inner.append(head);
+  }
+
+  add('Where to stay', r.stay?.area, () => {
+    const f = document.createDocumentFragment();
+    if (r.stay.lines?.length) f.append(list(r.stay.lines));
+    if (r.stay.tradeoff) f.append(el('div', null, r.stay.tradeoff));
+    if (r.stay.alternative?.area) f.append(el('div', 'src', `Or ${r.stay.alternative.area} — ${r.stay.alternative.extra_travel ?? ''}`));
+    return f;
+  });
+  add('Sort these first', firstLine(r.sort_first, (x) => x.headline), () => list((r.sort_first ?? []).map((x) => [x.headline, x.detail].filter(Boolean).join(' — '))));
+  add('Worth knowing', r.worth_knowing?.line, () => r.worth_knowing.cost ? el('div', null, r.worth_knowing.cost) : null);
+  add('What to drop', firstLine(r.drop, (x) => x.cost_of_keeping), () => list((r.drop ?? []).map((x) => x.cost_of_keeping)));
+
+  const yours = (r.plan ?? []).flatMap((b) => (b.days ?? []).flatMap((day) => (day.items ?? []).filter((i) => i.save_id)));
+  add('Yours', yours.length ? yours.map((i) => i.name).join(', ') : null, () => list(yours.map((i) => `${i.name} — ${i.line ?? ''}`)));
+
+  add('Getting there', firstLine(r.getting_there, (x) => `${x.town} — ${x.thing}`), () => list((r.getting_there ?? []).map((x) => `${x.town} — ${x.thing}`)));
+
+  if (r.plan?.length) {
+    add('The plan', r.plan.map((b) => b.label).filter(Boolean).join(' · ') || 'The plan', () => {
+      const f = document.createDocumentFragment();
+      for (const block of r.plan) {
+        if (block.label) f.append(el('div', 'daylabel', block.label));
+        if (block.base) f.append(el('div', 'src', `Base: ${block.base}${block.why ? ' — ' + block.why : ''}`));
+        for (const day of block.days ?? []) {
+          if (day.day) f.append(el('div', 'daylabel', `${day.day}${day.type ? ' · ' + day.type : ''}`));
+          f.append(list((day.items ?? []).map((i) => {
+            const bits = [i.name, i.line, i.duration].filter(Boolean).join(' — ');
+            const note = research?.[i.name]?.line;
+            return note ? `${bits}\n${note}` : bits;
+          })));
+        }
+      }
+      return f;
+    });
+  }
+
+  add('Worth eating', firstLine(r.worth_eating, (x) => x.name), () => list((r.worth_eating ?? []).map((x) => `${x.name} — ${x.what}`)));
+  add('Getting set up', firstLine(r.setup, (x) => x.name), () => list((r.setup ?? []).map((x) => `${x.name} — ${x.for}`)));
+
+  if (r.budget?.per_week_local?.length) {
+    const [lo, hi] = r.budget.per_week_local;
+    add('Rough budget', `${lo}–${hi} ${r.budget.currency_local ?? ''} a week`,
+        () => r.budget.excludes?.length ? el('div', null, `Excludes: ${r.budget.excludes.join(', ')}`) : null);
+  }
+  add('Travel time', r.travel_time ?? null, null);
+
+  if (r.question) inner.append(el('div', 'bubble', r.question));
+
+  const extras = detailsOf({ conflicts: r.conflicts, unknowns: r.unknowns });
+  if (extras) add('Caveats', 'What we could not pin down', () => extras);
+}
+
+function firstLine(arr, fn) {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const s = fn(arr[0]);
+  return s ? (arr.length > 1 ? `${s} (+${arr.length - 1} more)` : s) : null;
+}
+function list(items) {
+  const ul = el('ul');
+  for (const it of (items ?? [])) if (it) ul.append(el('li', null, it));
+  return ul.children.length ? ul : null;
+}
+
+// ── §5 feedback ────────────────────────────────────────────────────────────
+function feedbackBar(answerId) {
+  const holder = el('div', 'fb');
+  if (!answerId) return holder;
+  const state = { would_go: null, too_long: false, wrong: false };
+
+  const save = async (patch) => {
+    Object.assign(state, patch);
+    const { error } = await db.from('lab_feedback').upsert({
+      answer_id: answerId, tester_id: tester.id,
+      would_go: state.would_go, too_long: state.too_long,
+      wrong: state.wrong, reason: state.reason ?? null, wrong_detail: state.wrong_detail ?? null,
+    }, { onConflict: 'answer_id' });
+    if (error) console.warn('[lab] feedback', error.message);
+  };
+
+  // Line 1 is the measurement.
+  const line1 = el('div', 'line1');
+  line1.append(el('span', 'ask', 'Would you go?'));
+  const yes = el('button', 'yn', 'Yes');
+  const no = el('button', 'yn', 'No');
+  line1.append(yes, no);
+
+  // Line 2 is a report about the answer, not an answer to the question.
+  const line2 = el('div', 'line2');
+  const tooLong = el('button', 'rep', 'Too long');
+  const wrong = el('button', 'rep', 'Wrong');
+  line2.append(tooLong, el('span', 'dot', '·'), wrong);
+
+  const reasonRow = el('div', 'reason'); reasonRow.hidden = true;
+  const reasonIn = el('input'); reasonIn.type = 'text'; reasonIn.placeholder = 'Why? (optional)';
+  const reasonGo = el('button', 'ghost', 'Save');
+  reasonRow.append(reasonIn, reasonGo);
+
+  const pick = async (v, btn, other) => {
+    btn.setAttribute('aria-pressed', 'true');
+    other.setAttribute('aria-pressed', 'false');
+    await save({ would_go: v });
+    reasonRow.hidden = false;
+    reasonIn.placeholder = v ? 'What made it a yes? (optional)' : 'What made it a no? (optional)';
+    reasonIn.focus();                       // appears already focused, still skippable
+  };
+  yes.onclick = () => pick(true, yes, no);
+  no.onclick = () => pick(false, no, yes);
+  tooLong.onclick = async () => { const v = !state.too_long; tooLong.setAttribute('aria-pressed', String(v)); await save({ too_long: v }); };
+  wrong.onclick = async () => {
+    const v = !state.wrong;
+    wrong.setAttribute('aria-pressed', String(v));
+    await save({ wrong: v });
+    if (v) { reasonRow.hidden = false; reasonIn.placeholder = 'What was wrong? (optional)'; reasonIn.focus(); }
+  };
+  reasonGo.onclick = async () => {
+    const t = reasonIn.value.trim();
+    await save(state.wrong ? { wrong_detail: t } : { reason: t });
+    reasonGo.textContent = 'Saved';
+    setTimeout(() => { reasonGo.textContent = 'Save'; }, 1500);
+  };
+
+  holder.append(line1, line2, reasonRow);
+  return holder;
+}
+
+// ── odds and ends ──────────────────────────────────────────────────────────
+function meTurn(t) { const d = el('div', 'turn me'); d.append(el('div', 'bubble', t)); return d; }
+function sunaTurn(t) { const d = el('div', 'turn suna'); d.append(el('div', 'bubble', t)); return d; }
+function scroll() { const c = $('#convo'); c.scrollTop = c.scrollHeight; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function nowString() {
+  const d = new Date(); const p = (n) => String(n).padStart(2, '0');
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return `${days[d.getDay()]} ${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Only a real sign-out reloads. `onAuthStateChange` also fires once on boot
+// with INITIAL_SESSION and a null session, and reloading on that put a
+// signed-out page into an endless reload loop.
+db.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') location.reload(); });
+// A test seam, not a feature: lets the round trip in §3 be driven and checked
+// without waiting for the model to phrase an assumption a particular way.
+window.__lab = { seasonOf, chipsForQuestion, extractAssumptions, rightNow, renderPanel,
+                 prefs, addPref, confirmPref, setPrefs, keyForPhrase,
+                 refreshWeather, weatherLine, wmoConditions };
+boot();
+</script>
+</body>
+</html>
