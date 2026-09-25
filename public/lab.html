@@ -492,7 +492,6 @@
         <button class="m-writer" data-w="haiku">Haiku<span class="tick"></span></button>
         <button class="m-writer" data-w="sonnet">Sonnet<span class="tick"></span></button>
         <button class="m-writer" data-w="opus">Opus<span class="tick"></span></button>
-        <button class="m-writer" data-w="rotate">Rotate<span class="tick"></span></button>
       </div>
     </div>
   </div>
@@ -591,7 +590,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v23';
+const BUILD = 'lab-v24';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1472,6 +1471,10 @@ function labelReportButton() {
 
 function markWriterChoice() {
   let cur = ''; try { cur = localStorage.getItem('lab.writer') || ''; } catch {}
+  // Rotate is gone from the picker. Anyone still carrying it in local storage
+  // from an earlier build falls back to Default, so the menu cannot show a
+  // choice that no longer exists — and cannot keep sending it.
+  if (cur === 'rotate') { cur = ''; try { localStorage.setItem('lab.writer', ''); } catch {} }
   for (const b of document.querySelectorAll('.m-writer')) {
     b.querySelector('.tick').textContent = (b.dataset.w || '') === cur ? '✓' : '';
   }
@@ -1618,7 +1621,12 @@ async function ask({ chip, request, scopeOverride }) {
         session_id: sessionId,
         // Ignored by the function for anyone without lab_admin, so
         // this is a convenience, not a permission.
-        writer: (() => { try { return localStorage.getItem('lab.writer') || undefined; } catch { return undefined; } })(),
+        writer: (() => {
+          try {
+            const w = localStorage.getItem('lab.writer') || '';
+            return (!w || w === 'rotate') ? undefined : w;   // Rotate is retired
+          } catch { return undefined; }
+        })(),
         now: nowString(),
         location: location_,
         tz_offset_minutes: new Date().getTimezoneOffset(),
