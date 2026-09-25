@@ -315,7 +315,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v7';
+const BUILD = 'lab-v8';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -904,6 +904,7 @@ function renderChips() {
     b.dataset.chip = s.chip;
     b.disabled = busy;
     b.onclick = async () => {
+      setStatus("Checking what's open", true);
       await ensureLocation();
       if (s.chip === 'trip') { $('#box').focus(); ask({ chip: s.chip, request: $('#box').value.trim() }); }
       else ask({ chip: s.chip, request: '' });
@@ -923,6 +924,7 @@ async function answerChip(c) {
     else if (c.confirm === 'correct') await confirmPref(q.assumptionIndex, true, c.reply);
     else await confirmPref(q.assumptionIndex, false);
   }
+  setStatus("Checking what's open", true);
   await ensureLocation();
   ask({ chip: null, request: c.reply });
 }
@@ -931,6 +933,10 @@ async function answerChip(c) {
 $('#send').addEventListener('click', async () => {
   const text = $('#box').value.trim();
   if (!text || busy) return;
+  // §2: the instant the tester sends, before anything is awaited. Measured at
+  // 1001 ms when this sat after `await ensureLocation()` — that await can
+  // include a reverse-geocode round trip, and the target is one second.
+  setStatus("Checking what's open", true);
   await ensureLocation();
   ask({ chip: null, request: text });
 });
