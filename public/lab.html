@@ -157,6 +157,22 @@
   .topic .what { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .topic button { background: none; color: var(--sand); font-size: 12px;
                   text-decoration: underline; padding: 6px 0; }
+  /* §1. The emergency card. Visually distinct from an answer, because it is
+     not one — nothing about it came from a model. */
+  .sos { background: #2a1414; border: 1px solid var(--danger); border-radius: 14px;
+         padding: 14px; margin-bottom: 24px; }
+  .sos .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+              color: var(--danger); margin-bottom: 6px; }
+  .sos p { margin: 0 0 10px; font-size: 16px; line-height: 1.5; }
+  .sos .nums { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sos a { background: var(--danger); color: #fff; text-decoration: none; font-weight: 600;
+           border-radius: 999px; padding: 12px 18px; min-height: 44px; font-size: 16px;
+           display: inline-flex; align-items: center; }
+  /* §2. A refusal is a line, not an error, and always carries a way back in. */
+  .refused { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .refused p { margin: 0 0 10px; font-size: 16px; line-height: 1.5; }
+  .refused button { font-size: 13px; padding: 10px 14px; min-height: 44px;
+                    background: rgba(255,255,255,.08); }
   .readonly { text-align: center; font-size: 12px; color: var(--sand); padding: 10px 0; }
   .reason { margin-top: 8px; display: flex; gap: 8px; }
   /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
@@ -315,7 +331,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v8';
+const BUILD = 'lab-v10';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -951,7 +967,7 @@ $('#box').addEventListener('focus', () => {
 
 const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip: 'Plan a trip' };
 
-async function ask({ chip, request }) {
+async function ask({ chip, request, scopeOverride }) {
   if (readOnly) return;
   busy = true; setBusy(true);
   const shown = request || CHIP_TEXT[chip] || '';
@@ -991,6 +1007,7 @@ async function ask({ chip, request }) {
       },
       body: JSON.stringify({
         chip, request,
+        scope_override: scopeOverride === true,
         session_id: sessionId,
         now: nowString(),
         location: location_,
@@ -1031,6 +1048,21 @@ async function ask({ chip, request }) {
           streamed += d.t; inner.textContent = streamed; scroll();
         }
         if (event === 'capped') { inner.textContent = d.message; }
+        // §1. Never styled as an answer, and the numbers are tappable — on a
+        // phone, in trouble, a tel: link is the difference between reading a
+        // number and calling it.
+        // §2. "It was about travel" records a false refusal AND sends the
+        // request through anyway — a refusal the tester disagrees with must
+        // not cost them the answer.
+        if (event === 'refused') {
+          holder.replaceChildren(refusalCard(d.message, d.request));
+          clearTimeout(slowTimer); setStatus('');
+        }
+        if (event === 'refusal_id') { lastRefusalId = d.id; }
+        if (event === 'emergency') {
+          holder.replaceChildren(emergencyCard(d));
+          clearTimeout(slowTimer); setStatus('');
+        }
         // A transient upstream failure. The tester sees a sentence, not a
         // status code; the code is in the function log.
         if (event === 'unavailable') { inner.textContent = d.message; }
@@ -1065,6 +1097,46 @@ function showTopicDivider(d, before) {
   };
   row.append(fresh, el('span', 'rule'));
   before.parentNode.insertBefore(row, before);
+}
+
+let lastRefusalId = null;
+
+function refusalCard(message, request) {
+  const box = el('div', 'refused');
+  box.append(el('p', null, message));
+  const b = el('button', null, 'It was about travel');
+  b.onclick = async () => {
+    b.disabled = true;
+    b.textContent = 'Sending it through…';
+    if (lastRefusalId) {
+      await db.from('lab_refusals')
+        .update({ false_refusal: true, false_refusal_at: new Date().toISOString() })
+        .eq('id', lastRefusalId);
+    }
+    box.remove();
+    ask({ chip: null, request, scopeOverride: true });
+  };
+  box.append(b);
+  return box;
+}
+
+function emergencyCard(d) {
+  const box = el('div', 'sos');
+  box.append(el('div', 'lbl', 'Emergency'));
+  box.append(el('p', null, d.message));
+  const nums = el('div', 'nums');
+  const seen = new Set();
+  for (const [label, n] of [['Call', d.numbers?.primary], ['Police', d.numbers?.police],
+                            ['Ambulance', d.numbers?.ambulance], ['Fire', d.numbers?.fire]]) {
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    const a = document.createElement('a');
+    a.href = 'tel:' + n;
+    a.textContent = `${label} ${n}`;
+    nums.append(a);
+  }
+  if (nums.children.length) box.append(nums);
+  return box;
 }
 
 function stageLabel(stage) {
