@@ -340,10 +340,11 @@
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     background: var(--fill); border: 0; border-radius: 999px;
-    padding: 0 14px; font-size: 15px; color: var(--text);
+    padding: 7px 14px; font-size: 15px; line-height: 1.35; color: var(--text);
     /* 36pt of ink inside a 44pt target: the shape is quieter than the answer
-       above it, the tap area is not. */
-    height: 36px; display: inline-flex; align-items: center;
+       above it, the tap area is not. min-height, not height — a long reply
+       chip wraps to two lines and a fixed height squeezed the text. */
+    min-height: 36px; display: inline-flex; align-items: center;
     position: relative; flex: 0 1 auto; max-width: 100%;
     white-space: normal; text-align: left;
   }
@@ -580,7 +581,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v21';
+const BUILD = 'lab-v22';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
