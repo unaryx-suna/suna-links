@@ -126,7 +126,6 @@
   }
   #menu button:active { background: rgba(255,255,255,.08); }
   #menu .sep { height: 0.5px; background: var(--line); }
-  #menu .mlbl { font-size: 13px; color: var(--muted); padding: 10px 16px 4px; }
   #menu .tick { color: var(--sand); }
 
   /* ── band 2: the conversation, scrolls ────────────────────────────────── */
@@ -485,14 +484,12 @@
       <button id="m-session"><span>Session <span id="m-session-code">S-…</span></span><span class="tick" id="m-session-tick"></span></button>
       <div class="sep"></div>
       <button id="m-fresh">Start fresh</button>
-      <div id="m-writer-wrap" hidden>
-        <div class="sep"></div>
-        <div class="mlbl">Writer</div>
-        <button class="m-writer" data-w="">Default<span class="tick"></span></button>
-        <button class="m-writer" data-w="haiku">Haiku<span class="tick"></span></button>
-        <button class="m-writer" data-w="sonnet">Sonnet<span class="tick"></span></button>
-        <button class="m-writer" data-w="opus">Opus<span class="tick"></span></button>
-      </div>
+      <!-- The writer picker is gone from the site (Brian, 26 Sep). Which model
+           writes is decided by the blind comparison and the `writer_assignment`
+           config, not by a control on the page — a picker beside the answers
+           invites choosing by preference, which is the thing the blind test
+           exists to avoid. lab-replay's "Compare writers" is still the way to
+           put the three side by side. -->
     </div>
   </div>
 
@@ -590,7 +587,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v24';
+const BUILD = 'lab-v25';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -682,27 +679,11 @@ async function openApp() {
     return;
   }
 
-  // WRITER-SWITCH §1. The picker lives in the ⋯ menu and exists only for
-  // testers with the flag. Everyone else never sees it and never sees a model
-  // name, which is what makes their Yes or No worth counting.
-  if (tester.lab_admin === true) {
-    $('#m-writer-wrap').hidden = false;
-    markWriterChoice();
-    for (const b of document.querySelectorAll('.m-writer')) {
-      b.addEventListener('click', () => {
-        try { localStorage.setItem('lab.writer', b.dataset.w || ''); } catch {}
-        markWriterChoice();
-        closeMenu();
-        // It applies from the NEXT topic, not mid-conversation — say so
-        // rather than let it look like nothing happened.
-        $('#convo-col').append(sunaTurn(
-          b.dataset.w
-            ? `Writer set to ${b.textContent.trim()}. It applies from the next topic.`
-            : 'Writer back to the default. It applies from the next topic.'));
-        renderChips();
-      });
-    }
-  }
+  // Any writer choice left behind by an earlier build is cleared, so a stale
+  // localStorage value cannot keep steering the writer after the picker that
+  // set it has gone.
+  try { localStorage.removeItem('lab.writer'); } catch {}
+
   renderContext();
   renderChips();
 
@@ -1469,17 +1450,6 @@ function labelReportButton() {
   if (el2) el2.textContent = sessionCode ?? 'S-…';
 }
 
-function markWriterChoice() {
-  let cur = ''; try { cur = localStorage.getItem('lab.writer') || ''; } catch {}
-  // Rotate is gone from the picker. Anyone still carrying it in local storage
-  // from an earlier build falls back to Default, so the menu cannot show a
-  // choice that no longer exists — and cannot keep sending it.
-  if (cur === 'rotate') { cur = ''; try { localStorage.setItem('lab.writer', ''); } catch {} }
-  for (const b of document.querySelectorAll('.m-writer')) {
-    b.querySelector('.tick').textContent = (b.dataset.w || '') === cur ? '✓' : '';
-  }
-}
-
 function openMenu() {
   labelReportButton();
   $('#menu').dataset.open = '1';
@@ -1621,12 +1591,6 @@ async function ask({ chip, request, scopeOverride }) {
         session_id: sessionId,
         // Ignored by the function for anyone without lab_admin, so
         // this is a convenience, not a permission.
-        writer: (() => {
-          try {
-            const w = localStorage.getItem('lab.writer') || '';
-            return (!w || w === 'rotate') ? undefined : w;   // Rotate is retired
-          } catch { return undefined; }
-        })(),
         now: nowString(),
         location: location_,
         tz_offset_minutes: new Date().getTimezoneOffset(),
@@ -2337,6 +2301,9 @@ function feedbackBar(d) {
   // WRITER-SWITCH §1. Which model wrote it — present ONLY when the function
   // sent it, which it does only for testers with lab_admin. Everyone
   // else rates the answer, not the name on it.
+  // The per-answer model label stays, admin-only. It is read-only information
+  // — the picker that changed the writer is gone, but being able to tell what
+  // wrote an answer is how a Wrong report gets attributed to a model.
   if (d.writer) holder.append(el('div', 'writer-tag', `written by ${d.writer}`));
   return holder;
 }
