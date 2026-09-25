@@ -188,7 +188,43 @@
   .dish { background: none; color: var(--text); text-align: left; padding: 0; font-size: 14px;
           text-decoration: underline; text-decoration-color: var(--line); }
   .barright { display: flex; gap: 6px; align-items: center; flex: none; }
-  #sess-code, #report-chat { background: rgba(255,255,255,.08); font-size: 12px; padding: 8px 10px; }
+  /* ── glass ────────────────────────────────────────────────────────────
+     Starter chips, an answer's reply chips and the report button share one
+     surface. The -webkit- prefix stays: iPhone Safari still needs it, and
+     dropping it turns the glass into a flat wash on the device most testers
+     are holding. */
+  .glass, .chip {
+    background: rgba(255,255,255,0.08);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    border-radius: 999px;
+  }
+  /* Where the effect is unsupported the translucency has nothing to sit on,
+     so it becomes a solid instead of a muddy overlay. */
+  @supports not (backdrop-filter: blur(16px)) {
+    .glass, .chip { background: rgba(255,255,255,0.10); }
+  }
+  /* The tail: chips and the report button, at the bottom of the thread. */
+  #tail { display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+          padding: 4px 0 8px; }
+  #tail[hidden] { display: none; }
+  /* An error the tester's browser hit, shown in the read-only session view so
+     a report shows what they SAW, not what the server believes it sent. */
+  .clienterr { margin-top: 8px; padding: 10px 12px; border-radius: 10px;
+               background: rgba(255,107,107,.10); border: 1px solid var(--danger);
+               color: var(--danger); font-size: 13px; line-height: 1.45; }
+  .clienterr .when { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  /* 44px minimum tap target, and #fff on this surface is ~14:1 — well past
+     the 4.5:1 floor. */
+  #tail .chip { min-height: 44px; padding: 11px 16px; font-size: 15px; color: var(--text); }
+  /* Quieter than the chips: smaller, muted, but still 44px to tap and still
+     --muted (#C2C2C2) on #111, which measures ~11.6:1. */
+  #report-chat.report {
+    min-height: 44px; padding: 11px 14px; font-size: 13px;
+    color: var(--muted); align-self: flex-start;
+  }
   #left-today { font-size: 12px; color: var(--muted); padding: 8px 4px; white-space: nowrap; }
   /* LAB-R5 §3. The tracker. One screen, read-only. */
   .tracker { padding: 16px 0 40px; }
@@ -212,7 +248,7 @@
                  padding: 7px 8px; border: 0; border-radius: 8px; }
   /* The model that wrote it, under the answer. Brian only. */
   .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
-  #sess-code { letter-spacing: .04em; color: var(--muted); }
+
   #attach { flex: none; min-height: 48px; width: 48px; padding: 0; font-size: 22px; line-height: 1; }
   /* §3 the upload confirm card */
   .upl { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
@@ -322,8 +358,6 @@
           <option value="opus">Opus</option>
           <option value="rotate">Rotate</option>
         </select>
-        <button id="sess-code" title="Tap to copy">S-….</button>
-        <button id="report-chat">Report this chat</button>
         <button id="new-chat">New chat</button>
       </div>
     </div>
@@ -331,10 +365,10 @@
 
   <div id="convo"><div class="col" id="convo-col"></div></div>
 
+
   <div id="dock">
     <div class="col">
       <div id="status"></div>
-      <div class="chips" id="chips"></div>
       <div class="row">
         <button id="attach" class="ghost" title="Add a photo or clip">+</button>
         <textarea id="box" rows="1" placeholder="Ask Suna…"></textarea>
@@ -416,7 +450,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v16';
+const BUILD = 'lab-v17';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -552,7 +586,7 @@ async function ensureSessionCode() {
     const { data, error } = await db.rpc('lab_ensure_session', { p_session_id: sessionId });
     if (error) { console.warn('[lab] session code', error.message); return; }
     sessionCode = data;
-    $('#sess-code').textContent = data;
+    labelReportButton();
   } catch (e) { console.warn('[lab] session code', e.message); }
 }
 
@@ -581,14 +615,6 @@ function renderCounter() {
     : `${q} left`;
 }
 
-$('#sess-code').addEventListener('click', async () => {
-  if (!sessionCode) return;
-  try { await navigator.clipboard.writeText(sessionCode); $('#sess-code').textContent = sessionCode + ' copied'; }
-  catch { /* clipboard blocked; the code is still on screen */ }
-  setTimeout(() => { $('#sess-code').textContent = sessionCode; }, 1500);
-});
-
-$('#report-chat').addEventListener('click', () => { $('#report-sheet').dataset.open = '1'; $('#report-note').focus(); });
 $('#report-close').addEventListener('click', () => { $('#report-sheet').dataset.open = '0'; });
 $('#report-send').addEventListener('click', async () => {
   // §4. Its own record type. Never answer feedback, so it stays out of every
@@ -648,6 +674,21 @@ async function renderSession(sessionUuid, banner, highlightRef) {
     .select('id, label').eq('session_id', sessionUuid);
   const labelFor = Object.fromEntries((topics ?? []).map((t) => [t.id, t.label]));
 
+  // What the tester's browser did, against the answers it happened on. A
+  // report is only useful if it shows what they actually saw — an answer can
+  // be written, billed and counted while an error stood in its place.
+  const { data: errs } = await db.from('lab_client_errors')
+    .select('answer_ref, where_, message, build, created_at')
+    .eq('session_id', sessionUuid).order('created_at');
+  const errsByRef = new Map();
+  const looseErrs = [];
+  for (const e of (errs ?? [])) {
+    if (e.answer_ref) {
+      if (!errsByRef.has(e.answer_ref)) errsByRef.set(e.answer_ref, []);
+      errsByRef.get(e.answer_ref).push(e);
+    } else looseErrs.push(e);
+  }
+
   readOnly = true;
   sessionId = sessionUuid;
   $('#dock').style.display = 'none';
@@ -670,9 +711,24 @@ async function renderSession(sessionUuid, banner, highlightRef) {
     bubble.textContent = r.text ?? r.context ?? '(no text)';
     holder.append(bubble);
     holder.append(el('div', 'ref', row.ref + (row.ref === highlightRef ? ' · this one' : '')));
+    for (const e of (errsByRef.get(row.ref) ?? [])) {
+      const box = el('div', 'clienterr');
+      box.append(el('div', null, `In the tester's browser (${e.where_}): ${e.message}`));
+      box.append(el('div', 'when', `${new Date(e.created_at).toLocaleString()} · ${e.build ?? 'build unknown'}`));
+      holder.append(box);
+    }
     if (row.ref === highlightRef) anchor = holder;
     $('#convo-col').append(holder);
   }
+
+  // Errors with no answer to hang off still belong in the thread.
+  for (const e of looseErrs) {
+    const box = el('div', 'clienterr');
+    box.append(el('div', null, `In the tester's browser (${e.where_}): ${e.message}`));
+    box.append(el('div', 'when', `${new Date(e.created_at).toLocaleString()} · ${e.build ?? 'build unknown'}`));
+    $('#convo-col').append(box);
+  }
+
   (anchor ?? $('#convo-col').lastElementChild)?.scrollIntoView({ block: 'center' });
 }
 
@@ -1126,7 +1182,46 @@ const START_CHIPS = [
   { chip: 'trip', label: 'Plan a trip' },
 ];
 
+/// The chip row and the report button live at the BOTTOM OF THE THREAD, not
+/// above the composer.
+///
+/// They are built once and MOVED — `append` on an element already in the DOM
+/// relocates it rather than copying — so they always sit directly after the
+/// latest message and travel down as the conversation grows. Rebuilding them
+/// each time would drop the click handlers and lose focus.
+let tailEl = null;
+function ensureTail() {
+  if (readOnly) return null;
+  if (!tailEl) {
+    tailEl = el('div', null); tailEl.id = 'tail';
+    const chips = el('div', 'chips'); chips.id = 'chips';
+    const rep = el('button', 'glass report'); rep.id = 'report-chat';
+    rep.onclick = () => { $('#report-sheet').dataset.open = '1'; $('#report-note').focus(); };
+    tailEl.append(chips, rep);
+  }
+  // Moves it to the end if it is already somewhere else in the column.
+  $('#convo-col').append(tailEl);
+  labelReportButton();
+  return tailEl;
+}
+
+/// "Report this chat · S-0038" — the code is part of the button now that the
+/// header no longer carries it, so a tester can still read it out.
+function labelReportButton() {
+  const b = document.getElementById('report-chat');
+  if (b) b.textContent = sessionCode ? `Report this chat · ${sessionCode}` : 'Report this chat';
+}
+
+/// Hidden while an answer streams, shown again when it finishes — offering
+/// the next move mid-sentence is noise.
+function showTail(on) {
+  const t = ensureTail();
+  if (t) t.hidden = !on;
+}
+
 function renderChips() {
+  const t = ensureTail();
+  if (!t) return;
   const host = $('#chips'); host.innerHTML = '';
   // An answer's question replaces the starters until it is answered, so the
   // one-tap reply is the obvious next move rather than a fourth option.
@@ -1196,6 +1291,9 @@ const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip
 async function ask({ chip, request, scopeOverride }) {
   if (readOnly) return;
   busy = true; setBusy(true);
+  // Out of the way while the answer streams — offering the next move
+  // mid-sentence is noise. It comes back in the `finally`, below the answer.
+  showTail(false);
   const shown = request || CHIP_TEXT[chip] || '';
   $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
@@ -1219,6 +1317,9 @@ async function ask({ chip, request, scopeOverride }) {
 
   const { data: { session } } = await db.auth.getSession();
   let streamed = '';
+  // True the moment real text exists. After that, nothing may replace the
+  // answer on screen with an error.
+  let answered = false;
   let modeKnown = null;
 
   try {
@@ -1273,6 +1374,7 @@ async function ask({ chip, request, scopeOverride }) {
         if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
         if (event === 'stage')  setStatus(stageLabel(d.stage), true);
         if (event === 'token')  {
+          answered = true;
           if (!streamed) setStatus('Suna is typing', true);
           streamed += d.t; inner.textContent = streamed; scroll();
         }
@@ -1302,6 +1404,7 @@ async function ask({ chip, request, scopeOverride }) {
         if (event === 'unavailable') { inner.textContent = d.message; }
         if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
         if (event === 'done') {
+          answered = true;
           // GAPS §5/§6: local names, map uris and coordinates all come from
           // the facts step, so they are indexed before the answer renders.
           factsByName = new Map();
@@ -1318,12 +1421,21 @@ async function ask({ chip, request, scopeOverride }) {
       }
     }
   } catch (e) {
-    inner.textContent = `That didn't work: ${e.message}`;
+    // An answer that arrived stays on screen. Extras — Save rows, map links,
+    // the why panel, chips — are additions, and a failure while adding them
+    // must never destroy the thing the tester was reading. That is precisely
+    // what happened with `inner is not defined`: a complete, correct answer
+    // was overwritten by an error about a variable name.
+    reportClientError(e, { ref: lastAnswerRef, where: 'ask' });
+    if (!answered) inner.textContent = `That didn't work: ${e.message}`;
+    else console.error('[lab] after the answer:', e);
   } finally {
     clearTimeout(slowTimer);
     setStatus('');
     $('#status').classList.remove('slow');
-    busy = false; setBusy(false); renderChips(); scroll();
+    // renderChips() re-parents the tail to the END of the column, so it lands
+    // directly under the answer that just finished.
+    busy = false; setBusy(false); renderChips(); showTail(true); scroll();
   }
 }
 
@@ -1502,7 +1614,7 @@ function setStatus(text, dots) {
 }
 function setBusy(on) {
   $('#send').disabled = on;
-  document.querySelectorAll('#chips .chip').forEach((c) => { c.disabled = on; });
+  document.querySelectorAll('#tail .chip').forEach((c) => { c.disabled = on; });
 }
 
 // ── rendering the answer ───────────────────────────────────────────────────
@@ -1526,7 +1638,13 @@ async function renderAnswer(holder, bubble, d) {
     if (named.length) {
       const box = el('div', 'places');
       for (const n of named) box.append(placeRow(n, d.ref));
-      inner.append(box);
+      // `holder`, not `inner`. `inner` is not in scope here, so this threw a
+      // ReferenceError on EVERY quick answer that named a place — and the
+      // catch around the caller then replaced the finished answer with
+      // "That didn't work: inner is not defined". Save, map links and local
+      // names have therefore never rendered on a quick answer, which is also
+      // why the round-3 fixes looked done: this path never ran.
+      holder.append(box);
     }
   } else {
     bubble.remove();
@@ -1925,6 +2043,44 @@ function feedbackBar(d) {
   if (d.writer) holder.append(el('div', 'writer-tag', `written by ${d.writer}`));
   return holder;
 }
+
+/// Record an error that happened in THIS browser, against the session and the
+/// answer it spoiled.
+///
+/// The server cannot see these. `inner is not defined` fired on every quick
+/// answer that named a place, and server-side everything looked perfect — the
+/// answer row written, the spend recorded, the report counting it delivered.
+/// The failure existed only on the tester's screen, which is exactly why a
+/// report has to be able to show what they actually saw.
+///
+/// Best effort and never thrown from: a logger that breaks the page it is
+/// logging for is worse than no logger.
+async function reportClientError(e, { ref = null, where = 'render' } = {}) {
+  try {
+    console.error(`[lab:${where}]`, e);
+    if (!tester?.id) return;
+    await db.from('lab_client_errors').insert({
+      tester_id: tester.id,
+      session_id: sessionId ?? null,
+      answer_ref: ref ?? null,
+      where_: where,
+      message: String(e?.message ?? e).slice(0, 500),
+      stack: e?.stack ? String(e.stack).slice(0, 2000) : null,
+      build: BUILD,
+      user_agent: navigator.userAgent.slice(0, 300),
+    });
+  } catch (inner2) {
+    console.warn('[lab] could not record the error', inner2);
+  }
+}
+
+// Anything that escapes entirely still gets recorded.
+window.addEventListener('error', (ev) => {
+  reportClientError(ev.error ?? new Error(ev.message), { where: 'window', ref: lastAnswerRef });
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  reportClientError(ev.reason ?? new Error('unhandled rejection'), { where: 'promise', ref: lastAnswerRef });
+});
 
 /// LAB-R5 §3. The tracker. Admin only, read-only, one screen, live.
 ///
