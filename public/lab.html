@@ -187,6 +187,17 @@
   .prow2 button[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
   .dish { background: none; color: var(--text); text-align: left; padding: 0; font-size: 14px;
           text-decoration: underline; text-decoration-color: var(--line); }
+  .barright { display: flex; gap: 6px; align-items: center; flex: none; }
+  #sess-code, #report-chat { background: rgba(255,255,255,.08); font-size: 12px; padding: 8px 10px; }
+  #sess-code { letter-spacing: .04em; color: var(--muted); }
+  #attach { flex: none; min-height: 48px; width: 48px; padding: 0; font-size: 22px; line-height: 1; }
+  /* §3 the upload confirm card */
+  .upl { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .upl p { margin: 0 0 10px; font-size: 16px; line-height: 1.5; }
+  .upl .read { font-size: 12px; color: var(--dim); margin: 0 0 10px; white-space: pre-wrap; }
+  .upl .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
+  .upl button { min-height: 44px; font-size: 14px; padding: 11px 16px; background: rgba(255,255,255,.08); }
+  .upl button.yes { background: var(--sand); color: var(--ink); font-weight: 600; }
   .readonly { text-align: center; font-size: 12px; color: var(--sand); padding: 10px 0; }
   .reason { margin-top: 8px; display: flex; gap: 8px; }
   /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
@@ -276,7 +287,11 @@
   <div id="bar">
     <div class="col">
       <button id="ctx-btn"><span id="ctx">…</span> <span class="chev">›</span></button>
-      <button id="new-chat">New chat</button>
+      <div class="barright">
+        <button id="sess-code" title="Tap to copy">S-….</button>
+        <button id="report-chat">Report this chat</button>
+        <button id="new-chat">New chat</button>
+      </div>
     </div>
   </div>
 
@@ -287,9 +302,11 @@
       <div id="status"></div>
       <div class="chips" id="chips"></div>
       <div class="row">
+        <button id="attach" class="ghost" title="Add a photo or clip">+</button>
         <textarea id="box" rows="1" placeholder="Ask Suna…"></textarea>
         <button id="send" class="primary">Go</button>
       </div>
+      <input id="file" type="file" accept="image/*,video/*" hidden>
     </div>
   </div>
 </div>
@@ -301,6 +318,17 @@
   <input id="loc-input" type="text" placeholder="Kuala Lumpur" autocomplete="address-level2">
   <div style="height:12px"></div>
   <button id="loc-save" class="primary" style="width:100%">Save</button>
+</div></div>
+
+<!-- ── §4 Report this chat ─────────────────────────────────────────────── -->
+<div class="sheet" id="report-sheet"><div class="inner">
+  <h2>Report this chat</h2>
+  <p class="sub">This flags the whole conversation for Brian to read, not one answer.</p>
+  <input id="report-note" type="text" placeholder="What went wrong? (optional)">
+  <div style="height:12px"></div>
+  <button id="report-send" class="primary" style="width:100%">Send</button>
+  <div style="height:10px"></div>
+  <button id="report-close" class="ghost" style="width:100%">Cancel</button>
 </div></div>
 
 <!-- ── GAPS §7 the dish sheet: what it is and its local name. No places. ── -->
@@ -354,7 +382,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v11';
+const BUILD = 'lab-v12';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -388,6 +416,7 @@ let currentTopic = null;
 // this is where local_name, maps_uri and coordinates come from. GAPS §5, §6.
 let factsByName = new Map();
 let lastAnswerRef = null;
+let sessionCode = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -434,10 +463,16 @@ async function openApp() {
   renderContext();
   renderChips();
 
-  // §0. `?ref=A-0042` opens that session read-only, scrolled to that answer —
-  // a failure in the report becomes one click to the thread that caused it.
-  const wanted = new URLSearchParams(location.search).get('ref');
-  if (wanted) { await openSession(wanted.toUpperCase()); return; }
+  await ensureSessionCode();
+
+  // §0/§4. `?ref=A-0042` opens that answer's session; `?session=S-0142` opens
+  // a whole session. Both read-only — this is somebody reading a failure, not
+  // continuing the conversation that caused it.
+  const params = new URLSearchParams(location.search);
+  const wantedRef = params.get('ref');
+  const wantedSession = params.get('session');
+  if (wantedRef) { await openSession(wantedRef.toUpperCase()); return; }
+  if (wantedSession) { await openSessionByCode(wantedSession.toUpperCase()); return; }
 
   // §2 comes before anything else on a new visit, then §4.
   await maybeAskDidGo();
@@ -446,6 +481,51 @@ async function openApp() {
 
 /// Replays a stored thread. Read-only: the composer is hidden, because this is
 /// somebody reading a failure, not continuing the conversation that caused it.
+/// §4. A code a tester can read out loud or paste into a message.
+async function ensureSessionCode() {
+  try {
+    const { data, error } = await db.rpc('lab_ensure_session', { p_session_id: sessionId });
+    if (error) { console.warn('[lab] session code', error.message); return; }
+    sessionCode = data;
+    $('#sess-code').textContent = data;
+  } catch (e) { console.warn('[lab] session code', e.message); }
+}
+
+$('#sess-code').addEventListener('click', async () => {
+  if (!sessionCode) return;
+  try { await navigator.clipboard.writeText(sessionCode); $('#sess-code').textContent = sessionCode + ' copied'; }
+  catch { /* clipboard blocked; the code is still on screen */ }
+  setTimeout(() => { $('#sess-code').textContent = sessionCode; }, 1500);
+});
+
+$('#report-chat').addEventListener('click', () => { $('#report-sheet').dataset.open = '1'; $('#report-note').focus(); });
+$('#report-close').addEventListener('click', () => { $('#report-sheet').dataset.open = '0'; });
+$('#report-send').addEventListener('click', async () => {
+  // §4. Its own record type. Never answer feedback, so it stays out of every
+  // per-answer rate — it means "something went wrong somewhere in this
+  // conversation", which is a different claim from "this answer was wrong".
+  const note = $('#report-note').value.trim();
+  const { error } = await db.from('lab_session_reports').insert({
+    tester_id: tester.id, session_id: sessionId, session_code: sessionCode,
+    topic_id: currentTopic?.topic_id ?? null, latest_ref: lastAnswerRef, note: note || null,
+  });
+  if (error) console.warn('[lab] session report', error.message);
+  $('#report-sheet').dataset.open = '0';
+  $('#report-note').value = '';
+  $('#convo-col').append(sunaTurn(`Thanks — flagged as ${sessionCode}. Brian will read the whole thread.`));
+  scroll();
+});
+
+/// §4. `?session=S-0142` opens the whole session, every topic and answer.
+async function openSessionByCode(code) {
+  const { data: sess } = await db.from('lab_sessions').select('id, code').eq('code', code).maybeSingle();
+  if (!sess) {
+    $('#convo-col').append(sunaTurn(`No session ${code} — it may belong to another tester.`));
+    return;
+  }
+  await renderSession(sess.id, `Session ${code}`, null);
+}
+
 async function openSession(ref) {
   const { data: target } = await db.from('lab_answers')
     .select('session_id').eq('ref', ref).maybeSingle();
@@ -453,27 +533,43 @@ async function openSession(ref) {
     $('#convo-col').append(sunaTurn(`No answer ${ref} — it may belong to another tester.`));
     return;
   }
+  await renderSession(target.session_id, `Session for ${ref}`, ref);
+}
+
+/// Replays a stored thread, read-only. Every answer shows its ref, and each
+/// topic gets a divider so a reader can see where the subject changed — a ref
+/// alone does not say what the tester was trying to do.
+async function renderSession(sessionUuid, banner, highlightRef) {
   const { data: rows } = await db.from('lab_answers')
-    .select('id, ref, mode, request, response, created_at')
-    .eq('session_id', target.session_id).order('created_at');
+    .select('id, ref, mode, request, response, created_at, topic_id')
+    .eq('session_id', sessionUuid).order('created_at');
+  const { data: topics } = await db.from('lab_topics')
+    .select('id, label').eq('session_id', sessionUuid);
+  const labelFor = Object.fromEntries((topics ?? []).map((t) => [t.id, t.label]));
 
   readOnly = true;
-  sessionId = target.session_id;
+  sessionId = sessionUuid;
   $('#dock').style.display = 'none';
   $('#convo-col').innerHTML = '';
-  $('#convo-col').append(el('div', 'readonly', `Session for ${ref} — read only`));
+  $('#convo-col').append(el('div', 'readonly', `${banner} — read only`));
 
   let anchor = null;
+  let lastTopic = null;
   for (const row of (rows ?? [])) {
+    if (row.topic_id && row.topic_id !== lastTopic) {
+      lastTopic = row.topic_id;
+      const div = el('div', 'topic');
+      div.append(el('span', 'rule'), el('span', 'what', labelFor[row.topic_id] ?? 'a topic'), el('span', 'rule'));
+      $('#convo-col').append(div);
+    }
     $('#convo-col').append(meTurn(row.request || ''));
     const holder = el('div', 'turn suna');
     const bubble = el('div', 'bubble');
     const r = row.response ?? {};
     bubble.textContent = r.text ?? r.context ?? '(no text)';
     holder.append(bubble);
-    const tag = el('div', 'ref', row.ref + (row.ref === ref ? ' · this one' : ''));
-    holder.append(tag);
-    if (row.ref === ref) anchor = holder;
+    holder.append(el('div', 'ref', row.ref + (row.ref === highlightRef ? ' · this one' : '')));
+    if (row.ref === highlightRef) anchor = holder;
     $('#convo-col').append(holder);
   }
   (anchor ?? $('#convo-col').lastElementChild)?.scrollIntoView({ block: 'center' });
@@ -918,6 +1014,7 @@ $('#new-chat').addEventListener('click', () => {
   readOnly = false;
   $('#dock').style.display = '';
   history.replaceState(null, '', location.pathname);
+  ensureSessionCode();
   renderChips();
 });
 
@@ -1738,6 +1835,188 @@ async function refreshPlaceResearch(place) {
       body: JSON.stringify({ place_name: place, city: location_?.name ?? null, force: true }),
     });
   } catch (e) { console.warn('[lab] research refresh', e.message); }
+}
+
+// ── §3 uploads ─────────────────────────────────────────────────────────────
+//
+// An upload is NOT a request: it does not start a topic, does not change mode,
+// and never reaches the writer. Nothing is saved without a Yes.
+//
+// The file goes straight from the browser to the private bucket on a
+// short-lived signed url. Video never travels through the edge function's
+// request body.
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const MAX_VIDEO_SECONDS = 60;
+
+$('#attach').addEventListener('click', () => { if (!busy && !readOnly) $('#file').click(); });
+$('#file').addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (f) await handleUpload(f);
+});
+
+/// Reads a clip's duration before uploading, so a 3-minute video is refused
+/// in the browser rather than after 50 MB has crossed the network.
+function videoDuration(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => { URL.revokeObjectURL(v.src); resolve(Number.isFinite(v.duration) ? v.duration : null); };
+    v.onerror = () => { URL.revokeObjectURL(v.src); resolve(null); };
+    v.src = URL.createObjectURL(file);
+  });
+}
+
+async function handleUpload(file) {
+  const isVideo = /^video\//.test(file.type);
+  const mediaType = isVideo ? 'video' : 'image';
+  const duration = isVideo ? await videoDuration(file) : null;
+
+  // Checked here as well as in the function: same limits, but the tester hears
+  // about it before the upload rather than after it.
+  if (!isVideo && file.size > MAX_IMAGE_BYTES) return uploadNote(`That photo is ${(file.size/1048576).toFixed(1)} MB and I can take up to 10 MB. Could you send a smaller one?`);
+  if (isVideo && file.size > MAX_VIDEO_BYTES) return uploadNote(`That clip is ${(file.size/1048576).toFixed(1)} MB and I can take up to 50 MB. Could you send a shorter one?`);
+  if (isVideo && duration !== null && duration > MAX_VIDEO_SECONDS) return uploadNote(`That clip is ${Math.round(duration)} seconds and I can take up to 60. Could you trim it down?`);
+
+  busy = true; setBusy(true);
+  $('#convo-col').append(meTurn(isVideo ? 'Sent a clip' : 'Sent a photo'));
+  // §3: a stage line within 1 second, like every other request.
+  setStatus(isVideo ? 'Watching your video' : 'Reading your photo', true);
+  scroll();
+
+  const holder = el('div', 'turn suna');
+  const inner = el('div');
+  holder.append(inner);
+  $('#convo-col').append(holder);
+
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' };
+    const ext = (file.name.split('.').pop() || (isVideo ? 'mp4' : 'jpg')).toLowerCase();
+
+    const signRes = await fetch(`${SUPABASE_URL}/functions/v1/lab-upload`, {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ action: 'sign', media_type: mediaType, bytes: file.size, duration_s: duration, ext }),
+    });
+    const sign = await signRes.json();
+    if (!signRes.ok || sign.error) { inner.append(el('div', 'bubble', sign.message ?? `That didn't work: ${sign.error ?? signRes.status}`)); return; }
+
+    // Straight to the bucket. The function never sees the bytes.
+    const up = await db.storage.from('lab-uploads').uploadToSignedUrl(sign.path, sign.token, file);
+    if (up.error) { inner.append(el('div', 'bubble', `Upload failed: ${up.error.message}`)); return; }
+
+    const readRes = await fetch(`${SUPABASE_URL}/functions/v1/lab-upload`, {
+      method: 'POST', headers: H,
+      body: JSON.stringify({
+        action: 'read', path: sign.path, media_type: mediaType, mime: file.type,
+        duration_s: duration, session_id: sessionId,
+        tz_offset_minutes: new Date().getTimezoneOffset(),
+        // Where the tester stood, used only to rank candidates.
+        lat: location_?.lat ?? null, lng: location_?.lng ?? null,
+        place_hint: location_?.name ?? null,
+      }),
+    });
+    const out = await readRes.json();
+    if (out.error === 'capped') { inner.append(el('div', 'bubble', out.message)); return; }
+    if (!readRes.ok || out.error) { inner.append(el('div', 'bubble', `I couldn't read that one: ${out.error}`)); return; }
+
+    inner.append(uploadCard(out));
+  } catch (err) {
+    inner.append(el('div', 'bubble', `That didn't work: ${err.message}`));
+  } finally {
+    setStatus('');
+    busy = false; setBusy(false); scroll();
+  }
+}
+
+function uploadNote(msg) {
+  $('#convo-col').append(sunaTurn(msg));
+  scroll();
+}
+
+/// "Looks like Gandan Monastery, Ulaanbaatar. Save it?" Yes · Edit.
+/// Nothing is saved without a Yes.
+function uploadCard(out) {
+  const box = el('div', 'upl');
+
+  if (!out.is_a_place || !out.best) {
+    box.append(el('p', null, out.skip_reason
+      ? `I couldn't place that one — ${out.skip_reason}`
+      : "I couldn't work out which place that is."));
+    const row = el('div', 'row2');
+    const typeIt = el('button', null, 'Type the name');
+    typeIt.onclick = () => typeName(out.upload_id, box);
+    row.append(typeIt);
+    box.append(row);
+    return box;
+  }
+
+  const best = out.best;
+  const where = dash(best.name, best.city);
+  box.append(el('p', null, `Looks like ${where}. Save it?`));
+  if (best.local_name) box.append(el('p', 'read', best.local_name));
+  if (out.text_read) box.append(el('p', 'read', `Read: ${String(out.text_read).slice(0, 160)}`));
+
+  const row = el('div', 'row2');
+  const yes = el('button', 'yes', 'Yes');
+  yes.onclick = async () => {
+    await savePlace('place', best.name, best.local_name ?? null, best.maps_uri ?? null, lastAnswerRef, best);
+    await db.from('lab_uploads').update({ outcome: 'accepted' }).eq('id', out.upload_id);
+    box.replaceChildren(el('p', null, `Saved ${best.name}. It'll come back as yours.`));
+  };
+  const edit = el('button', null, 'Edit');
+  edit.onclick = () => showCandidates(out, box);
+  row.append(yes, edit);
+  box.append(row);
+  return box;
+}
+
+/// Edit offers the next closest candidates, or a typed name.
+function showCandidates(out, box) {
+  box.replaceChildren(el('p', null, 'Which one is it?'));
+  const row = el('div', 'row2');
+  for (const c of (out.candidates ?? []).slice(1, 4)) {
+    const b = el('button', null, dash(c.name, c.city));
+    b.onclick = async () => {
+      await savePlace('place', c.name, c.local_name ?? null, c.maps_uri ?? null, lastAnswerRef, c);
+      await db.from('lab_uploads').update({
+        outcome: 'edited', matched_name: c.name, matched_local_name: c.local_name ?? null,
+        matched_maps_uri: c.maps_uri ?? null,
+      }).eq('id', out.upload_id);
+      box.replaceChildren(el('p', null, `Saved ${c.name}.`));
+    };
+    row.append(b);
+  }
+  const typeIt = el('button', null, 'Type the name');
+  typeIt.onclick = () => typeName(out.upload_id, box);
+  const none = el('button', null, 'None of these');
+  none.onclick = async () => {
+    await db.from('lab_uploads').update({ outcome: 'rejected' }).eq('id', out.upload_id);
+    box.replaceChildren(el('p', null, "Noted — I'll leave it."));
+  };
+  row.append(typeIt, none);
+  box.append(row);
+}
+
+function typeName(uploadId, box) {
+  box.replaceChildren(el('p', null, 'What is it called?'));
+  const r = el('div', 'reason');
+  const input = el('input'); input.type = 'text'; input.placeholder = 'Place name';
+  const go = el('button', 'ghost', 'Save');
+  go.onclick = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    await savePlace('place', name, null, null, lastAnswerRef, { typed: true });
+    await db.from('lab_uploads').update({
+      outcome: 'edited', match_method: 'typed', matched_name: name,
+    }).eq('id', uploadId);
+    box.replaceChildren(el('p', null, `Saved ${name}.`));
+  };
+  r.append(input, go);
+  box.append(r);
+  input.focus();
 }
 
 // ── odds and ends ──────────────────────────────────────────────────────────
