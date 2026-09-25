@@ -32,8 +32,8 @@
     --col: 680px;
     /* The two bars are fixed, so the thread needs to know how tall they are
        to scroll clear of them. */
-    --bar-h: 60px;
-    --dock-h: 72px;
+    --bar-h: calc(env(safe-area-inset-top) + 60px);
+    --dock-h: calc(env(safe-area-inset-bottom) + 72px);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: var(--ink); color: var(--text); }
@@ -105,7 +105,7 @@
   #menu .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
   #menu .sheetc {
     position: absolute; left: 16px; right: 16px;
-    top: calc(env(safe-area-inset-top) + var(--bar-h) + 6px);
+    top: calc(var(--bar-h) + 6px);
     margin-inline: auto; max-width: 320px;
     background: rgba(28,28,30,0.92);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -127,8 +127,10 @@
   #convo {
     height: 100dvh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
     /* Clear of both fixed bars, so nothing is ever hidden behind the glass. */
-    padding-top: calc(env(safe-area-inset-top) + var(--bar-h));
-    padding-bottom: calc(env(safe-area-inset-bottom) + var(--dock-h));
+    /* The measured heights already include each bar's safe-area padding, so
+       they are NOT added again here. */
+    padding-top: var(--bar-h);
+    padding-bottom: var(--dock-h);
   }
   /* A flex column so the empty state can push its chips to the bottom, into
      thumb reach, instead of stranding them at the top of an empty screen. */
@@ -578,7 +580,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v20';
+const BUILD = 'lab-v21';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1079,6 +1081,28 @@ function shortPlace(name) {
   t = t.replace(/\s+(District|Province|Prefecture|County|Municipality|Region|Territory|City)$/i, '');
   return t || 'somewhere';
 }
+
+/// Keep the thread clear of the two fixed bars by MEASURING them.
+///
+/// The first version hardcoded 60px and 72px. The composer is actually 90px
+/// with the safe-area inset, so the last row of chips sat clipped behind it —
+/// and it changes height anyway as the textarea grows or the status line
+/// appears. A guess cannot track that; a measurement can.
+function syncBarHeights() {
+  const bar = document.getElementById('bar');
+  const dock = document.getElementById('dock');
+  if (bar) document.documentElement.style.setProperty('--bar-h', Math.ceil(bar.getBoundingClientRect().height) + 'px');
+  if (dock) document.documentElement.style.setProperty('--dock-h', Math.ceil(dock.getBoundingClientRect().height) + 'px');
+}
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(syncBarHeights);
+  addEventListener('DOMContentLoaded', () => {
+    for (const id of ['bar', 'dock']) { const n = document.getElementById(id); if (n) ro.observe(n); }
+    syncBarHeights();
+  });
+}
+addEventListener('resize', syncBarHeights);
+addEventListener('load', syncBarHeights);
 
 function renderContext() {
   const n = rightNow();
