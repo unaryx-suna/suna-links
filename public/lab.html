@@ -382,7 +382,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v12';
+const BUILD = 'lab-v13';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1912,6 +1912,8 @@ async function handleUpload(file) {
       body: JSON.stringify({
         action: 'read', path: sign.path, media_type: mediaType, mime: file.type,
         duration_s: duration, session_id: sessionId,
+        // An upload does not start a topic; it belongs to the one already open.
+        topic_id: currentTopic?.topic_id ?? null, answer_ref: lastAnswerRef,
         tz_offset_minutes: new Date().getTimezoneOffset(),
         // Where the tester stood, used only to rank candidates.
         lat: location_?.lat ?? null, lng: location_?.lng ?? null,
