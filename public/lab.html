@@ -189,7 +189,26 @@
           text-decoration: underline; text-decoration-color: var(--line); }
   .barright { display: flex; gap: 6px; align-items: center; flex: none; }
   #sess-code, #report-chat { background: rgba(255,255,255,.08); font-size: 12px; padding: 8px 10px; }
-  #writer-pick { background: rgba(255,255,255,.08); color: var(--fg); font-size: 12px;
+  #left-today { font-size: 12px; color: var(--muted); padding: 8px 4px; white-space: nowrap; }
+  /* LAB-R5 §3. The tracker. One screen, read-only. */
+  .tracker { padding: 16px 0 40px; }
+  .tracker h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+                color: var(--muted); margin: 26px 0 8px; font-weight: 600; }
+  .trow { display: flex; align-items: baseline; gap: 10px; padding: 9px 0;
+          border-bottom: 1px solid var(--line); }
+  .tlabel { flex: 1; font-size: 15px; }
+  .tval { font-size: 15px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  /* The count always sits beside the rate. A rate without its denominator is
+     how a two-answer sample gets read as a finding. */
+  .tcount { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .trow.ok .tval { color: var(--ok); }
+  .trow.under .tval { color: var(--muted); }
+  .trow.danger .tval { color: var(--danger); }
+  .tbanner { background: rgba(255,107,107,.12); border: 1px solid var(--danger);
+             color: var(--danger); border-radius: 12px; padding: 12px 14px;
+             margin: 0 0 14px; font-size: 14px; }
+  .tnote { font-size: 12px; color: var(--muted); margin-top: 20px; line-height: 1.5; }
+  #writer-pick { background: rgba(255,255,255,.08); color: var(--text); font-size: 12px;
                  padding: 7px 8px; border: 0; border-radius: 8px; }
   /* The model that wrote it, under the answer. Brian only. */
   .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
@@ -295,6 +314,7 @@
         <!-- WRITER-SWITCH §1. Brian only. Stays hidden for every other tester,
              and the answers carry no model label for them either — a visible
              model name would shape the Yes or No. -->
+        <span id="left-today" hidden title="Answers left today"></span>
         <select id="writer-pick" hidden title="Which model writes. Applies from the next topic.">
           <option value="">Writer: default</option>
           <option value="haiku">Haiku</option>
@@ -396,7 +416,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v14';
+const BUILD = 'lab-v15';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -431,6 +451,9 @@ let currentTopic = null;
 let factsByName = new Map();
 let lastAnswerRef = null;
 let sessionCode = null;
+// LAB-R5 §2. What's left today, read from the same function the server
+// enforces with — so the number on screen is never a guess.
+let dailyState = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -465,7 +488,7 @@ async function openApp() {
   for (const k of PREF_KEYS) $('#p-key').append(new Option(k.replace(/_/g, ' '), k));
 
   const { data, error } = await db.from('lab_testers')
-    .select('id, name, home_city, last_location, preferences, daily_cap_usd, can_choose_writer').maybeSingle();
+    .select('id, name, home_city, last_location, preferences, daily_cap_usd, lab_admin, daily_limit_exempt').maybeSingle();
   if (error || !data) {
     $('#convo-col').append(sunaTurn("You're signed in, but you're not on the lab list yet. Tell Brian and he'll add you."));
     $('#dock').style.display = 'none';
@@ -475,10 +498,20 @@ async function openApp() {
   if (!Array.isArray(tester.preferences)) tester.preferences = [];
   if (tester.last_location) location_ = tester.last_location;
 
+  await refreshDailyState();
+
+  // LAB-R5 §3. `?tracker` takes over the screen. Gated on lab_admin, and the
+  // RPC behind it checks the same flag again — the hidden UI is a convenience,
+  // the server is the gate.
+  if (new URLSearchParams(location.search).has('tracker')) {
+    await renderTracker();
+    return;
+  }
+
   // WRITER-SWITCH §1. The selector exists only for testers with the flag.
   // Everyone else never sees it and never sees a model name, which is what
   // makes their Yes or No worth counting.
-  if (tester.can_choose_writer === true) {
+  if (tester.lab_admin === true) {
     const sel = $('#writer-pick');
     sel.hidden = false;
     try { sel.value = localStorage.getItem('lab.writer') || ''; } catch {}
@@ -521,6 +554,31 @@ async function ensureSessionCode() {
     sessionCode = data;
     $('#sess-code').textContent = data;
   } catch (e) { console.warn('[lab] session code', e.message); }
+}
+
+/// LAB-R5 §2. "3 left today" — and nothing at all for an exempt row, because
+/// a counter that never moves is just clutter.
+async function refreshDailyState() {
+  try {
+    const { data, error } = await db.rpc('lab_daily_state', {
+      p_tz_offset_minutes: new Date().getTimezoneOffset(),
+    });
+    if (error) return;
+    dailyState = data;
+    renderCounter();
+  } catch { /* the counter is a courtesy; the server is the authority */ }
+}
+
+function renderCounter() {
+  const n = $('#left-today');
+  if (!n || !dailyState || dailyState.exempt) { if (n) n.hidden = true; return; }
+  const q = Number(dailyState.quick_left ?? 0);
+  const p = Number(dailyState.plan_left ?? 0);
+  n.hidden = false;
+  n.textContent = q === 0 && p > 0 ? '1 plan left'
+    : q === 0 ? 'none left today'
+    : p > 0 ? `${q} left · 1 plan`
+    : `${q} left`;
 }
 
 $('#sess-code').addEventListener('click', async () => {
@@ -1166,7 +1224,7 @@ async function ask({ chip, request, scopeOverride }) {
         chip, request,
         scope_override: scopeOverride === true,
         session_id: sessionId,
-        // Ignored by the function for anyone without can_choose_writer, so
+        // Ignored by the function for anyone without lab_admin, so
         // this is a convenience, not a permission.
         writer: (() => { try { return localStorage.getItem('lab.writer') || undefined; } catch { return undefined; } })(),
         now: nowString(),
@@ -1219,6 +1277,11 @@ async function ask({ chip, request, scopeOverride }) {
           clearTimeout(slowTimer); setStatus('');
         }
         if (event === 'refusal_id') { lastRefusalId = d.id; }
+        // LAB-R5 §2. Out of answers for today, with a way to earn three more.
+        if (event === 'limit') {
+          holder.replaceChildren(limitCard(d));
+          clearTimeout(slowTimer); setStatus('');
+        }
         if (event === 'emergency') {
           holder.replaceChildren(emergencyCard(d));
           clearTimeout(slowTimer); setStatus('');
@@ -1236,6 +1299,9 @@ async function ask({ chip, request, scopeOverride }) {
             if (k) factsByName.set(k, p);
           }
           lastAnswerRef = d.ref ?? null;
+          // The count moved — a reply to Suna's own question does not spend
+          // one, so this asks the server rather than decrementing locally.
+          refreshDailyState();
           await renderAnswer(holder, inner, d);
         }
       }
@@ -1843,10 +1909,169 @@ function feedbackBar(d) {
   }
 
   // WRITER-SWITCH §1. Which model wrote it — present ONLY when the function
-  // sent it, which it does only for testers with can_choose_writer. Everyone
+  // sent it, which it does only for testers with lab_admin. Everyone
   // else rates the answer, not the name on it.
   if (d.writer) holder.append(el('div', 'writer-tag', `written by ${d.writer}`));
   return holder;
+}
+
+/// LAB-R5 §3. The tracker. Admin only, read-only, one screen, live.
+///
+/// Every rate prints the count behind it, because "50%" over two answers and
+/// "50%" over two hundred are not the same finding and a tracker that hides
+/// the denominator invites the wrong decision.
+async function renderTracker() {
+  const root = $('#convo-col');
+  $('#dock').style.display = 'none';
+  $('#bar').style.display = 'none';
+  root.replaceChildren(el('p', null, 'Loading the tracker…'));
+
+  const { data, error } = await db.rpc('lab_tracker');
+  if (error) {
+    root.replaceChildren(el('p', null,
+      /not allowed/i.test(error.message) ? 'The tracker is admin only.' : `Tracker failed: ${error.message}`));
+    return;
+  }
+
+  const wrap = el('div', 'tracker');
+  const section = (title) => { wrap.append(el('h2', null, title)); };
+  /// A rate always carries its count. `bar` is the proposed target, not a pass
+  /// mark — Brian sets the real ones.
+  const rate = (label, o) => {
+    const pct = o.of > 0 ? Math.round((o.n / o.of) * 100) : null;
+    const row = el('div', 'trow');
+    row.append(el('span', 'tlabel', label));
+    row.append(el('span', 'tval', pct === null ? '—' : `${pct}%`));
+    row.append(el('span', 'tcount', `${o.n} of ${o.of}` + (o.bar ? ` · bar ${o.bar}%` : '')));
+    if (pct !== null && o.bar) row.classList.add(pct >= o.bar ? 'ok' : 'under');
+    wrap.append(row);
+  };
+  const line = (label, value, note) => {
+    const row = el('div', 'trow');
+    row.append(el('span', 'tlabel', label));
+    row.append(el('span', 'tval', String(value)));
+    if (note) row.append(el('span', 'tcount', note));
+    wrap.append(row);
+  };
+
+  const v = data.viability ?? {};
+  section('Viability');
+  rate('Did go, of would-go', v.did_go ?? { n: 0, of: 0, bar: 30 });
+  rate('Came back a second day', v.second_day ?? { n: 0, of: 0, bar: 40 });
+  rate('Hit the limit and asked for more', v.wanted_more ?? { n: 0, of: 0, bar: 25 });
+  rate('Faster than deciding themselves', v.faster ?? { n: 0, of: 0, bar: 50 });
+
+  const q = data.quality ?? {};
+  section('Quality');
+  rate('Would go', { n: q.would_go ?? 0, of: q.rated ?? 0 });
+  rate('Too long', { n: q.too_long ?? 0, of: q.rated ?? 0 });
+  rate('Wrong', { n: q.wrong ?? 0, of: q.rated ?? 0 });
+  line('Saved', q.saved ?? 0);
+  line('Refusals', q.refusals ?? 0, `${q.false_refusals ?? 0} disputed`);
+
+  const sp = data.spend ?? {};
+  section('Spend — estimated');
+  if (sp.budget_usd == null) {
+    const w = el('div', 'tnote');
+    w.textContent = 'No round budget set. Brian sets the number before the lab is invited — until then nothing is enforced.';
+    wrap.append(w);
+  } else {
+    const bar = el('div', 'trow');
+    bar.append(el('span', 'tlabel', 'Round budget'));
+    bar.append(el('span', 'tval', `$${Number(sp.total_usd).toFixed(2)} of $${Number(sp.budget_usd).toFixed(2)}`));
+    bar.append(el('span', 'tcount', `${sp.pct_of_budget ?? 0}%`));
+    if (sp.over_80pct) bar.classList.add('danger');
+    wrap.append(bar);
+    if (sp.over_80pct) {
+      const b = el('div', 'tbanner');
+      b.textContent = `Over 80% of the round budget — $${Number(sp.total_usd).toFixed(2)} of $${Number(sp.budget_usd).toFixed(2)}.`;
+      wrap.prepend(b);
+    }
+  }
+  line('Testers', `$${Number(sp.tester_usd ?? 0).toFixed(2)}`);
+  // Claude Code's proofs are real money, but they are not tester behaviour, so
+  // they never read as it.
+  line('Build tests (lab-selftest)', `$${Number(sp.test_usd ?? 0).toFixed(2)}`);
+  for (const w of (sp.by_writer ?? [])) line(`  writer · ${w.model}`, `$${Number(w.usd).toFixed(2)}`, `${w.n} calls`);
+  for (const m of (sp.by_mode ?? [])) line(`  median · mode ${m.mode}`, `$${Number(m.median_usd ?? 0).toFixed(4)}`, `${m.n} answers`);
+  const g = sp.grounded_today ?? {};
+  // Beside the money because the money assumes we stay inside the allowance.
+  line('Grounded today', `${g.search ?? 0} search · ${g.maps ?? 0} maps`,
+       `free ${g.free ?? 1500}/day — past that they cost real money this figure excludes`);
+
+  section('Testers');
+  for (const t of (data.testers ?? [])) {
+    line(t.name + (t.exempt ? ' (exempt)' : ''), `${t.answers} answers`,
+         `${t.days} day${t.days === 1 ? '' : 's'} · $${Number(t.usd).toFixed(2)}`);
+  }
+
+  section('Reports');
+  line('Answers with feedback', data.feedback_count ?? 0, 'next report at the next multiple of 10');
+  for (const r of (data.reports ?? [])) {
+    const row = el('div', 'trow');
+    row.append(el('span', 'tlabel', `Report ${r.n} (at ${r.due_at_count})`));
+    row.append(el('span', 'tval', r.written ? 'written' : 'DUE'));
+    // Red is only ever "due and not written". A report that exists but has not
+    // been mirrored to the project is not a failure — the tracker cannot see
+    // that project, so the tick is set by hand.
+    row.append(el('span', 'tcount', r.mirrored ? 'mirrored ✓' : 'not mirrored'));
+    if (!r.written) row.classList.add('danger');
+    wrap.append(row);
+  }
+
+  wrap.append(el('p', 'tnote',
+    `Estimated spend: list prices x recorded tokens, grounded calls at $0 inside Google's free daily allowance. Generated ${new Date(data.generated_at).toLocaleString()}.`));
+  root.replaceChildren(wrap);
+}
+
+/// LAB-R5 §2. The limit, and the one question that earns three more.
+///
+/// The screen says ANY answer earns them, in as many words. Without that line
+/// a tester works out that "Yes, helped" is the safe choice and starts saying
+/// it to get their three back — and then the answer means nothing.
+///
+/// Built on `.refused`, the same card shape as a refusal: this is not an
+/// answer and must never be styled like one.
+function limitCard(d) {
+  const card = el('div', 'refused');
+  card.append(el('p', null, d.message));
+  if (!d.can_earn_more) {
+    card.append(el('p', null, d.mode === 'B'
+      ? 'Quick questions are still open.'
+      : "That's it for today — it resets in the morning."));
+    return card;
+  }
+
+  card.append(el('p', null, d.question));
+  card.append(el('p', null, 'Any answer earns them — "Not really" works too.'));
+
+  const note = el('input');
+  note.placeholder = 'Anything else? (optional)';
+  note.maxLength = 300;
+
+  const row = el('div', 'chips');
+  for (const o of (d.options ?? [])) {
+    const b = el('button', null, o.label);
+    b.onclick = async () => {
+      for (const x of row.querySelectorAll('button')) x.disabled = true;
+      const { data, error } = await db.rpc('lab_earn_more', {
+        p_answer: o.value,
+        p_note: note.value.trim() || null,
+        p_tz_offset_minutes: new Date().getTimezoneOffset(),
+      });
+      if (error) {
+        for (const x of row.querySelectorAll('button')) x.disabled = false;
+        card.append(el('p', null, "That didn't save — try again?"));
+        return;
+      }
+      dailyState = data;
+      renderCounter();
+      card.replaceChildren(el('p', null, `Thanks — ${data.quick_left} more. Ask away.`));
+    };
+    row.append(b);
+  }
+  card.append(note, row);
+  return card;
 }
 
 /// Names the answer actually used, for the "which one?" picker.
