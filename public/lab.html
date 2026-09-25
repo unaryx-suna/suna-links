@@ -189,6 +189,10 @@
           text-decoration: underline; text-decoration-color: var(--line); }
   .barright { display: flex; gap: 6px; align-items: center; flex: none; }
   #sess-code, #report-chat { background: rgba(255,255,255,.08); font-size: 12px; padding: 8px 10px; }
+  #writer-pick { background: rgba(255,255,255,.08); color: var(--fg); font-size: 12px;
+                 padding: 7px 8px; border: 0; border-radius: 8px; }
+  /* The model that wrote it, under the answer. Brian only. */
+  .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
   #sess-code { letter-spacing: .04em; color: var(--muted); }
   #attach { flex: none; min-height: 48px; width: 48px; padding: 0; font-size: 22px; line-height: 1; }
   /* §3 the upload confirm card */
@@ -288,6 +292,16 @@
     <div class="col">
       <button id="ctx-btn"><span id="ctx">…</span> <span class="chev">›</span></button>
       <div class="barright">
+        <!-- WRITER-SWITCH §1. Brian only. Stays hidden for every other tester,
+             and the answers carry no model label for them either — a visible
+             model name would shape the Yes or No. -->
+        <select id="writer-pick" hidden title="Which model writes. Applies from the next topic.">
+          <option value="">Writer: default</option>
+          <option value="haiku">Haiku</option>
+          <option value="sonnet">Sonnet</option>
+          <option value="opus">Opus</option>
+          <option value="rotate">Rotate</option>
+        </select>
         <button id="sess-code" title="Tap to copy">S-….</button>
         <button id="report-chat">Report this chat</button>
         <button id="new-chat">New chat</button>
@@ -382,7 +396,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v13';
+const BUILD = 'lab-v14';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -451,7 +465,7 @@ async function openApp() {
   for (const k of PREF_KEYS) $('#p-key').append(new Option(k.replace(/_/g, ' '), k));
 
   const { data, error } = await db.from('lab_testers')
-    .select('id, name, home_city, last_location, preferences, daily_cap_usd').maybeSingle();
+    .select('id, name, home_city, last_location, preferences, daily_cap_usd, can_choose_writer').maybeSingle();
   if (error || !data) {
     $('#convo-col').append(sunaTurn("You're signed in, but you're not on the lab list yet. Tell Brian and he'll add you."));
     $('#dock').style.display = 'none';
@@ -460,6 +474,24 @@ async function openApp() {
   tester = data;
   if (!Array.isArray(tester.preferences)) tester.preferences = [];
   if (tester.last_location) location_ = tester.last_location;
+
+  // WRITER-SWITCH §1. The selector exists only for testers with the flag.
+  // Everyone else never sees it and never sees a model name, which is what
+  // makes their Yes or No worth counting.
+  if (tester.can_choose_writer === true) {
+    const sel = $('#writer-pick');
+    sel.hidden = false;
+    try { sel.value = localStorage.getItem('lab.writer') || ''; } catch {}
+    sel.addEventListener('change', () => {
+      try { localStorage.setItem('lab.writer', sel.value); } catch {}
+      // It applies from the NEXT topic, not mid-conversation — say so rather
+      // than let it look like nothing happened.
+      $('#convo-col').append(sunaTurn(
+        sel.value
+          ? `Writer set to ${sel.options[sel.selectedIndex].text}. It applies from the next topic.`
+          : 'Writer back to the default. It applies from the next topic.'));
+    });
+  }
   renderContext();
   renderChips();
 
@@ -1134,6 +1166,9 @@ async function ask({ chip, request, scopeOverride }) {
         chip, request,
         scope_override: scopeOverride === true,
         session_id: sessionId,
+        // Ignored by the function for anyone without can_choose_writer, so
+        // this is a convenience, not a permission.
+        writer: (() => { try { return localStorage.getItem('lab.writer') || undefined; } catch { return undefined; } })(),
         now: nowString(),
         location: location_,
         tz_offset_minutes: new Date().getTimezoneOffset(),
@@ -1806,6 +1841,11 @@ function feedbackBar(d) {
     };
     holder.append(r);
   }
+
+  // WRITER-SWITCH §1. Which model wrote it — present ONLY when the function
+  // sent it, which it does only for testers with can_choose_writer. Everyone
+  // else rates the answer, not the name on it.
+  if (d.writer) holder.append(el('div', 'writer-tag', `written by ${d.writer}`));
   return holder;
 }
 
