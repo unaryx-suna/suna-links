@@ -450,7 +450,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v17';
+const BUILD = 'lab-v18';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1634,7 +1634,13 @@ async function renderAnswer(holder, bubble, d) {
 
     // GAPS §4/§5/§6. Every place in a quick answer gets a name, a local name,
     // a map link and Save.
-    const named = (r.place_ids ?? []).filter((x) => typeof x === 'string' && x.trim());
+    // `place_names` is the server's resolution of `place_ids` against the
+    // catalogue it assembled. Prefer it: `place_ids` can be raw UUIDs, and a
+    // Save button under "2476d999-6aae-44a2-a9e8-0afc30965910" helps nobody.
+    const named = ((d.place_names?.length ? d.place_names : r.place_ids) ?? [])
+      .filter((x) => typeof x === 'string' && x.trim())
+      // A UUID that the catalogue could not name is not a place we can show.
+      .filter((x) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x));
     if (named.length) {
       const box = el('div', 'places');
       for (const n of named) box.append(placeRow(n, d.ref));
@@ -2263,6 +2269,10 @@ function limitCard(d) {
 
 /// Names the answer actually used, for the "which one?" picker.
 function placesNamed(d) {
+  if (Array.isArray(d?.place_names) && d.place_names.length) {
+    return d.place_names.filter((x) => typeof x === 'string' && x.trim()
+      && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x));
+  }
   const r = d.response ?? {};
   const out = [];
   if (Array.isArray(r.place_ids)) for (const p of r.place_ids) if (typeof p === 'string') out.push(p);
