@@ -76,7 +76,13 @@
     border-bottom: 0.5px solid var(--line);
   }
   @supports not (backdrop-filter: blur(20px)) { #bar { background: #1c1c1e; } }
-  #bar .col { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-height: var(--bar-h); }
+  /* FIXED height, and deliberately not var(--bar-h).
+     --bar-h is an OUTPUT: syncBarHeights() measures the bar and writes it
+     there for the thread to pad by. Sizing the bar's own row from it closed
+     the loop — measure, write, the observer sees a change, measure again —
+     and each pass added the safe-area inset (~59px on a notched iPhone) or at
+     least 1px from rounding the 0.5px border up. The bar grew without end. */
+  #bar .col { display: flex; gap: 8px; align-items: center; justify-content: space-between; height: 52px; }
   /* Title and time, stacked. The place is the title; the time is the
      subtitle, the way a Messages conversation names who you are talking to. */
   #ctx-btn {
@@ -451,9 +457,13 @@
       </button>
       <!-- Two buttons, no more. Everything else is in the menu. -->
       <button id="new-chat" class="barbtn" aria-label="New chat" title="New chat">
+        <!-- Apple's compose glyph — square with a pencil, as in Messages and
+             Notes. A bare pencil reads as "edit this", and the button starts a
+             new chat. -->
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/>
+          <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>
+          <path d="M18.4 3.6a2 2 0 0 1 2.8 2.8L12 15.6l-3.6.8.8-3.6z"/>
         </svg>
       </button>
       <button id="more-btn" class="barbtn" aria-label="More" title="More"
@@ -581,7 +591,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v22';
+const BUILD = 'lab-v23';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1089,21 +1099,60 @@ function shortPlace(name) {
 /// with the safe-area inset, so the last row of chips sat clipped behind it —
 /// and it changes height anyway as the textarea grows or the status line
 /// appears. A guess cannot track that; a measurement can.
+let syncCount = 0;                       // read by the proof in §4
 function syncBarHeights() {
-  const bar = document.getElementById('bar');
-  const dock = document.getElementById('dock');
-  if (bar) document.documentElement.style.setProperty('--bar-h', Math.ceil(bar.getBoundingClientRect().height) + 'px');
-  if (dock) document.documentElement.style.setProperty('--dock-h', Math.ceil(dock.getBoundingClientRect().height) + 'px');
+  syncCount++;
+  const root = document.documentElement;
+  // Write ONLY on a real change. An unconditional setProperty is a style
+  // mutation, and a style mutation can be what wakes the observer that called
+  // us — the guard is what stops a fixed layout from ticking forever.
+  const put = (name, node) => {
+    if (!node) return;
+    const next = Math.ceil(node.getBoundingClientRect().height) + 'px';
+    if (root.style.getPropertyValue(name) !== next) root.style.setProperty(name, next);
+  };
+  put('--bar-h', document.getElementById('bar'));
+  put('--dock-h', document.getElementById('dock'));
 }
-if (typeof ResizeObserver !== 'undefined') {
-  const ro = new ResizeObserver(syncBarHeights);
-  addEventListener('DOMContentLoaded', () => {
-    for (const id of ['bar', 'dock']) { const n = document.getElementById(id); if (n) ro.observe(n); }
-    syncBarHeights();
-  });
+// Exposed so the layout can be checked from the console without guessing.
+window.__labBarProbe = () => ({
+  observing: !!barObserver,
+  syncCount,
+  barH: document.getElementById('bar')?.getBoundingClientRect().height,
+  dockH: document.getElementById('dock')?.getBoundingClientRect().height,
+  barVar: getComputedStyle(document.documentElement).getPropertyValue('--bar-h').trim(),
+  dockVar: getComputedStyle(document.documentElement).getPropertyValue('--dock-h').trim(),
+});
+// Attached IMMEDIATELY, not on DOMContentLoaded. This is a module at the end
+// of the body, so the bars are already parsed — and waiting measurably lost
+// the attachment: the bar could be grown from 111px to 132px with the
+// observer never firing once.
+//
+// border-box, not the default content-box: a bar's height is mostly PADDING
+// (the safe-area insets), and a content-box observer never sees a padding
+// change at all. Safe to watch now that nothing inside either bar is sized
+// from --bar-h / --dock-h — that was the loop.
+let barObserver = null;
+function watchBars() {
+  if (typeof ResizeObserver === 'undefined') return;
+  if (!barObserver) barObserver = new ResizeObserver(syncBarHeights);
+  for (const id of ['bar', 'dock']) {
+    const n = document.getElementById(id);
+    if (n) barObserver.observe(n, { box: 'border-box' });
+  }
+  syncBarHeights();
 }
+watchBars();
 addEventListener('resize', syncBarHeights);
 addEventListener('load', syncBarHeights);
+// The observer is belt and braces, not the mechanism. Its callbacks are tied
+// to the rendering lifecycle and simply do not run in a tab that is not being
+// rendered — verified: in a background tab even a fresh ResizeObserver never
+// delivers, not even its initial callback. So the two things that actually
+// change a bar's height call this directly, which is deterministic:
+//   - the composer's textarea growing as it is typed into
+//   - the status line appearing and disappearing above it
+// Cheap: the guard inside means an unchanged height writes nothing.
 
 function renderContext() {
   const n = rightNow();
@@ -1508,6 +1557,9 @@ $('#box').addEventListener('input', (e) => {
   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   // The circular send stays dimmed until there is something to send.
   $('#send').classList.toggle('empty', !e.target.value.trim());
+  // The composer just changed height; the thread's bottom padding has to
+  // follow or the last message hides behind it.
+  syncBarHeights();
 });
 // Don't fight the keyboard with viewport maths — dvh plus this is enough.
 $('#box').addEventListener('focus', () => {
@@ -1839,6 +1891,9 @@ function setStatus(text, dots) {
   const s = $('#status');
   s.textContent = text || '';
   s.className = dots && text ? 'dots' : '';
+  // The status line lives inside the composer bar, so showing or clearing it
+  // changes that bar's height — and the thread pads by it.
+  syncBarHeights();
 }
 function setBusy(on) {
   $('#send').disabled = on;
