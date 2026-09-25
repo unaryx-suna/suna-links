@@ -416,7 +416,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v15';
+const BUILD = 'lab-v16';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -595,11 +595,22 @@ $('#report-send').addEventListener('click', async () => {
   // per-answer rate — it means "something went wrong somewhere in this
   // conversation", which is a different claim from "this answer was wrong".
   const note = $('#report-note').value.trim();
-  const { error } = await db.from('lab_session_reports').insert({
+  const { data: saved, error } = await db.from('lab_session_reports').insert({
     tester_id: tester.id, session_id: sessionId, session_code: sessionCode,
     topic_id: currentTopic?.topic_id ?? null, latest_ref: lastAnswerRef, note: note || null,
-  });
+  }).select('id').single();
   if (error) console.warn('[lab] session report', error.message);
+
+  // LAB-R5 §2. Tell Brian on WhatsApp. Only the row ID goes over — the words
+  // that reach his phone are read back from the stored row by the function,
+  // so nothing here can put arbitrary text into an approved template.
+  //
+  // Deliberately not awaited: a failed alert must never make a tester think
+  // their report did not land. It is logged and shows on the tracker.
+  if (saved?.id) {
+    db.functions.invoke('lab-alert', { body: { action: 'session_report', report_id: saved.id } })
+      .catch((e) => console.warn('[lab] alert', e?.message ?? e));
+  }
   $('#report-sheet').dataset.open = '0';
   $('#report-note').value = '';
   $('#convo-col').append(sunaTurn(`Thanks — flagged as ${sessionCode}. Brian will read the whole thread.`));
@@ -1958,7 +1969,13 @@ async function renderTracker() {
   section('Viability');
   rate('Did go, of would-go', v.did_go ?? { n: 0, of: 0, bar: 30 });
   rate('Came back a second day', v.second_day ?? { n: 0, of: 0, bar: 40 });
-  rate('Hit the limit and asked for more', v.wanted_more ?? { n: 0, of: 0, bar: 25 });
+  // §3: below 5 testers having hit the limit, this says "not enough data"
+  // rather than a percentage. One tester declining is not a 0% signal, and a
+  // tracker that prints 0% invites a decision the data cannot carry.
+  const wm = v.wanted_more ?? { n: 0, of: 0, bar: 25, enough_data: false };
+  if (wm.enough_data) rate('Hit the limit and asked for more', wm);
+  else line('Hit the limit and asked for more', 'not enough data',
+            `${wm.of ?? 0} of ${wm.min_testers ?? 5} testers have hit it`);
   rate('Faster than deciding themselves', v.faster ?? { n: 0, of: 0, bar: 50 });
 
   const q = data.quality ?? {};
@@ -1971,27 +1988,27 @@ async function renderTracker() {
 
   const sp = data.spend ?? {};
   section('Spend — estimated');
-  if (sp.budget_usd == null) {
-    const w = el('div', 'tnote');
-    w.textContent = 'No round budget set. Brian sets the number before the lab is invited — until then nothing is enforced.';
-    wrap.append(w);
-  } else {
+  // There is NO budget cap. Nothing pauses the lab on spend; passing the line
+  // sends Brian a WhatsApp alert. Worded so the page cannot be read as a cap.
+  if (sp.alert_line_usd != null) {
     const bar = el('div', 'trow');
-    bar.append(el('span', 'tlabel', 'Round budget'));
-    bar.append(el('span', 'tval', `$${Number(sp.total_usd).toFixed(2)} of $${Number(sp.budget_usd).toFixed(2)}`));
-    bar.append(el('span', 'tcount', `${sp.pct_of_budget ?? 0}%`));
-    if (sp.over_80pct) bar.classList.add('danger');
+    bar.append(el('span', 'tlabel', "Today, against the alert line"));
+    bar.append(el('span', 'tval', `$${Number(sp.today_usd).toFixed(2)} of $${Number(sp.alert_line_usd).toFixed(0)}`));
+    bar.append(el('span', 'tcount', `${sp.today_pct_of_line ?? 0}% · alert only, nothing pauses`));
+    if (sp.today_over_line) bar.classList.add('danger');
     wrap.append(bar);
-    if (sp.over_80pct) {
+    if (sp.today_over_line) {
       const b = el('div', 'tbanner');
-      b.textContent = `Over 80% of the round budget — $${Number(sp.total_usd).toFixed(2)} of $${Number(sp.budget_usd).toFixed(2)}.`;
+      b.textContent = `Today's estimated spend passed $${Number(sp.alert_line_usd).toFixed(0)} — $${Number(sp.today_usd).toFixed(2)}. Brian has been alerted. Nothing is paused.`;
       wrap.prepend(b);
     }
   }
-  line('Testers', `$${Number(sp.tester_usd ?? 0).toFixed(2)}`);
+  line('Today — testers', `$${Number(sp.today_tester_usd ?? 0).toFixed(2)}`);
+  line('Today — build tests', `$${Number(sp.today_test_usd ?? 0).toFixed(2)}`);
+  line('All time', `$${Number(sp.total_usd ?? 0).toFixed(2)}`, `testers $${Number(sp.tester_usd ?? 0).toFixed(2)}`);
   // Claude Code's proofs are real money, but they are not tester behaviour, so
   // they never read as it.
-  line('Build tests (lab-selftest)', `$${Number(sp.test_usd ?? 0).toFixed(2)}`);
+  line('All time — build tests', `$${Number(sp.test_usd ?? 0).toFixed(2)}`);
   for (const w of (sp.by_writer ?? [])) line(`  writer · ${w.model}`, `$${Number(w.usd).toFixed(2)}`, `${w.n} calls`);
   for (const m of (sp.by_mode ?? [])) line(`  median · mode ${m.mode}`, `$${Number(m.median_usd ?? 0).toFixed(4)}`, `${m.n} answers`);
   const g = sp.grounded_today ?? {};
@@ -2003,6 +2020,20 @@ async function renderTracker() {
   for (const t of (data.testers ?? [])) {
     line(t.name + (t.exempt ? ' (exempt)' : ''), `${t.answers} answers`,
          `${t.days} day${t.days === 1 ? '' : 's'} · $${Number(t.usd).toFixed(2)}`);
+  }
+
+  // §3. Every alert sent or failed, with the time. A failed send is invisible
+  // to the tester by design, so this is the only place it shows.
+  section('Alerts');
+  const alerts = data.alerts ?? [];
+  if (!alerts.length) line('No alerts yet', '—');
+  for (const a of alerts) {
+    const row = el('div', 'trow');
+    row.append(el('span', 'tlabel', `${a.kind}${a.template ? ` · ${a.template}` : ''}`));
+    row.append(el('span', 'tval', a.status));
+    row.append(el('span', 'tcount', new Date(a.at).toLocaleString() + (a.detail ? ` · ${a.detail}` : '')));
+    if (a.status === 'failed') row.classList.add('danger');
+    wrap.append(row);
   }
 
   section('Reports');
@@ -2020,7 +2051,7 @@ async function renderTracker() {
   }
 
   wrap.append(el('p', 'tnote',
-    `Estimated spend: list prices x recorded tokens, grounded calls at $0 inside Google's free daily allowance. Generated ${new Date(data.generated_at).toLocaleString()}.`));
+    `Estimated spend: list prices x recorded tokens, grounded calls at $0 inside Google's free daily allowance — past 1,500 a day across the Google project they start costing real money this figure does not include. There is no budget cap; the line above only triggers an alert. Generated ${new Date(data.generated_at).toLocaleString()}.`));
   root.replaceChildren(wrap);
 }
 
