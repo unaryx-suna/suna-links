@@ -173,6 +173,20 @@
   .refused p { margin: 0 0 10px; font-size: 16px; line-height: 1.5; }
   .refused button { font-size: 13px; padding: 10px 14px; min-height: 44px;
                     background: rgba(255,255,255,.08); }
+  /* GAPS §4-§8. A place row: name, local name, map link, save. */
+  .places { margin-top: 12px; }
+  .prow2 { display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+           padding: 8px 0; border-top: 1px solid var(--line); }
+  .prow2 .who { flex: 1; min-width: 0; font-size: 14px; }
+  .prow2 .local { color: var(--dim); font-size: 13px; display: block; margin-top: 2px; }
+  .prow2 .acts2 { display: flex; gap: 6px; flex: none; }
+  .prow2 a, .prow2 button { font-size: 13px; padding: 10px 12px; min-height: 44px;
+                            background: rgba(255,255,255,.08); color: var(--text);
+                            border-radius: 999px; text-decoration: none;
+                            display: inline-flex; align-items: center; }
+  .prow2 button[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .dish { background: none; color: var(--text); text-align: left; padding: 0; font-size: 14px;
+          text-decoration: underline; text-decoration-color: var(--line); }
   .readonly { text-align: center; font-size: 12px; color: var(--sand); padding: 10px 0; }
   .reason { margin-top: 8px; display: flex; gap: 8px; }
   /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
@@ -289,6 +303,15 @@
   <button id="loc-save" class="primary" style="width:100%">Save</button>
 </div></div>
 
+<!-- ── GAPS §7 the dish sheet: what it is and its local name. No places. ── -->
+<div class="sheet" id="dish-sheet"><div class="inner">
+  <h2 id="dish-name"></h2>
+  <p class="sub" id="dish-local" hidden></p>
+  <p id="dish-what" style="font-size:15px;line-height:1.5"></p>
+  <div style="height:16px"></div>
+  <button id="dish-close" class="ghost" style="width:100%">Close</button>
+</div></div>
+
 <!-- ── §3 what Suna knows ──────────────────────────────────────────────── -->
 <div class="sheet" id="panel"><div class="inner">
   <h2>What Suna knows</h2>
@@ -331,7 +354,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v10';
+const BUILD = 'lab-v11';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -361,6 +384,10 @@ let sessionId = crypto.randomUUID();
 let readOnly = false;         // set when opened via ?ref=
 let answersThisSession = 0;
 let currentTopic = null;
+// The facts step's places for the answer on screen, keyed by normalised name —
+// this is where local_name, maps_uri and coordinates come from. GAPS §5, §6.
+let factsByName = new Map();
+let lastAnswerRef = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -785,6 +812,7 @@ function titleish(s) {
 // ── the panel ──────────────────────────────────────────────────────────────
 $('#ctx-btn').addEventListener('click', async () => { await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1'; });
 $('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; });
+$('#dish-close').addEventListener('click', () => { $('#dish-sheet').dataset.open = '0'; });
 
 async function renderPanel() {
   const n = rightNow();
@@ -1067,7 +1095,17 @@ async function ask({ chip, request, scopeOverride }) {
         // status code; the code is in the function log.
         if (event === 'unavailable') { inner.textContent = d.message; }
         if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
-        if (event === 'done')   { await renderAnswer(holder, inner, d); }
+        if (event === 'done') {
+          // GAPS §5/§6: local names, map uris and coordinates all come from
+          // the facts step, so they are indexed before the answer renders.
+          factsByName = new Map();
+          for (const p of (d.places ?? [])) {
+            const k = normName(p?.name);
+            if (k) factsByName.set(k, p);
+          }
+          lastAnswerRef = d.ref ?? null;
+          await renderAnswer(holder, inner, d);
+        }
       }
     }
   } catch (e) {
@@ -1120,6 +1158,109 @@ function refusalCard(message, request) {
   return box;
 }
 
+/// Mirrors mapLinkFor in supabase/functions/lab-answer/logic.ts, which has the
+/// test. Google Maps does not work in mainland China; a link that opens
+/// nothing is worse than no link.
+function mapLinkFor(place, countryHintStr) {
+  const cn = /china|\u4e2d\u56fd|prc|beijing|shanghai|tongzhou/i.test(countryHintStr ?? '');
+  const q = encodeURIComponent(place.name);
+  if (cn) {
+    return place.lat != null && place.lng != null
+      ? { href: `https://uri.amap.com/marker?position=${place.lng},${place.lat}&name=${q}`, app: 'Amap' }
+      : { href: `https://uri.amap.com/search?keyword=${q}`, app: 'Amap' };
+  }
+  if (place.maps_uri) return { href: place.maps_uri, app: 'Google Maps' };
+  return { href: `https://www.google.com/maps/search/?api=1&query=${q}`, app: 'Google Maps' };
+}
+
+const normName = (x) => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function factsFor(name) {
+  const n = normName(name);
+  if (!n) return null;
+  if (factsByName.has(n)) return factsByName.get(n);
+  for (const [k, v] of factsByName) if (k.includes(n) || n.includes(k)) return v;
+  return null;
+}
+
+/// GAPS §8. Every map-link and dish tap is recorded. The ladder the report
+/// reads is tapped → saved → would go → did go, and this is its first rung.
+async function recordTap(target, name, answerRef) {
+  try {
+    await db.from('lab_link_taps').insert({
+      // The ref the row was built with, not whatever is latest — a tap on an
+      // older answer belongs to that answer.
+      tester_id: tester.id, answer_ref: answerRef ?? lastAnswerRef, target, name: name ?? null,
+    });
+  } catch (e) { console.warn('[lab] tap', e.message); }
+}
+
+/// GAPS §4, §5, §6. One row per place: English and local-script name, a map
+/// link that opens an app that actually works where they are, and Save.
+function placeRow(name, answerRef) {
+  const f = factsFor(name);
+  const row = el('div', 'prow2');
+  const who = el('div', 'who');
+  who.append(document.createTextNode(name));
+  // §5. Local script name, when the facts step returned one.
+  if (f?.local_name) who.append(el('span', 'local', f.local_name));
+  row.append(who);
+
+  const acts = el('div', 'acts2');
+
+  // §6. mapLinkFor picks Amap in mainland China, Google Maps elsewhere —
+  // Google Maps does not work in mainland China and a link that opens nothing
+  // is worse than no link.
+  const link = mapLinkFor({ name, maps_uri: f?.maps_uri ?? null, lat: f?.lat ?? null, lng: f?.lng ?? null },
+                          countryHint());
+  const a = document.createElement('a');
+  a.href = link.href; a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = link.app === 'Amap' ? 'Amap' : 'Map';
+  a.onclick = () => recordTap('map', name, answerRef);
+  acts.append(a);
+
+  const save = el('button', null, 'Save');
+  save.onclick = async () => {
+    save.setAttribute('aria-pressed', 'true');
+    save.textContent = 'Saved';
+    await savePlace('place', name, f?.local_name ?? null, f?.maps_uri ?? null, answerRef, f ?? null);
+  };
+  acts.append(save);
+  row.append(acts);
+  return row;
+}
+
+/// §6. Which map app. Mainland China is the case that matters.
+function countryHint() {
+  return [location_?.name, currentTopic?.label, tester?.home_city].filter(Boolean).join(' ');
+}
+
+async function savePlace(kind, name, localName, mapsUri, answerRef, payload) {
+  try {
+    const { error } = await db.from('lab_saves').upsert({
+      tester_id: tester.id, answer_ref: answerRef ?? lastAnswerRef,
+      kind, name, local_name: localName, maps_uri: mapsUri, payload,
+    }, { onConflict: 'tester_id,kind,name' });
+    if (error) console.warn('[lab] save', error.message);
+  } catch (e) { console.warn('[lab] save', e.message); }
+}
+
+/// GAPS §7. A dish sheet is what the dish is and its local name. No places —
+/// Brian, 24 Sep. Nothing in the catalogue says what a place serves, so any
+/// place here would have come from the model unchecked.
+function openDish(d, answerRef) {
+  const sheet = $('#dish-sheet');
+  $('#dish-name').textContent = d.name ?? '';
+  $('#dish-what').textContent = d.what ?? 'No description came back for this one.';
+  const local = $('#dish-local');
+  const f = factsFor(d.name);
+  if (f?.local_name) { local.textContent = f.local_name; local.hidden = false; }
+  else local.hidden = true;
+  sheet.dataset.open = '1';
+  recordTap('dish', d.name, answerRef);
+}
+
 function emergencyCard(d) {
   const box = el('div', 'sos');
   box.append(el('div', 'lbl', 'Emergency'));
@@ -1169,6 +1310,15 @@ async function renderAnswer(holder, bubble, d) {
 
     const det = detailsOf(r.details);
     if (det) attachWhy(bubble, det);
+
+    // GAPS §4/§5/§6. Every place in a quick answer gets a name, a local name,
+    // a map link and Save.
+    const named = (r.place_ids ?? []).filter((x) => typeof x === 'string' && x.trim());
+    if (named.length) {
+      const box = el('div', 'places');
+      for (const n of named) box.append(placeRow(n, d.ref));
+      inner.append(box);
+    }
   } else {
     bubble.remove();
     const host = el('div');
@@ -1283,39 +1433,56 @@ function renderPlan(inner, r, research) {
     const f = document.createDocumentFragment();
     if (r.stay.lines?.length) f.append(list(r.stay.lines));
     if (r.stay.tradeoff) f.append(el('div', null, r.stay.tradeoff));
-    if (r.stay.alternative?.area) f.append(el('div', 'src', `Or ${r.stay.alternative.area} — ${r.stay.alternative.extra_travel ?? ''}`));
+    if (r.stay.alternative?.area) f.append(el('div', 'src', dash('Or ' + r.stay.alternative.area, r.stay.alternative.extra_travel)));
     return f;
   });
-  add('Sort these first', firstLine(r.sort_first, (x) => x.headline), () => list((r.sort_first ?? []).map((x) => [x.headline, x.detail].filter(Boolean).join(' — '))));
+  add('Sort these first', firstLine(r.sort_first, (x) => x.headline), () => list((r.sort_first ?? []).map((x) => dash(x.headline, x.detail))));
   add('Worth knowing', r.worth_knowing?.line, () => r.worth_knowing.cost ? el('div', null, r.worth_knowing.cost) : null);
   add('What to drop', firstLine(r.drop, (x) => x.cost_of_keeping), () => list((r.drop ?? []).map((x) => x.cost_of_keeping)));
 
   const yours = (r.plan ?? []).flatMap((b) => (b.days ?? []).flatMap((day) => (day.items ?? []).filter((i) => i.save_id)));
-  add('Yours', yours.length ? yours.map((i) => i.name).join(', ') : null, () => list(yours.map((i) => `${i.name} — ${i.line ?? ''}`)));
+  add('Yours', yours.length ? yours.map((i) => i.name).join(', ') : null, () => list(yours.map((i) => dash(i.name, i.line))));
 
-  add('Getting there', firstLine(r.getting_there, (x) => `${x.town} — ${x.thing}`), () => list((r.getting_there ?? []).map((x) => `${x.town} — ${x.thing}`)));
+  add('Getting there', firstLine(r.getting_there, (x) => dash(x.town, x.thing)), () => list((r.getting_there ?? []).map((x) => dash(x.town, x.thing))));
 
   if (r.plan?.length) {
     add('The plan', r.plan.map((b) => b.label).filter(Boolean).join(' · ') || 'The plan', () => {
       const f = document.createDocumentFragment();
       for (const block of r.plan) {
         if (block.label) f.append(el('div', 'daylabel', block.label));
-        if (block.base) f.append(el('div', 'src', `Base: ${block.base}${block.why ? ' — ' + block.why : ''}`));
+        if (block.base) f.append(el('div', 'src', dash('Base: ' + block.base, block.why)));
         for (const day of block.days ?? []) {
           if (day.day) f.append(el('div', 'daylabel', `${day.day}${day.type ? ' · ' + day.type : ''}`));
-          f.append(list((day.items ?? []).map((i) => {
-            const bits = [i.name, i.line, i.duration].filter(Boolean).join(' — ');
-            const note = research?.[i.name]?.line;
-            return note ? `${bits}\n${note}` : bits;
-          })));
+          // Each stop is a place row rather than a line of text, so it
+          // carries its local name, a map link and Save like everywhere else.
+          for (const i of (day.items ?? [])) {
+            if (!i?.name) continue;
+            const line = dash(i.line, i.duration, research?.[i.name]?.line);
+            const row = placeRow(i.name, lastAnswerRef);
+            if (line) row.querySelector('.who').append(el('span', 'local', line));
+            f.append(row);
+          }
         }
       }
       return f;
     });
   }
 
-  add('Worth eating', firstLine(r.worth_eating, (x) => x.name), () => list((r.worth_eating ?? []).map((x) => `${x.name} — ${x.what}`)));
-  add('Getting set up', firstLine(r.setup, (x) => x.name), () => list((r.setup ?? []).map((x) => `${x.name} — ${x.for}`)));
+  // GAPS §7. Each dish opens a sheet rather than printing its description
+  // inline, and the sheet is what the dish is and its local name only.
+  add('Worth eating', firstLine(r.worth_eating, (x) => x.name), () => {
+    const ul = el('ul');
+    for (const x of (r.worth_eating ?? [])) {
+      if (!x?.name) continue;
+      const li = el('li');
+      const b = el('button', 'dish', x.name);
+      b.onclick = () => openDish(x, lastAnswerRef);
+      li.append(b);
+      ul.append(li);
+    }
+    return ul.children.length ? ul : null;
+  });
+  add('Getting set up', firstLine(r.setup, (x) => x.name), () => list((r.setup ?? []).map((x) => dash(x.name, x.for))));
 
   if (r.budget?.per_week_local?.length) {
     const [lo, hi] = r.budget.per_week_local;
@@ -1324,10 +1491,36 @@ function renderPlan(inner, r, research) {
   }
   add('Travel time', r.travel_time ?? null, null);
 
+  // GAPS §4. Save plan on every plan.
+  if (r.plan?.length || r.title) {
+    const box = el('div', 'places');
+    const row = el('div', 'prow2');
+    row.append(el('div', 'who', r.title ?? r.context ?? 'This plan'));
+    const acts = el('div', 'acts2');
+    const b = el('button', null, 'Save plan');
+    b.onclick = async () => {
+      b.setAttribute('aria-pressed', 'true'); b.textContent = 'Saved';
+      await savePlace('plan', r.title ?? r.context ?? 'Plan', null, null, lastAnswerRef, { meta: r.meta ?? null });
+    };
+    acts.append(b); row.append(acts); box.append(row);
+    inner.append(box);
+  }
+
   if (r.question) inner.append(el('div', 'bubble', r.question));
 
   const extras = detailsOf({ conflicts: r.conflicts, unknowns: r.unknowns });
   if (extras) add('Caveats', 'What we could not pin down', () => extras);
+}
+
+/// GAPS §1. Every line builder goes through this. The Mongolia session
+/// rendered "Buuz — undefined" because `${x.name} — ${x.what}` interpolates a
+/// missing field into a truthy string, which `list()` then happily keeps.
+///
+/// Joining a filtered array instead means a missing field disappears rather
+/// than being printed, and there is no site left where a template literal can
+/// put `undefined` on a tester's screen.
+function dash(...parts) {
+  return parts.filter((p) => p !== null && p !== undefined && String(p).trim() !== '').join(' — ');
 }
 
 function firstLine(arr, fn) {
@@ -1566,7 +1759,10 @@ db.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') location.relo
 // without waiting for the model to phrase an assumption a particular way.
 window.__lab = { seasonOf, chipsForQuestion, extractAssumptions, rightNow, renderPanel,
                  prefs, addPref, confirmPref, setPrefs, keyForPhrase,
-                 refreshWeather, weatherLine, wmoConditions };
+                 refreshWeather, weatherLine, wmoConditions,
+                 // test seam: lets the renderer be driven without a model call
+                 renderAnswer, renderPlan, dash, placeRow, factsByName: () => factsByName,
+                 setFacts: (list) => { factsByName = new Map(list.map((p) => [normName(p.name), p])); } };
 boot();
 </script>
 </body>
