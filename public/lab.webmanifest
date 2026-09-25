@@ -1,0 +1,14 @@
+{
+  "name": "Suna Lab",
+  "short_name": "Suna Lab",
+  "description": "Prompt-testing harness for Suna.",
+  "start_url": "/lab.html",
+  "scope": "/lab.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/lab-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

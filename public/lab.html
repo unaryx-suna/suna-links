@@ -7,33 +7,49 @@
      it too, because a meta tag is ignored on a page a crawler was told not to
      fetch and the disallow is ignored by crawlers that do not read it. -->
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#000000">
+<!-- Add to Home Screen. The browser's own bars eat about a fifth of an
+     iPhone screen; standalone gives that back and the lab opens like an app. -->
+<link rel="manifest" href="/lab.webmanifest">
+<link rel="apple-touch-icon" href="/lab-icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Suna Lab">
 <title>Suna Lab</title>
 <style>
   :root {
-    --ink: #111111; --card: #1b1b1b; --line: #292929; --sand: #F6CB94;
-    --text: #ffffff; --muted: #C2C2C2; --dim: rgba(255,255,255,.55);
+    /* UI-R2. Apple's system palette: a true black ground so the glass bars
+       have something to sit on, and the two standard label levels instead of
+       hand-picked greys. */
+    --ink: #000000; --card: #1c1c1e; --line: rgba(84,84,88,0.65);
+    --sand: #F6CB94;
+    --text: #ffffff;
+    --muted: rgba(235,235,245,0.6);          /* secondary label */
+    --dim: rgba(235,235,245,0.3);            /* tertiary label */
+    --fill: rgba(118,118,128,0.24);          /* the standard control fill */
     --danger: #FF6B6B; --ok: #6FCF97;
     /* §1. The whole desktop fix. Everything else is for the phone. */
     --col: 680px;
+    /* The two bars are fixed, so the thread needs to know how tall they are
+       to scroll clear of them. */
+    --bar-h: 60px;
+    --dock-h: 72px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: var(--ink); color: var(--text); }
   body {
-    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+    /* 17pt body, the iOS default. */
+    font-size: 17px; line-height: 1.47;
     /* dvh, not vh: on iOS Safari vh ignores the toolbar and the composer ends
        up underneath it. */
     height: 100dvh;
-    display: flex; flex-direction: column;
     overflow: hidden;
   }
   /* 320px is the floor. Nothing may scroll sideways there. */
   .col { width: 100%; max-width: var(--col); margin-inline: auto; padding-inline: 16px; }
 
-  button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 12px 18px; color: var(--text); }
+  button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 12px 18px; color: var(--text); background: none; }
   .primary { background: var(--sand); color: var(--ink); font-weight: 600; }
   .primary[disabled] { opacity: .45; }
   .ghost { background: rgba(255,255,255,.10); }
@@ -47,27 +63,83 @@
   }
   textarea { resize: none; min-height: 48px; max-height: 140px; line-height: 1.4; }
 
-  /* ── band 1: context bar, sticky top ──────────────────────────────────── */
-  #bar { flex: none; border-bottom: 1px solid var(--line); background: var(--ink); }
-  #bar .col { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-height: 52px; }
-  #ctx-btn {
-    background: none; padding: 8px 0; text-align: left; flex: 1; min-width: 0;
-    font-size: 13px; color: var(--muted); line-height: 1.35;
+  /* ── band 1: the top bar ──────────────────────────────────────────────
+     Glass, fixed, with the thread scrolling UNDER it — a blur with nothing
+     behind it is just a grey rectangle, which is what the old in-content
+     glass was. */
+  #bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding-top: env(safe-area-inset-top);
+    background: rgba(28,28,30,0.72);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 0.5px solid var(--line);
   }
-  #ctx-btn b { color: var(--text); font-weight: 500; }
-  #ctx-btn .chev { color: var(--dim); }
-  #new-chat { background: rgba(255,255,255,.08); font-size: 13px; padding: 9px 13px; flex: none; }
+  @supports not (backdrop-filter: blur(20px)) { #bar { background: #1c1c1e; } }
+  #bar .col { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-height: var(--bar-h); }
+  /* Title and time, stacked. The place is the title; the time is the
+     subtitle, the way a Messages conversation names who you are talking to. */
+  #ctx-btn {
+    padding: 6px 0; text-align: left; flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 1px;
+    /* 44pt tap area even though the ink is shorter. */
+    min-height: 44px; justify-content: center;
+  }
+  #ctx-btn .place {
+    font-size: 17px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #ctx-btn .chev { color: var(--dim); font-weight: 400; }
+  #ctx-btn .sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* At most two on the right, per the brief. Everything else is in the menu. */
+  .barbtn {
+    flex: none; width: 44px; height: 44px; padding: 0;
+    display: grid; place-items: center;
+    font-size: 19px; color: var(--sand); background: none;
+  }
+  .barbtn:active { opacity: .5; }
+
+  /* ── the ⋯ menu ───────────────────────────────────────────────────────── */
+  #menu { position: fixed; inset: 0; z-index: 30; display: none; }
+  #menu[data-open="1"] { display: block; }
+  #menu .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+  #menu .sheetc {
+    position: absolute; left: 16px; right: 16px;
+    top: calc(env(safe-area-inset-top) + var(--bar-h) + 6px);
+    margin-inline: auto; max-width: 320px;
+    background: rgba(28,28,30,0.92);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 0.5px solid var(--line); border-radius: 14px; overflow: hidden;
+  }
+  @supports not (backdrop-filter: blur(20px)) { #menu .sheetc { background: #1c1c1e; } }
+  #menu button, #menu .mitem {
+    display: flex; width: 100%; align-items: center; justify-content: space-between;
+    gap: 12px; min-height: 44px; padding: 11px 16px; border-radius: 0;
+    font-size: 17px; color: var(--text); text-align: left; background: none;
+  }
+  #menu button:active { background: rgba(255,255,255,.08); }
+  #menu .sep { height: 0.5px; background: var(--line); }
+  #menu .mlbl { font-size: 13px; color: var(--muted); padding: 10px 16px 4px; }
+  #menu .tick { color: var(--sand); }
 
   /* ── band 2: the conversation, scrolls ────────────────────────────────── */
-  #convo { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-  #convo .col { padding-top: 20px; padding-bottom: 8px; }
+  #convo {
+    height: 100dvh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    /* Clear of both fixed bars, so nothing is ever hidden behind the glass. */
+    padding-top: calc(env(safe-area-inset-top) + var(--bar-h));
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--dock-h));
+  }
+  /* A flex column so the empty state can push its chips to the bottom, into
+     thumb reach, instead of stranding them at the top of an empty screen. */
+  #convo .col { padding-top: 16px; padding-bottom: 8px; display: flex; flex-direction: column; min-height: 100%; }
   /* §6. 24px between messages. */
   .turn { display: flex; margin-bottom: 24px; }
   .turn.me { justify-content: flex-end; }
   .bubble {
-    max-width: 88%; padding: 12px 14px; border-radius: 16px;
-    background: var(--card); border: 1px solid var(--line);
-    font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+    max-width: 88%; padding: 12px 14px; border-radius: 18px;
+    background: var(--card); border: 0;
+    font-size: 17px; line-height: 1.47; white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .turn.me .bubble { background: var(--sand); color: var(--ink); border-color: transparent; }
   .suna { display: block; }
@@ -188,44 +260,24 @@
   .dish { background: none; color: var(--text); text-align: left; padding: 0; font-size: 14px;
           text-decoration: underline; text-decoration-color: var(--line); }
   .barright { display: flex; gap: 6px; align-items: center; flex: none; }
-  /* ── glass ────────────────────────────────────────────────────────────
-     Starter chips, an answer's reply chips and the report button share one
-     surface. The -webkit- prefix stays: iPhone Safari still needs it, and
-     dropping it turns the glass into a flat wash on the device most testers
-     are holding. */
-  .glass, .chip {
-    background: rgba(255,255,255,0.08);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    backdrop-filter: blur(16px) saturate(140%);
-    border: 1px solid rgba(255,255,255,0.14);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-    border-radius: 999px;
-  }
-  /* Where the effect is unsupported the translucency has nothing to sit on,
-     so it becomes a solid instead of a muddy overlay. */
-  @supports not (backdrop-filter: blur(16px)) {
-    .glass, .chip { background: rgba(255,255,255,0.10); }
-  }
+  /* Glass lives on the two BARS only. It was on the chips and the report
+     button, inside the content — Apple uses it for surfaces that float over
+     content, and on a flat background it has nothing to blur, so it just read
+     as grey. */
   /* The tail: chips and the report button, at the bottom of the thread. */
-  #tail { display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
-          padding: 4px 0 8px; }
+  #tail { display: flex; flex-direction: column; align-items: stretch; padding: 4px 0 8px; }
   #tail[hidden] { display: none; }
+  /* Empty chat: push the chips down to where a thumb reaches, rather than
+     stranding them at the top of a blank screen. `auto` only bites when there
+     is spare room, so mid-conversation they stay under the latest answer. */
+  #convo-col.empty #tail { margin-top: auto; }
   /* An error the tester's browser hit, shown in the read-only session view so
      a report shows what they SAW, not what the server believes it sent. */
   .clienterr { margin-top: 8px; padding: 10px 12px; border-radius: 10px;
                background: rgba(255,107,107,.10); border: 1px solid var(--danger);
                color: var(--danger); font-size: 13px; line-height: 1.45; }
   .clienterr .when { color: var(--muted); font-size: 11px; margin-top: 4px; }
-  /* 44px minimum tap target, and #fff on this surface is ~14:1 — well past
-     the 4.5:1 floor. */
-  #tail .chip { min-height: 44px; padding: 11px 16px; font-size: 15px; color: var(--text); }
-  /* Quieter than the chips: smaller, muted, but still 44px to tap and still
-     --muted (#C2C2C2) on #111, which measures ~11.6:1. */
-  #report-chat.report {
-    min-height: 44px; padding: 11px 14px; font-size: 13px;
-    color: var(--muted); align-self: flex-start;
-  }
-  #left-today { font-size: 12px; color: var(--muted); padding: 8px 4px; white-space: nowrap; }
+
   /* LAB-R5 §3. The tracker. One screen, read-only. */
   .tracker { padding: 16px 0 40px; }
   .tracker h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
@@ -244,8 +296,6 @@
              color: var(--danger); border-radius: 12px; padding: 12px 14px;
              margin: 0 0 14px; font-size: 14px; }
   .tnote { font-size: 12px; color: var(--muted); margin-top: 20px; line-height: 1.5; }
-  #writer-pick { background: rgba(255,255,255,.08); color: var(--text); font-size: 12px;
-                 padding: 7px 8px; border: 0; border-radius: 8px; }
   /* The model that wrote it, under the answer. Brian only. */
   .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
 
@@ -266,24 +316,69 @@
   .reason button { min-height: 44px; }
 
   /* ── band 3: composer, pinned ─────────────────────────────────────────── */
-  #dock { flex: none; border-top: 1px solid var(--line); background: var(--ink); }
+  /* ── band 3: the composer ─────────────────────────────────────────────
+     The second glass bar. Fixed, with the thread scrolling under it. */
+  #dock {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    background: rgba(28,28,30,0.72);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-top: 0.5px solid var(--line);
+  }
+  @supports not (backdrop-filter: blur(20px)) { #dock { background: #1c1c1e; } }
   /* Without the inset the input sits under the home bar on any iPhone
      without a home button. */
-  #dock .col { padding-top: 10px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  #dock .col { padding-top: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   #status { font-size: 13px; color: var(--dim); min-height: 18px; margin-bottom: 6px; }
   #status.slow { color: var(--sand); }
   .dots::after { content: '…'; animation: blink 1.2s steps(4, end) infinite; }
   @keyframes blink { 0% { opacity: .2 } 50% { opacity: 1 } 100% { opacity: .2 } }
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
+  /* WRAP, never scroll sideways — the old row ran off both edges of a
+     320pt screen and clipped the first and last chip. */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
-    white-space: nowrap; background: rgba(255,255,255,.08);
-    border-radius: 999px; padding: 10px 14px; font-size: 14px; min-height: 44px; flex: none;
+    background: var(--fill); border: 0; border-radius: 999px;
+    padding: 0 14px; font-size: 15px; color: var(--text);
+    /* 36pt of ink inside a 44pt target: the shape is quieter than the answer
+       above it, the tap area is not. */
+    height: 36px; display: inline-flex; align-items: center;
+    position: relative; flex: 0 1 auto; max-width: 100%;
+    white-space: normal; text-align: left;
   }
+  .chip::after { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
   .chip[disabled] { opacity: .4; }
-  .chip.answer { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .chip.answer { background: var(--sand); color: #000; font-weight: 600; }
+  /* One rounded field with the attach icon INSIDE it, and a circular send
+     button beside it — the "Go" text button is gone. */
   .row { display: flex; gap: 8px; align-items: flex-end; }
-  .row button { flex: none; min-height: 48px; }
+  .field {
+    flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 6px;
+    background: var(--fill); border-radius: 20px; padding: 0 6px 0 4px;
+  }
+  .field textarea {
+    flex: 1; min-width: 0; background: none; border: 0; border-radius: 0;
+    padding: 10px 4px; min-height: 40px; max-height: 120px;
+    font-size: 17px; line-height: 1.35; color: var(--text);
+  }
+  .field textarea:focus { outline: none; }
+  #attach {
+    flex: none; width: 36px; height: 36px; padding: 0; margin-bottom: 2px;
+    display: grid; place-items: center; font-size: 22px; font-weight: 300;
+    color: var(--muted); background: none; border-radius: 999px;
+  }
+  #send {
+    flex: none; width: 36px; height: 36px; padding: 0; margin-bottom: 2px;
+    display: grid; place-items: center; border-radius: 999px;
+    background: var(--sand); color: #000; font-size: 17px; font-weight: 700;
+  }
+  /* Dimmed until there is something to send. */
+  #send[disabled], #send.empty { opacity: .3; }
+  /* The visible circle is 36pt; the target is 44pt. */
+  #send::after, #attach::after { content: ''; position: absolute; width: 44px; height: 44px; }
+  #send, #attach { position: relative; }
+
+  /* The empty chat's one line of guidance, directly above the chips. */
+  #tail-prompt { font-size: 15px; color: var(--muted); margin-bottom: 10px; }
 
   /* ── sheets ───────────────────────────────────────────────────────────── */
   .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 20; }
@@ -345,20 +440,37 @@
 <div id="app" hidden style="display:contents">
   <div id="bar">
     <div class="col">
-      <button id="ctx-btn"><span id="ctx">…</span> <span class="chev">›</span></button>
-      <div class="barright">
-        <!-- WRITER-SWITCH §1. Brian only. Stays hidden for every other tester,
-             and the answers carry no model label for them either — a visible
-             model name would shape the Yes or No. -->
-        <span id="left-today" hidden title="Answers left today"></span>
-        <select id="writer-pick" hidden title="Which model writes. Applies from the next topic.">
-          <option value="">Writer: default</option>
-          <option value="haiku">Haiku</option>
-          <option value="sonnet">Sonnet</option>
-          <option value="opus">Opus</option>
-          <option value="rotate">Rotate</option>
-        </select>
-        <button id="new-chat">New chat</button>
+      <!-- The place is the title, the time its subtitle. Two lines, one tap
+           target, and the place is truncated rather than wrapped. -->
+      <button id="ctx-btn">
+        <span class="place"><span id="ctx-place">…</span> <span class="chev">›</span></span>
+        <span class="sub" id="ctx-sub"></span>
+      </button>
+      <!-- Two buttons, no more. Everything else is in the menu. -->
+      <button id="new-chat" class="barbtn" aria-label="New chat" title="New chat">✎</button>
+      <button id="more-btn" class="barbtn" aria-label="More" title="More"
+              aria-haspopup="true" aria-expanded="false">⋯</button>
+    </div>
+  </div>
+
+  <!-- ⋯ More. Report this chat, the session code, Start fresh, and the
+       writer picker for admins only. -->
+  <div id="menu" data-open="0" role="dialog" aria-label="More">
+    <div class="scrim" id="menu-scrim"></div>
+    <div class="sheetc">
+      <button id="m-report">Report this chat</button>
+      <div class="sep"></div>
+      <button id="m-session"><span>Session <span id="m-session-code">S-…</span></span><span class="tick" id="m-session-tick"></span></button>
+      <div class="sep"></div>
+      <button id="m-fresh">Start fresh</button>
+      <div id="m-writer-wrap" hidden>
+        <div class="sep"></div>
+        <div class="mlbl">Writer</div>
+        <button class="m-writer" data-w="">Default<span class="tick"></span></button>
+        <button class="m-writer" data-w="haiku">Haiku<span class="tick"></span></button>
+        <button class="m-writer" data-w="sonnet">Sonnet<span class="tick"></span></button>
+        <button class="m-writer" data-w="opus">Opus<span class="tick"></span></button>
+        <button class="m-writer" data-w="rotate">Rotate<span class="tick"></span></button>
       </div>
     </div>
   </div>
@@ -370,9 +482,11 @@
     <div class="col">
       <div id="status"></div>
       <div class="row">
-        <button id="attach" class="ghost" title="Add a photo or clip">+</button>
-        <textarea id="box" rows="1" placeholder="Ask Suna…"></textarea>
-        <button id="send" class="primary">Go</button>
+        <div class="field">
+          <button id="attach" aria-label="Add a photo or clip" title="Add a photo or clip">+</button>
+          <textarea id="box" rows="1" placeholder="Ask Suna…"></textarea>
+        </div>
+        <button id="send" class="empty" aria-label="Send">↑</button>
       </div>
       <input id="file" type="file" accept="image/*,video/*" hidden>
     </div>
@@ -450,7 +564,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v18';
+const BUILD = 'lab-v19';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -542,22 +656,26 @@ async function openApp() {
     return;
   }
 
-  // WRITER-SWITCH §1. The selector exists only for testers with the flag.
-  // Everyone else never sees it and never sees a model name, which is what
-  // makes their Yes or No worth counting.
+  // WRITER-SWITCH §1. The picker lives in the ⋯ menu and exists only for
+  // testers with the flag. Everyone else never sees it and never sees a model
+  // name, which is what makes their Yes or No worth counting.
   if (tester.lab_admin === true) {
-    const sel = $('#writer-pick');
-    sel.hidden = false;
-    try { sel.value = localStorage.getItem('lab.writer') || ''; } catch {}
-    sel.addEventListener('change', () => {
-      try { localStorage.setItem('lab.writer', sel.value); } catch {}
-      // It applies from the NEXT topic, not mid-conversation — say so rather
-      // than let it look like nothing happened.
-      $('#convo-col').append(sunaTurn(
-        sel.value
-          ? `Writer set to ${sel.options[sel.selectedIndex].text}. It applies from the next topic.`
-          : 'Writer back to the default. It applies from the next topic.'));
-    });
+    $('#m-writer-wrap').hidden = false;
+    markWriterChoice();
+    for (const b of document.querySelectorAll('.m-writer')) {
+      b.addEventListener('click', () => {
+        try { localStorage.setItem('lab.writer', b.dataset.w || ''); } catch {}
+        markWriterChoice();
+        closeMenu();
+        // It applies from the NEXT topic, not mid-conversation — say so
+        // rather than let it look like nothing happened.
+        $('#convo-col').append(sunaTurn(
+          b.dataset.w
+            ? `Writer set to ${b.textContent.trim()}. It applies from the next topic.`
+            : 'Writer back to the default. It applies from the next topic.'));
+        renderChips();
+      });
+    }
   }
   renderContext();
   renderChips();
@@ -603,17 +721,42 @@ async function refreshDailyState() {
   } catch { /* the counter is a courtesy; the server is the authority */ }
 }
 
-function renderCounter() {
-  const n = $('#left-today');
-  if (!n || !dailyState || dailyState.exempt) { if (n) n.hidden = true; return; }
-  const q = Number(dailyState.quick_left ?? 0);
-  const p = Number(dailyState.plan_left ?? 0);
-  n.hidden = false;
-  n.textContent = q === 0 && p > 0 ? '1 plan left'
-    : q === 0 ? 'none left today'
-    : p > 0 ? `${q} left · 1 plan`
-    : `${q} left`;
-}
+/// The count lives in the bar's subtitle now, beside the time.
+function renderCounter() { renderContext(); }
+
+// ── the ⋯ menu ─────────────────────────────────────────────────────────────
+$('#more-btn').addEventListener('click', () => {
+  ($('#menu').dataset.open === '1') ? closeMenu() : openMenu();
+});
+$('#menu-scrim').addEventListener('click', closeMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+
+$('#m-report').addEventListener('click', () => {
+  closeMenu();
+  $('#report-sheet').dataset.open = '1';
+  $('#report-note').focus();
+});
+// Tap the code to copy it — a tester needs to be able to read it out or paste
+// it to Brian.
+$('#m-session').addEventListener('click', async () => {
+  if (!sessionCode) return;
+  try {
+    await navigator.clipboard.writeText(sessionCode);
+    $('#m-session-tick').textContent = 'Copied';
+    setTimeout(() => { $('#m-session-tick').textContent = ''; }, 1400);
+  } catch { /* clipboard refused; the code is still on screen to read */ }
+});
+$('#m-fresh').addEventListener('click', () => {
+  closeMenu();
+  // Same as the divider's Start fresh: a clean topic without clearing what is
+  // already on screen.
+  sessionId = crypto.randomUUID();
+  lastQuestion = null;
+  ensureSessionCode();
+  $('#convo-col').append(sunaTurn('Starting fresh — new topic.'));
+  renderChips();
+  scroll();
+});
 
 $('#report-close').addEventListener('click', () => { $('#report-sheet').dataset.open = '0'; });
 $('#report-send').addEventListener('click', async () => {
@@ -911,10 +1054,30 @@ function rightNow() {
   };
 }
 
+/// The place is the title; the time is the subtitle.
+///
+/// SHORT place names only. "Tongzhou District" wrapped onto two lines and
+/// pushed the bar's buttons off the edge, so the trailing administrative word
+/// is dropped — the district or neighbourhood is what a person would say.
+function shortPlace(name) {
+  if (!name) return 'somewhere';
+  let t = String(name).split(',')[0].trim();
+  t = t.replace(/\s+(District|Province|Prefecture|County|Municipality|Region|Territory|City)$/i, '');
+  return t || 'somewhere';
+}
+
 function renderContext() {
   const n = rightNow();
-  const where = n.location ? `<b>${escapeHtml(n.location)}</b>` : '<b>somewhere</b>';
-  $('#ctx').innerHTML = `${escapeHtml(n.local_time)} in ${where}`;
+  $('#ctx-place').textContent = shortPlace(n.location);
+  // The daily counter rides here, in the subtitle, rather than as a third
+  // thing in the bar: R5 §2 still requires a visible count, and the bar is
+  // allowed two buttons and no more.
+  const bits = [n.local_time];
+  if (dailyState && !dailyState.exempt) {
+    const q = Number(dailyState.quick_left ?? 0);
+    bits.push(q === 0 ? 'none left today' : `${q} left`);
+  }
+  $('#ctx-sub').textContent = bits.join(' · ');
 }
 
 // ── location: asked on first chip tap, never on page load ──────────────────
@@ -1194,22 +1357,43 @@ function ensureTail() {
   if (readOnly) return null;
   if (!tailEl) {
     tailEl = el('div', null); tailEl.id = 'tail';
+    // One line of guidance, shown only on an empty chat.
+    const prompt = el('div', null, 'What are you up for?'); prompt.id = 'tail-prompt';
     const chips = el('div', 'chips'); chips.id = 'chips';
-    const rep = el('button', 'glass report'); rep.id = 'report-chat';
-    rep.onclick = () => { $('#report-sheet').dataset.open = '1'; $('#report-note').focus(); };
-    tailEl.append(chips, rep);
+    tailEl.append(prompt, chips);
   }
   // Moves it to the end if it is already somewhere else in the column.
   $('#convo-col').append(tailEl);
-  labelReportButton();
+  // Empty means: nothing in the column except the tail itself.
+  const empty = $('#convo-col').children.length <= 1;
+  $('#convo-col').classList.toggle('empty', empty);
+  // "Report this chat" is in the ⋯ menu; it has no business appearing under
+  // a chat with nothing in it.
+  $('#tail-prompt').hidden = !empty;
   return tailEl;
 }
 
-/// "Report this chat · S-0038" — the code is part of the button now that the
-/// header no longer carries it, so a tester can still read it out.
+/// The session code shows in the ⋯ menu now.
 function labelReportButton() {
-  const b = document.getElementById('report-chat');
-  if (b) b.textContent = sessionCode ? `Report this chat · ${sessionCode}` : 'Report this chat';
+  const el2 = document.getElementById('m-session-code');
+  if (el2) el2.textContent = sessionCode ?? 'S-…';
+}
+
+function markWriterChoice() {
+  let cur = ''; try { cur = localStorage.getItem('lab.writer') || ''; } catch {}
+  for (const b of document.querySelectorAll('.m-writer')) {
+    b.querySelector('.tick').textContent = (b.dataset.w || '') === cur ? '✓' : '';
+  }
+}
+
+function openMenu() {
+  labelReportButton();
+  $('#menu').dataset.open = '1';
+  $('#more-btn').setAttribute('aria-expanded', 'true');
+}
+function closeMenu() {
+  $('#menu').dataset.open = '0';
+  $('#more-btn').setAttribute('aria-expanded', 'false');
 }
 
 /// Hidden while an answer streams, shown again when it finishes — offering
@@ -1279,7 +1463,9 @@ $('#send').addEventListener('click', async () => {
 });
 $('#box').addEventListener('input', (e) => {
   e.target.style.height = 'auto';
-  e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  // The circular send stays dimmed until there is something to send.
+  $('#send').classList.toggle('empty', !e.target.value.trim());
 });
 // Don't fight the keyboard with viewport maths — dvh plus this is enough.
 $('#box').addEventListener('focus', () => {
