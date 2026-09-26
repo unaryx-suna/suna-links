@@ -305,6 +305,11 @@
   .tnote { font-size: 12px; color: var(--muted); margin-top: 20px; line-height: 1.5; }
   /* The model that wrote it, under the answer. Brian only. */
   .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
+  /* v2: the source name code resolved from a fact_id. Quieter than the claim,
+     because the claim is the thing being read. */
+  .srcname { color: var(--muted); font-size: 12px; }
+  /* v2: the trip at a glance, directly under the title. */
+  .planmeta { margin-top: 6px; font-size: 13px; color: var(--muted); }
 
   #attach { flex: none; min-height: 48px; width: 48px; padding: 0; font-size: 22px; line-height: 1; }
   /* §3 the upload confirm card */
@@ -587,7 +592,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v25';
+const BUILD = 'lab-v26';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1541,7 +1546,7 @@ $('#box').addEventListener('focus', () => {
 
 const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip: 'Plan a trip' };
 
-async function ask({ chip, request, scopeOverride }) {
+async function ask({ chip, request, scopeOverride, widenFacts }) {
   if (readOnly) return;
   busy = true; setBusy(true);
   // Out of the way while the answer streams — offering the next move
@@ -1588,6 +1593,9 @@ async function ask({ chip, request, scopeOverride }) {
       body: JSON.stringify({
         chip, request,
         scope_override: scopeOverride === true,
+        // v2: "Yes, look" — the same question, searched wider, and excluded
+        // from the daily count server-side.
+        widen_facts: widenFacts === true,
         session_id: sessionId,
         // Ignored by the function for anyone without lab_admin, so
         // this is a convenience, not a permission.
@@ -1657,6 +1665,17 @@ async function ask({ chip, request, scopeOverride }) {
         if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
         if (event === 'done') {
           answered = true;
+          // v2: nothing was found. Replace the whole turn with the offer —
+          // drawing an empty plan around it would look like a broken answer
+          // rather than an honest one.
+          if (d.no_facts === true) {
+            holder.replaceChildren(noFactsCard(d, request || CHIP_TEXT[chip] || ''));
+            lastAnswerRef = d.ref ?? null;
+            clearTimeout(slowTimer); setStatus('');
+            refreshDailyState();
+            scroll();
+            return;
+          }
           // GAPS §5/§6: local names, map uris and coordinates all come from
           // the facts step, so they are indexed before the answer renders.
           factsByName = new Map();
@@ -1964,6 +1983,10 @@ function detailsOf(details) {
       const li = el('li');
       li.append(document.createTextNode(c.text));
       if (c.type) li.append(el('span', 'tag', c.type));
+      // v2: the writer cites a fact id and code resolves it. Anything without
+      // a resolved name was dropped server-side, so a claim that reaches here
+      // always has one — but guard anyway rather than print "undefined".
+      if (c.source_name) li.append(el('span', 'srcname', ` · ${c.source_name}`));
       ul.append(li);
     }
     if (ul.children.length) f.append(group('Claims', ul));
@@ -2013,7 +2036,11 @@ function renderPlan(inner, r, research) {
 
   if (r.title || r.context) {
     const head = el('div', 'bubble');
-    head.textContent = [r.title, r.context, r.meta].filter(Boolean).join('\n');
+    head.textContent = [r.title, r.context].filter(Boolean).join('\n');
+    // v2: `meta` is the shape of the trip at a glance — "10 days · 1 base ·
+    // 5 days out". It sits under the title as its own line because the first
+    // screen has to stand on its own.
+    if (r.meta) head.append(el('div', 'planmeta', r.meta));
     inner.append(head);
   }
 
@@ -2473,6 +2500,39 @@ async function renderTracker() {
   wrap.append(el('p', 'tnote',
     `Estimated spend: list prices x recorded tokens, grounded calls at $0 inside Google's free daily allowance — past 1,500 a day across the Google project they start costing real money this figure does not include. There is no budget cap; the line above only triggers an alert. Generated ${new Date(data.generated_at).toLocaleString()}.`));
   root.replaceChildren(wrap);
+}
+
+/// v2. Nothing was found, so nothing is claimed.
+///
+/// The facts step came back empty and the answer said so instead of writing
+/// from memory. That is the honest outcome, and it has to LOOK like an offer
+/// rather than a failure — so the card is the question and two chips, with no
+/// empty plan scaffolding around it.
+///
+/// Neither reply costs the tester one of their five: the server excludes a
+/// widen request from the count, the same way it excludes a reply.
+function noFactsCard(d, request) {
+  const card = el('div', 'refused');
+  const q = d?.response?.question || d?.response?.context
+    || "I haven't looked into this one yet. Want me to?";
+  card.append(el('p', null, q));
+
+  const row = el('div', 'chips');
+  const yes = el('button', 'chip answer', 'Yes, look');
+  yes.onclick = () => {
+    for (const b of row.querySelectorAll('button')) b.disabled = true;
+    card.append(el('p', null, 'Looking…'));
+    // The same question, told to search wider. Not a new question.
+    ask({ chip: null, request, widenFacts: true });
+  };
+  const no = el('button', 'chip', 'No');
+  no.onclick = () => {
+    row.remove();
+    card.append(el('p', null, 'Fair enough — ask me something else.'));
+  };
+  row.append(yes, no);
+  card.append(row);
+  return card;
 }
 
 /// LAB-R5 §2. The limit, and the one question that earns three more.
