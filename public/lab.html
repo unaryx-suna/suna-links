@@ -601,7 +601,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v27';
+const BUILD = 'lab-v28';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1255,6 +1255,34 @@ async function reverseName(lat, lng, accuracyM) {
   } catch { return null; }
 }
 
+/// Start the facts lookup before the tester asks for anything.
+///
+/// Measured 26 Sep: the facts step takes a median 15.4s and up to 79s. Nothing
+/// makes that fast enough to sit in front of someone waiting, so it stops
+/// sitting in front of them — it starts when we learn where they are, and the
+/// answer usually finds it already done. Fire and forget: if it fails, the
+/// answer just does the lookup itself.
+let lastPrefetchCell = null;
+function prefetchFacts(loc) {
+  if (!loc || loc.lat == null || loc.lng == null) return;
+  const cell = `${loc.lat.toFixed(2)},${loc.lng.toFixed(2)}`;
+  if (cell === lastPrefetchCell) return;    // same ~1km cell, already asked
+  lastPrefetchCell = cell;
+  (async () => {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) return;
+      await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                   'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prefetch_facts', lat: loc.lat, lng: loc.lng,
+                               place_name: loc.name ?? null, now: nowString() }),
+      });
+    } catch (e) { console.warn('[lab] prefetch', e?.message ?? e); }
+  })();
+}
+
 /// How old a fix is, in seconds. A stored location with no `at` predates this
 /// change and is treated as old, which is the safe reading.
 function locationAgeS(loc) {
@@ -1291,6 +1319,8 @@ async function refreshLocation() {
   got.name = await reverseName(got.lat, got.lng, got.accuracy_m);
   location_ = got;
   await saveTester({ last_location: location_ });
+  // We now know where they are — start looking things up.
+  prefetchFacts(location_);
   await refreshWeather();
   renderContext();
   return location_;
@@ -1622,6 +1652,9 @@ function renderChips() {
     b.onclick = async () => {
       setStatus("Checking what's open", true);
       await ensureLocation();
+      // Again on the tap: the fix may have moved since load, and a warm cell
+      // is the difference between an instant answer and a 20-second wait.
+      prefetchFacts(location_);
       if (s.chip === 'trip') { $('#box').focus(); ask({ chip: s.chip, request: $('#box').value.trim() }); }
       else ask({ chip: s.chip, request: '' });
     };
