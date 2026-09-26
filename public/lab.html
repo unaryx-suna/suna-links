@@ -311,6 +311,7 @@
      because the claim is the thing being read. */
   .srcname { color: var(--muted); font-size: 12px; }
   /* v2: the trip at a glance, directly under the title. */
+  .placelink { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
   .planmeta { margin-top: 6px; font-size: 13px; color: var(--muted); }
 
   #attach { flex: none; min-height: 48px; width: 48px; padding: 0; font-size: 22px; line-height: 1; }
@@ -601,7 +602,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v30';
+const BUILD = 'lab-v31';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -777,6 +778,7 @@ $('#m-fresh').addEventListener('click', () => {
   // already on screen.
   sessionId = crypto.randomUUID();
   lastQuestion = null;
+  topicSubject = null;
   ensureSessionCode();
   $('#convo-col').append(sunaTurn('Starting fresh — new topic.'));
   renderChips();
@@ -1152,13 +1154,36 @@ addEventListener('load', syncBarHeights);
 //   - the status line appearing and disappearing above it
 // Cheap: the guard inside means an unchanged height writes nothing.
 
+/// SCENARIO-1 §4. The subject of the current topic, when it came from what
+/// the tester typed rather than from where their phone is.
+///
+/// Brian asked about Bukit Bintang and the header kept saying "Melbourne ·
+/// You set this", which is where he set his location days ago and has
+/// nothing to do with the question.
+let topicSubject = null;   // { name, source } | null
+
 function renderContext() {
   const n = rightNow();
-  $('#ctx-place').textContent = shortPlace(n.location);
+  // The header follows the topic. The tester's own location comes back the
+  // moment a topic has no subject of its own.
+  $('#ctx-place').textContent = topicSubject?.name
+    ? shortPlace(topicSubject.name)
+    : shortPlace(n.location);
   // The daily counter rides here, in the subtitle, rather than as a third
   // thing in the bar: R5 §2 still requires a visible count, and the bar is
   // allowed two buttons and no more.
   const bits = [n.local_time];
+  if (topicSubject?.name) {
+    // Said plainly, because the alternative reads as if Suna has lost track
+    // of where the tester is.
+    bits.push('From your message');
+    if (dailyState && !dailyState.exempt) {
+      const q0 = Number(dailyState.quick_left ?? 0);
+      bits.push(q0 === 0 ? 'none left today' : `${q0} left`);
+    }
+    $('#ctx-sub').textContent = bits.join(' · ');
+    return;
+  }
   // §3: the subtitle says so when the place is not a fresh fix, because a
   // wrong place produces a confidently wrong answer and nothing on screen
   // would otherwise admit it.
@@ -1825,7 +1850,12 @@ async function ask({ chip, request, scopeOverride, widenFacts }) {
         // The page is already showing "Checking what's open"; the mode event
         // arrives before the facts step finishes, so it must not replace a
         // true stage line with a vaguer one.
-        if (event === 'mode') modeKnown = d.mode;
+        if (event === 'mode') {
+          modeKnown = d.mode;
+          // SCENARIO-1 §4: the header updates before the answer streams.
+          topicSubject = d.subject ? { name: d.subject, source: d.subject_source } : null;
+          renderContext();
+        }
         // §0a. The divider is the tester's only signal that we have re-scoped,
         // so it shows before the answer rather than after it.
         if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
@@ -2088,6 +2118,34 @@ function setBusy(on) {
   document.querySelectorAll('#tail .chip').forEach((c) => { c.disabled = on; });
 }
 
+
+/// SCENARIO-1 §4. Turn each place named in a quick answer into a map link.
+///
+/// The names come from the facts the answer was written from, so a link only
+/// appears for a place we actually hold a Maps URL for — an underlined word
+/// that goes nowhere is worse than plain text.
+function linkPlacesInText(bubble, d) {
+  const places = (d.places ?? []).filter((p) => p?.name && p?.maps_uri);
+  if (!places.length) return;
+  // Longest first, so "Jalan Alor Food Street" wins over "Jalan Alor".
+  const byLength = [...places].sort((a, b) => b.name.length - a.name.length);
+  let html = bubble.textContent;
+  const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  html = esc(html);
+  const done = new Set();
+  for (const p of byLength) {
+    const key = p.name.toLowerCase();
+    if (done.has(key)) continue;
+    const needle = esc(p.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?<!>)\\b${needle}\\b(?![^<]*</a>)`, 'i');
+    if (!re.test(html)) continue;
+    html = html.replace(re, (m) =>
+      `<a class="placelink" href="${esc(p.maps_uri)}" target="_blank" rel="noopener">${m}</a>`);
+    done.add(key);
+  }
+  bubble.innerHTML = html;
+}
+
 // ── rendering the answer ───────────────────────────────────────────────────
 async function renderAnswer(holder, bubble, d) {
   const r = d.response ?? {};
@@ -2099,6 +2157,11 @@ async function renderAnswer(holder, bubble, d) {
     let body = (bubble.textContent || r.text || '').trim();
     if (r.question && !/[?？]\s*$/.test(body)) body += (body ? ' ' : '') + String(r.question).trim();
     bubble.textContent = body;
+
+    // SCENARIO-1 §4. "A quick answer is the message." Each place named in
+    // the text becomes a link to its map, in place, so the tester can get
+    // there from the sentence rather than from a row underneath it.
+    linkPlacesInText(bubble, d);
 
     const det = detailsOf(r.details);
     if (det) attachWhy(bubble, det);
@@ -2279,13 +2342,31 @@ function renderPlan(inner, r, research) {
   add('Getting there', firstLine(r.getting_there, (x) => dash(x.town, x.thing)), () => list((r.getting_there ?? []).map((x) => dash(x.town, x.thing))));
 
   if (r.plan?.length) {
-    add('The plan', r.plan.map((b) => b.label).filter(Boolean).join(' · ') || 'The plan', () => {
+    // SCENARIO-1 §4: "Plans name the place first." The summary line was the
+    // block labels ("Kuala Lumpur · Penang"), so the first screen of a plan
+    // named no place at all until you opened it.
+    const firstStop = r.plan.flatMap((b) => (b.days ?? []))
+      .flatMap((dd) => (dd.items ?? [])).find((i) => i?.name)?.name ?? null;
+    const planSummary = firstStop
+      ? `Starts at ${firstStop}`
+      : (r.plan.map((b) => b.label).filter(Boolean).join(' · ') || 'The plan');
+    add('The plan', planSummary, () => {
       const f = document.createDocumentFragment();
       for (const block of r.plan) {
         if (block.label) f.append(el('div', 'daylabel', block.label));
         if (block.base) f.append(el('div', 'src', dash('Base: ' + block.base, block.why)));
         for (const day of block.days ?? []) {
-          if (day.day) f.append(el('div', 'daylabel', `${day.day}${day.type ? ' · ' + dayTypeLabel(day.type) : ''}`));
+          // SCENARIO-1 §4: a day's title is its anchor place, never
+          // "Evening" or "Morning". If the writer sent a time of day, the
+          // anchor's name is rendered instead — the server flags it.
+          if (day.day) {
+            const anchor = (day.items ?? []).find((i) => i?.name)?.name ?? null;
+            const given = String(day.title ?? day.label ?? '').trim();
+            const timeish = /^(morning|afternoon|evening|night|early|late|midday|lunch|dinner|breakfast|am|pm)[\s·\-—:]*$/i.test(given);
+            const shown = (given && !timeish) ? given : anchor;
+            f.append(el('div', 'daylabel',
+              `${day.day}${shown ? ' · ' + shown : (day.type ? ' · ' + dayTypeLabel(day.type) : '')}`));
+          }
           // v2.1: a free day has no stops. One that has them is a writer
           // error, and hiding the stops would hide the error from the tester
           // AND from us — so they stay, with the day marked for what it is.
