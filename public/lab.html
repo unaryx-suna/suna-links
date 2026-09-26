@@ -305,6 +305,8 @@
   .tnote { font-size: 12px; color: var(--muted); margin-top: 20px; line-height: 1.5; }
   /* The model that wrote it, under the answer. Brian only. */
   .writer-tag { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
+  .locfix { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .locfix span { font-size: 13px; color: var(--muted); flex: 1 0 100%; }
   /* v2: the source name code resolved from a fact_id. Quieter than the claim,
      because the claim is the thing being read. */
   .srcname { color: var(--muted); font-size: 12px; }
@@ -557,6 +559,13 @@
 
   <div class="seclbl">Right now</div>
   <div id="p-now"></div>
+  <!-- §3: a wrong place produces a confidently wrong answer, so there has to
+       be a way to say so from the screen that shows it. -->
+  <div class="locfix">
+    <span id="p-locwhere"></span>
+    <button id="p-locnow" class="chip">Use my location now</button>
+    <button id="p-loctype" class="chip">Type a place</button>
+  </div>
 
   <div class="seclbl">You told us</div>
   <div id="p-stated"></div>
@@ -592,7 +601,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v26';
+const BUILD = 'lab-v27';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -672,7 +681,11 @@ async function openApp() {
   }
   tester = data;
   if (!Array.isArray(tester.preferences)) tester.preferences = [];
-  if (tester.last_location) location_ = tester.last_location;
+  // A stored fix is a FALLBACK, not where they are. It is marked `saved` until
+  // the phone confirms otherwise, and the bar shows that.
+  if (tester.last_location) location_ = { ...tester.last_location, source: 'saved' };
+  // Ask on load, without blocking the first paint.
+  refreshLocation();
 
   await refreshDailyState();
 
@@ -1146,6 +1159,23 @@ function renderContext() {
   // thing in the bar: R5 §2 still requires a visible count, and the bar is
   // allowed two buttons and no more.
   const bits = [n.local_time];
+  // §3: the subtitle says so when the place is not a fresh fix, because a
+  // wrong place produces a confidently wrong answer and nothing on screen
+  // would otherwise admit it.
+  const src = location_?.source;
+  const age = locationAgeS(location_);
+  if (src === 'saved' && location_?.at) {
+    const d = new Date(location_.at);
+    bits.push(`Saved ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}: tap to update`);
+  } else if (src === 'saved') {
+    bits.push('Saved: tap to update');
+  } else if (src === 'typed') {
+    bits.push('You set this');
+  } else if (location_?.accuracy_m != null && location_.accuracy_m > 2000) {
+    bits.push('Approximate');
+  } else if (age !== null && age > FRESH_FOR_S) {
+    bits.push('tap to update');
+  }
   if (dailyState && !dailyState.exempt) {
     const q = Number(dailyState.quick_left ?? 0);
     bits.push(q === 0 ? 'none left today' : `${q} left`);
@@ -1154,21 +1184,26 @@ function renderContext() {
 }
 
 // ── location: asked on first chip tap, never on page load ──────────────────
+/// The fix used for the next answer.
+///
+/// The bug this replaces: the phone was asked ONCE, ever. `if (location_)
+/// return location_` meant the first fix — saved to lab_testers — was reused
+/// in every later session, wherever the tester actually was. Brian's stored
+/// point really is in Tongzhou; he is not.
+///
+/// A typed place wins until New chat, because someone who typed it meant it.
 async function ensureLocation() {
-  if (location_) return location_;
-  const got = await new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: +p.coords.latitude.toFixed(4), lng: +p.coords.longitude.toFixed(4), name: null }),
-      () => resolve(null),
-      { timeout: 8000, maximumAge: 300000 },
-    );
-  });
-  if (got) {
-    got.name = await reverseName(got.lat, got.lng);
-    location_ = got;
-    await saveTester({ last_location: location_ });
-    await refreshWeather();
+  if (location_?.source === 'typed') return location_;
+  const age = locationAgeS(location_);
+  if (location_ && age !== null && age <= FRESH_FOR_S) return location_;
+
+  const fresh = await refreshLocation();
+  if (fresh) return fresh;
+
+  // Denied, timed out, or no geolocation. A saved fix is still better than
+  // nothing — but it is marked as saved, and the bar says so.
+  if (location_) {
+    location_ = { ...location_, source: 'saved' };
     renderContext();
     return location_;
   }
@@ -1180,7 +1215,8 @@ async function ensureLocation() {
       const name = $('#loc-input').value.trim();
       if (!name) return;
       sheet.dataset.open = '0';
-      location_ = { name };
+      location_ = { name, lat: null, lng: null, accuracy_m: null,
+                    at: new Date().toISOString(), source: 'typed' };
       await saveTester({ last_location: location_ });
       renderContext();
       resolve(location_);
@@ -1190,14 +1226,74 @@ async function ensureLocation() {
 
 /// Names the coordinate without a paid geocode: the label is for the context
 /// line, and the model gets the raw lat/lng anyway.
-async function reverseName(lat, lng) {
+/// Name a fix at district level.
+///
+/// zoom=12, not 14. Measured on the stored point (39.9001, 116.6817), English:
+///   zoom 10  suburb=Zhongcang  city=Tongzhou District
+///   zoom 12  suburb=Zhongcang  city=Tongzhou District
+///   zoom 14  village=Shangying city=Beijing      <- loses the district
+///   zoom 16  suburb=Zhongcang  city=Tongzhou District
+/// 14 is the one level that drops to a village and throws the district away,
+/// so it is the one level not to use.
+///
+/// Nominatim puts a Chinese district in `city`, so there is no single field
+/// holding "district, city" — it is composed from the fine part and the coarse
+/// part, and either may be missing. Central KL at zoom 12 returns city only,
+/// and correctly comes back as "Kuala Lumpur".
+async function reverseName(lat, lng, accuracyM) {
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`,
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=12&addressdetails=1`,
       { headers: { 'Accept-Language': 'en' } });
     if (!r.ok) return null;
     const a = (await r.json()).address ?? {};
-    return a.city || a.town || a.state || a.country || null;
+    const coarse = a.city || a.town || a.county || a.state || a.country || null;
+    // A fix this loose cannot honestly claim a neighbourhood.
+    if (accuracyM != null && accuracyM > 2000) return coarse;
+    const fine = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.village || null;
+    if (fine && coarse && fine !== coarse) return `${fine}, ${coarse}`;
+    return fine || coarse;
   } catch { return null; }
+}
+
+/// How old a fix is, in seconds. A stored location with no `at` predates this
+/// change and is treated as old, which is the safe reading.
+function locationAgeS(loc) {
+  if (!loc) return null;
+  if (!loc.at) return Number.MAX_SAFE_INTEGER;
+  return Math.max(0, Math.round((Date.now() - new Date(loc.at).getTime()) / 1000));
+}
+
+const FRESH_FOR_S = 30 * 60;   // §3: refresh before any answer older than 30 minutes
+
+/// Ask the phone. Returns null rather than throwing on denial or timeout.
+async function getFix() {
+  return await new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({
+        lat: +p.coords.latitude.toFixed(4),
+        lng: +p.coords.longitude.toFixed(4),
+        name: null,
+        accuracy_m: p.coords.accuracy != null ? Math.round(p.coords.accuracy) : null,
+        at: new Date().toISOString(),
+        source: 'device',
+      }),
+      () => resolve(null),
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  });
+}
+
+/// A fresh fix, saved and rendered. Null if the phone would not give one.
+async function refreshLocation() {
+  const got = await getFix();
+  if (!got) return null;
+  got.name = await reverseName(got.lat, got.lng, got.accuracy_m);
+  location_ = got;
+  await saveTester({ last_location: location_ });
+  await refreshWeather();
+  renderContext();
+  return location_;
 }
 
 async function saveTester(patch) {
@@ -1301,6 +1397,33 @@ function titleish(s) {
 // ── the panel ──────────────────────────────────────────────────────────────
 $('#ctx-btn').addEventListener('click', async () => { await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1'; });
 $('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; });
+
+// §3. Not here? Change it.
+$('#p-locnow').addEventListener('click', async () => {
+  $('#p-locwhere').textContent = 'Asking your phone…';
+  const got = await refreshLocation();
+  $('#p-locwhere').textContent = got
+    ? `Now: ${got.name ?? 'found'}`
+    : 'Your phone would not give a fix — type a place instead.';
+  await renderPanel();
+});
+$('#p-loctype').addEventListener('click', () => {
+  $('#panel').dataset.open = '0';
+  // The existing typed-place sheet. A typed place wins until New chat.
+  const sheet = $('#loc-sheet');
+  sheet.dataset.open = '1';
+  $('#loc-input').value = '';
+  $('#loc-input').focus();
+  $('#loc-save').onclick = async () => {
+    const name = $('#loc-input').value.trim();
+    if (!name) return;
+    sheet.dataset.open = '0';
+    location_ = { name, lat: null, lng: null, accuracy_m: null,
+                  at: new Date().toISOString(), source: 'typed' };
+    await saveTester({ last_location: location_ });
+    renderContext();
+  };
+});
 $('#dish-close').addEventListener('click', () => { $('#dish-sheet').dataset.open = '0'; });
 
 async function renderPanel() {
@@ -1408,6 +1531,9 @@ $('#new-chat').addEventListener('click', () => {
   $('#dock').style.display = '';
   history.replaceState(null, '', location.pathname);
   ensureSessionCode();
+  // New chat means a new situation: drop a typed place and ask the phone again.
+  if (location_?.source === 'typed') location_ = { ...location_, source: 'saved' };
+  refreshLocation();
   renderChips();
 });
 
@@ -1601,6 +1727,12 @@ async function ask({ chip, request, scopeOverride, widenFacts }) {
         // this is a convenience, not a permission.
         now: nowString(),
         location: location_,
+        // §3: how old the fix is and where it came from, so an answer made on
+        // a stale saved location can be told apart from one made on a fresh
+        // fix — and not counted against the writer.
+        location_source: location_?.source ?? null,
+        location_age_s: locationAgeS(location_),
+        accuracy_m: location_?.accuracy_m ?? null,
         tz_offset_minutes: new Date().getTimezoneOffset(),
         // Absent fields are omitted, never sent as `unknown`.
         weather: weatherLine() ?? undefined,
