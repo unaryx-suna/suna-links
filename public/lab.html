@@ -601,7 +601,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v28';
+const BUILD = 'lab-v29';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1409,10 +1409,30 @@ function chipsForQuestion(question, assumption) {
       ? [{ label: other, reply: other, confirm: 'correct' }, { label: keep, reply: keep, confirm: 'keep' }]
       : [{ label: other, reply: other, confirm: 'correct' }];
   }
-  if (/^(do|are|is|would|should|can|will|have|did|any)\b/i.test(q)) {
+  // v2.1, Aster's dead end. "Want me to look into it?" starts with none of
+  // the auxiliaries below, so no chip was drawn at all and the offer was a
+  // dead end even for a tester who typed "yes" — the reply re-ran the same
+  // narrow lookup. The offer now gets its own chip pair, and Yes tells the
+  // server to look WIDER rather than to ask again.
+  if (isLookOffer(q)) {
+    return [
+      { label: 'Yes, look', reply: 'Yes', confirm: 'keep', widen: true },
+      { label: 'No', reply: 'No', confirm: 'reject' },
+    ];
+  }
+  if (/^(do|are|is|would|should|can|will|have|did|any|want|shall|could|may|how about|fancy)\b/i.test(q)) {
     return [{ label: 'Yes', reply: 'Yes', confirm: 'keep' }, { label: 'No', reply: 'No', confirm: 'reject' }];
   }
   return [];
+}
+
+/// The same test the server runs (lab-answer/logic.ts `isLookOffer`). Two
+/// copies because the page decides which chip to draw and the server decides
+/// what to do with a typed reply; they must agree, so keep them in step.
+function isLookOffer(question) {
+  const q = String(question ?? '').toLowerCase();
+  if (!q.trim()) return false;
+  return /\b(look (it )?(into|up|for)|look into (it|that|them)|find (out )?more|look for more|dig into|search (for )?(it|more)|check (it|that) (out|for you)|have a look)\b/.test(q);
 }
 
 function titleish(s) {
@@ -1673,9 +1693,13 @@ async function answerChip(c) {
     else if (c.confirm === 'correct') await confirmPref(q.assumptionIndex, true, c.reply);
     else await confirmPref(q.assumptionIndex, false);
   }
-  setStatus("Checking what's open", true);
+  setStatus(c.widen ? 'Looking wider' : "Checking what's open", true);
   await ensureLocation();
-  ask({ chip: null, request: c.reply });
+  // A "Yes, look" is the same question asked wider, not a new question — so
+  // it re-sends what was originally asked, not the word "Yes". The server
+  // excludes it from the daily count for the same reason.
+  if (c.widen) ask({ chip: null, request: askedLast || c.reply, widenFacts: true });
+  else ask({ chip: null, request: c.reply });
 }
 
 // ── asking ─────────────────────────────────────────────────────────────────
@@ -1705,9 +1729,17 @@ $('#box').addEventListener('focus', () => {
 
 const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip: 'Plan a trip' };
 
+/// The question the current answer is an answer to.
+///
+/// "Yes, look" must re-ask the ORIGINAL question wider. Sending "Yes" as the
+/// request makes the facts step look up the word "yes", which is how the
+/// widen path would have failed even once the chip existed.
+let askedLast = '';
+
 async function ask({ chip, request, scopeOverride, widenFacts }) {
   if (readOnly) return;
   busy = true; setBusy(true);
+  if (!widenFacts) askedLast = request || CHIP_TEXT[chip] || '';
   // Out of the way while the answer streams — offering the next move
   // mid-sentence is noise. It comes back in the `finally`, below the answer.
   showTail(false);
@@ -2186,6 +2218,23 @@ function group(label, node) {
   return g;
 }
 
+/// v2.1's day types, as a tester should read them.
+///
+/// `unplanned` is the one that matters: it means the facts could not fill the
+/// day, and the offer to look for more is the next move. Rendering it as
+/// "free" — which is what the raw word nearly reads as — would turn a gap
+/// into a decision Suna never made.
+const DAY_TYPE_LABEL = {
+  unplanned: 'Not planned yet',
+  free: 'Free',
+  out: 'Out',
+  work: 'Work',
+  travel: 'Travel',
+};
+function dayTypeLabel(t) {
+  return DAY_TYPE_LABEL[String(t ?? '').toLowerCase()] ?? String(t ?? '');
+}
+
 function renderPlan(inner, r, research) {
   const add = (cap, one, bodyBuilder) => {
     if (!one) return;
@@ -2232,7 +2281,13 @@ function renderPlan(inner, r, research) {
         if (block.label) f.append(el('div', 'daylabel', block.label));
         if (block.base) f.append(el('div', 'src', dash('Base: ' + block.base, block.why)));
         for (const day of block.days ?? []) {
-          if (day.day) f.append(el('div', 'daylabel', `${day.day}${day.type ? ' · ' + day.type : ''}`));
+          if (day.day) f.append(el('div', 'daylabel', `${day.day}${day.type ? ' · ' + dayTypeLabel(day.type) : ''}`));
+          // v2.1: a free day has no stops. One that has them is a writer
+          // error, and hiding the stops would hide the error from the tester
+          // AND from us — so they stay, with the day marked for what it is.
+          if (day.type === 'free' && (day.items ?? []).length) {
+            f.append(el('div', 'src', 'Marked free, but it has stops in it.'));
+          }
           // Each stop is a place row rather than a line of text, so it
           // carries its local name, a map link and Save like everywhere else.
           for (const i of (day.items ?? [])) {
