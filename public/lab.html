@@ -601,7 +601,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v29';
+const BUILD = 'lab-v30';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2225,7 +2225,11 @@ function group(label, node) {
 /// "free" — which is what the raw word nearly reads as — would turn a gap
 /// into a decision Suna never made.
 const DAY_TYPE_LABEL = {
-  unplanned: 'Not planned yet',
+  // v2.3 removed `unplanned`. A writer that still returns one gets its day
+  // rendered like any other — Brian: "having unplanned ... ruins the
+  // experience for users." The server counts it as `unplanned_day` so we
+  // still see it; the tester just sees a day.
+  unplanned: 'Out',
   free: 'Free',
   out: 'Out',
   work: 'Work',
