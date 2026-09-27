@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v40';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v41';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v40';
+  link.href = '/lab/decisions.css?v=lab-v41';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -743,9 +743,20 @@ function stopNames(day, nameOf) {
 export function dayHeading(block, day, nameOf) {
   const names = stopNames(day, nameOf);
   const label = String(block?.label ?? '').trim();
-  const partOfDay = /\b(morning|afternoon|evening|night|arrival|arriving|departure|departing|dawn|dusk|midday|noon|lunch|dinner|breakfast)\b/i;
-  if (label && !partOfDay.test(label)) return label;
-  return names[0] ?? String(block?.base ?? 'Your day');
+  const partOfDay = /\b(morning|afternoon|evening|night|weekend|arrival|arriving|departure|departing|dawn|dusk|midday|noon|lunch|dinner|breakfast)\b/i;
+  // The label is only a heading if it NAMES one of the day's places. A-0233
+  // came back labelled "Weekend" for a two-day block, so both days read
+  // "Weekend" — a heading that says when, for the second time.
+  //
+  // And a block covering several days cannot title them all: each day is
+  // headed by its own first stop.
+  const oneDay = (block?.days ?? []).length <= 1;
+  const namesAPlace = label && names.some((n) => {
+    const p = String(n).toLowerCase(), l = label.toLowerCase();
+    return l.includes(p) || p.includes(l);
+  });
+  if (label && oneDay && !partOfDay.test(label) && namesAPlace) return label;
+  return names[0] ?? (label && !partOfDay.test(label) ? label : String(block?.base ?? 'Your day'));
 }
 
 /// §4. The strip: one card per day, titled by where it goes.
