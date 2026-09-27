@@ -108,19 +108,54 @@
 }
 
 /* ── Ask ──────────────────────────────────────────────────────────────── */
-.dx .ask { display: flex; flex-direction: column; gap: 18px; padding: 8px 0 2px; }
-.dx .asklabel { font-size: 13px; color: var(--dx-muted); font-weight: 600; }
-.dx .askbox {
-  width: 100%; min-height: 108px; resize: none; border: 1.5px solid var(--dx-line);
-  border-radius: var(--radius); padding: 14px 16px; font: inherit; font-size: 17px;
-  background: var(--dx-paper); color: var(--dx-ink);
+/* Main.dc.html: main padding 28/20, greeting at 24px beside her, the box
+ * 150px tall with Send inside it, then "Stuck? Tap one" and three examples. */
+.dx.ask { display: flex; flex-direction: column; padding: 28px 20px 0; }
+.dx.ask .sunablock { padding: 0; align-items: flex-end; }
+.dx.ask .sunablock .sunaline {
+  font-size: 24px; font-weight: 600; line-height: 1.2;
+  letter-spacing: -.01em; padding-bottom: 8px;
 }
-.dx .askbox:focus { outline: none; border-color: var(--dx-sand); }
-.dx .examples { display: flex; flex-direction: column; gap: 8px; }
+
+.askbox-wrap { margin-top: 22px; position: relative; }
+textarea.askbox {
+  display: block; width: 100%; height: 150px; box-sizing: border-box;
+  /* Room at the bottom for Send, and on the left for the attach button. */
+  padding: 18px 18px 64px 18px;
+  border-radius: 24px; border: 1px solid var(--dx-line);
+  background: var(--dx-paper); color: var(--dx-ink);
+  font: inherit; font-size: 20px; line-height: 1.4; resize: none;
+  max-height: none;
+}
+textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
+/* #send and #attach are the PAGE's own ids and the page styles them by id,
+   which outranks any class this file adds. Matching on the id is what moves
+   them into the box instead of leaving them stacked underneath it. */
+#send.asksend {
+  position: absolute; right: 10px; bottom: 10px; margin: 0;
+  width: 48px; height: 48px; border-radius: 24px; border: 0;
+  background: var(--dx-sand); color: #1b1510;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#send.asksend::after, #attach.askattach::after { content: none; }
+#send.asksend.empty, #send.asksend[disabled] { opacity: .45; }
+/* Not on the board — the canvas did not cover uploads, and the lab has a
+   working one. Kept quiet, out of the way of Send. */
+#attach.askattach {
+  position: absolute; left: 12px; bottom: 12px; margin: 0;
+  width: 44px; height: 44px; border-radius: 22px; border: 0;
+  background: none; color: var(--dx-muted); font-size: 24px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+
+.dx.ask .stuck { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+.dx.ask .stuck h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--dx-muted); }
+.dx .examples { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .dx .example {
-  text-align: left; border: 1px solid var(--dx-line); background: transparent;
-  border-radius: 999px; padding: 10px 14px; font: inherit; font-size: 15px;
-  color: var(--dx-ink); cursor: pointer;
+  min-height: 44px; padding: 0 16px; border-radius: 22px;
+  border: 1px solid var(--dx-line); background: transparent;
+  color: var(--dx-ink); font: inherit; font-size: 16px; font-weight: 500;
+  display: flex; align-items: center; cursor: pointer; text-align: left;
 }
 .dx .example:active { background: color-mix(in srgb, var(--dx-sand) 30%, transparent); }
 .dx .go {
@@ -128,9 +163,35 @@
   font: inherit; font-size: 17px; font-weight: 700; padding: 15px 18px; cursor: pointer;
 }
 
+/* The ask folded to one line once the card is up (Card.dc.html). */
+.dx.chipsummary {
+  display: flex; align-items: center; gap: 10px; width: calc(100% - 40px);
+  margin: 0 20px; padding: 12px 14px; border: 0; border-radius: 16px;
+  background: var(--dx-paper); color: var(--dx-muted);
+  font: inherit; font-size: 15px; text-align: left; cursor: pointer;
+}
+.dx.chipsummary .summaryline { flex: 1; min-width: 0; }
+.dx.chipsummary .pencil { flex: none; opacity: .7; }
+
+/* The ask, before the parse lands. Loading.dc.html has the chip row here. */
+.dx.asksummary { padding: 6px 20px 2px; }
+.dx .summaryline {
+  font-size: 15px; color: var(--dx-muted); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* ── Understood chips ─────────────────────────────────────────────────── */
 .dx .chips, .dx.sheet .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.dx .chiphint { font-size: 12px; color: var(--dx-muted); }
+/* Loading.dc.html keeps the understood chips on ONE row that scrolls, so
+   the waiting scene stays above the fold. Wrapped, seven of them pushed
+   Suna a third of the way down the screen. The sheets' chips still wrap. */
+.dx .chips.understood {
+  flex-wrap: nowrap; overflow-x: auto; padding: 0 20px 2px;
+  scrollbar-width: none;
+}
+.dx .chips.understood::-webkit-scrollbar { display: none; }
+.dx .chips.understood .chip2 { flex: none; }
+.dx .chiphint { font-size: 12px; color: var(--dx-muted); padding: 0 20px; }
 .dx .chip2, .dx.sheet .chip2 {
   display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--dx-line); border-radius: 999px; padding: 7px 8px 7px 13px;
@@ -148,7 +209,9 @@
   display: flex; flex-direction: column; gap: 14px; background: var(--dx-paper);
 }
 .dx .cardtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.dx .eyebrow, .dx.sheet .eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--dx-muted); font-weight: 700; }
+/* Sentence case, as every board has it. The caps were mine, and they made
+   "YOUR PICK FOR TONIGHT" compete with the place name for the eye. */
+.dx .eyebrow, .dx.sheet .eyebrow { font-size: 14px; color: var(--dx-muted); font-weight: 500; }
 .dx .placename { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
 .dx .why { font-size: 17px; line-height: 1.4; }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
@@ -158,8 +221,13 @@
   flex: 1; border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
   padding: 15px 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--dx-ink); cursor: pointer;
 }
+/* Card.dc.html stacks the card, then "After that", then the nudges, then
+   "Would you go?" — four blocks down the screen, not one card holding
+   everything. */
+.dx .cardstack { display: flex; flex-direction: column; gap: 14px; }
 .dx .after {
-  border: 1px dashed var(--dx-line); border-radius: 16px; padding: 12px 14px;
+  border: 1px solid var(--dx-line); border-radius: 18px; padding: 14px 16px;
+  background: var(--dx-paper);
   display: flex; flex-direction: column; gap: 3px;
 }
 .dx .afterhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
@@ -184,13 +252,36 @@
   box-shadow: 0 -8px 40px rgba(0,0,0,.18);
   display: flex; flex-direction: column; gap: 14px; max-height: 82vh; overflow: auto;
 }
-.dx.sheet h3, .dx .sheet h3 { margin: 0; font-size: 20px; font-weight: 700; }
+/* A question wraps; a place name is the heading. NotThis asks one at 24px,
+   Details names the place at 30px under a "Details" eyebrow. */
+.dx.sheet h3, .dx .sheet h3 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.dx.sheet .sheettitle h3 { font-size: 30px; }
+/* The boards' grab handle, and Details' explicit close. */
+.dx.sheet .grab {
+  width: 42px; height: 5px; border-radius: 3px; margin: -6px auto 6px;
+  background: var(--dx-muted); opacity: .35; flex: none;
+}
+.dx.sheet .sheettitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dx.sheet .sheetclose {
+  flex: none; width: 44px; height: 44px; border-radius: 22px; border: 0;
+  background: color-mix(in srgb, var(--dx-muted) 18%, transparent);
+  color: var(--dx-ink); font-size: 22px; line-height: 1; cursor: pointer;
+}
 /* Named apart from the page's own `.scrim` (the menu's). */
 .dxscrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
 .dx .reasons, .dx.sheet .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
 .dx .reason, .dx.sheet .reason {
   border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
   padding: 11px 15px; font: inherit; font-size: 15px; color: var(--dx-ink); cursor: pointer;
+}
+.dx .btn.danger, .dx.sheet .btn.danger { border-color: transparent; color: #E8836F; }
+.dx .reason.on, .dx.sheet .reason.on {
+  background: var(--dx-ink); color: var(--dx-paper); border-color: var(--dx-ink);
+}
+.dx.sheet .askown {
+  width: 100%; box-sizing: border-box; padding: 13px 15px; border-radius: 14px;
+  border: 1.5px solid var(--dx-line); background: transparent; color: var(--dx-ink);
+  font: inherit; font-size: 17px;
 }
 .dx .rowline, .dx.sheet .rowline { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--dx-line); }
 .dx .rowline:last-child { border-bottom: none; }

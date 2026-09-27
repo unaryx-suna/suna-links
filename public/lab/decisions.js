@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v35';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v36';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v35';
+  link.href = '/lab/decisions.css?v=lab-v36';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -152,39 +152,47 @@ export const EXAMPLES = [
   'Plan my weekend',
 ];
 
-/// §3. A greeting, a big box, three examples. No sentence builder.
-export function askScreen({ greeting, onSend }) {
+/// §3 / Main.dc.html. The landing screen: her greeting, one big box with
+/// Send inside it, and three examples. No sentence builder, no thread.
+///
+/// The box and the send button are the page's OWN `#box` and `#send`, moved
+/// in here rather than rebuilt. Everything already wired to them — the send
+/// handler, prefetch-while-typing, the daily limit, clearing on send — keeps
+/// working, and there is only ever one composer in the document.
+export function askScreen({ greeting, box, send, attach, onExample }) {
   installDecisionsUI();
-  const root = el('div', 'dx');
-  const ask = el('div', 'ask');
-  ask.append(sunaBlock('idle', greeting, { hello: true }));
+  const root = el('div', 'dx ask');
 
-  const label = el('div', 'asklabel', "Tell Suna what you're up for");
-  const box = el('textarea', 'askbox');
-  box.placeholder = 'Got a few hours in Bukit Bintang…';
-  box.setAttribute('aria-label', "Tell Suna what you're up for");
+  root.append(sunaBlock('idle', greeting, { hello: true }));
 
-  const hint = el('div', 'asklabel', 'Stuck? Tap one');
+  const wrap = el('div', 'askbox-wrap');
+  if (box) {
+    box.classList.add('askbox');
+    // The board's label is for screen readers only: the placeholder carries
+    // it on screen, and a visible copy above the box is a second heading.
+    box.setAttribute('aria-label', "Tell Suna what you're up for");
+    box.placeholder = "Tell Suna what you're up for…";
+    box.rows = 4;
+    wrap.append(box);
+  }
+  if (attach) { attach.classList.add('askattach'); wrap.append(attach); }
+  if (send) { send.classList.add('asksend'); wrap.append(send); }
+  root.append(wrap);
+
+  const stuck = el('section', 'stuck');
+  stuck.append(el('h2', null, 'Stuck? Tap one'));
   const examples = el('div', 'examples');
   for (const e of EXAMPLES) {
     const b = el('button', 'example', e);
     b.type = 'button';
-    // §3: log whether the ask was typed or an example tap.
-    b.onclick = () => { box.value = e; box.dataset.source = 'example'; box.focus(); };
+    // §3: an example TAP is logged as one, so "typed vs tapped" is a real
+    // measure rather than whatever ended up in the box.
+    b.onclick = () => onExample(e);
     examples.append(b);
   }
-  box.addEventListener('input', () => { if (box.dataset.source !== 'example' || !box.value) box.dataset.source = 'typed'; });
-
-  const go = el('button', 'go', 'Go');
-  go.type = 'button';
-  go.onclick = () => {
-    const text = box.value.trim();
-    if (text) onSend(text, box.dataset.source === 'example' ? 'example' : 'typed');
-  };
-
-  ask.append(label, box, hint, examples, go);
-  root.append(ask);
-  return { root, box };
+  stuck.append(examples);
+  root.append(stuck);
+  return root;
 }
 
 // ── Understood chips ───────────────────────────────────────────────────────
@@ -200,7 +208,7 @@ const CHIP_KEYS = [
 export function chipsBlock(parse, { onEdit, onRemove }) {
   const wrap = el('div', 'dx');
   wrap.append(el('div', 'chiphint', 'Suna understood · tap to fix, × to drop'));
-  const row = el('div', 'chips');
+  const row = el('div', 'chips understood');
 
   const add = (key, value, kind) => {
     if (!value) return;
@@ -221,6 +229,91 @@ export function chipsBlock(parse, { onEdit, onRemove }) {
   for (const v of (parse?.not_for_me ?? [])) add('not_for_me', v, 'not');
   wrap.append(row);
   return wrap;
+}
+
+/// §4 / Ask-chip.dc.html. Tapping a chip opens its sheet. It used to open
+/// `window.prompt`, which is a blocking browser dialog, not a design — and
+/// the time chip is the one the board actually draws, with six presets.
+export const CHIP_SHEETS = {
+  time: {
+    title: 'How long have you got?',
+    hint: 'The search keeps going. Changing this re-runs it.',
+    options: ['Right now', '1 hour', '3 hours', 'Tonight', 'Tomorrow night', 'A trip…'],
+  },
+  area: { title: 'Where?', hint: 'Changing this re-runs the search.', options: [] },
+  who: { title: "Who's coming?", hint: 'Changing this re-runs the search.',
+         options: ['Solo', 'Two of us', 'With friends', 'With kids'] },
+  likes: { title: 'What are you after?', hint: 'Changing this re-runs the search.', options: [] },
+  not_for_me: { title: "What's out?", hint: 'Changing this re-runs the search.', options: [] },
+};
+
+export function chipSheet(key, value, { onPick }) {
+  const spec = CHIP_SHEETS[key] ?? { title: `Change "${value}"`, hint: '', options: [] };
+  return sheet(spec.title, (close) => {
+    const f = document.createDocumentFragment();
+    if (spec.hint) f.append(el('div', 'src', spec.hint));
+    if (spec.options.length) {
+      const row = el('div', 'reasons');
+      for (const o of spec.options) {
+        const b = el('button', `reason${o.toLowerCase() === String(value ?? '').toLowerCase() ? ' on' : ''}`, o);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(o.toLowerCase() === String(value ?? '').toLowerCase()));
+        b.onclick = () => { close(); onPick(o); };
+        row.append(b);
+      }
+      f.append(row);
+    }
+    // Anything the presets do not cover. The board has presets only, but a
+    // chip the tester typed has to be editable or the × is the only way out.
+    const own = el('input', 'askown');
+    own.type = 'text';
+    own.value = value ?? '';
+    own.setAttribute('aria-label', spec.title);
+    const save = el('button', 'go', 'Use this');
+    save.type = 'button';
+    save.onclick = () => { const v = own.value.trim(); if (v) { close(); onPick(v); } };
+    f.append(own, save);
+    return f;
+  });
+}
+
+/// One line of text, in a sheet. Same reason as chipSheet: window.prompt
+/// and window.confirm are system dialogs, and this design does not have
+/// any. Returns through onSave; Cancel just closes.
+export function textSheet(title, value, { onSave, hint, confirmLabel = 'Save' }) {
+  return sheet(title, (close) => {
+    const f = document.createDocumentFragment();
+    if (hint) f.append(el('div', 'src', hint));
+    const input = el('input', 'askown');
+    input.type = 'text';
+    input.value = value ?? '';
+    input.setAttribute('aria-label', title);
+    const go = el('button', 'go', confirmLabel);
+    go.type = 'button';
+    go.onclick = () => { const v = input.value.trim(); close(); if (v && v !== value) onSave(v); };
+    const cancel = el('button', 'linkish2', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = close;
+    f.append(input, go, cancel);
+    setTimeout(() => input.focus(), 50);
+    return f;
+  });
+}
+
+/// A destructive confirm, as a sheet rather than window.confirm.
+export function confirmSheet(title, { hint, danger = 'Delete', onYes }) {
+  return sheet(title, (close) => {
+    const f = document.createDocumentFragment();
+    if (hint) f.append(el('div', 'src', hint));
+    const yes = el('button', 'btn danger', danger);
+    yes.type = 'button';
+    yes.onclick = () => { close(); onYes(); };
+    const no = el('button', 'linkish2', 'Keep it');
+    no.type = 'button';
+    no.onclick = close;
+    f.append(yes, no);
+    return f;
+  });
 }
 
 // ── The decision card ──────────────────────────────────────────────────────
@@ -302,8 +395,11 @@ export function decisionCard(pick, {
   actions.append(go, not, save);
   card.append(actions);
 
+  const blocks = [card];
+
   // §5 / GO-LIVE §3.5. "After that" is its own small card with its own Go —
-  // it is a second place to walk to, not a footnote under the first.
+  // and on Card.dc.html it sits BELOW the pick's card, not inside its
+  // border: it is a second place, not a footnote on the first.
   if (after?.name) {
     const a = el('div', 'after');
     const head = el('div', 'afterhead');
@@ -320,7 +416,7 @@ export function decisionCard(pick, {
     // The walk to it, computed the same way as the pick's own.
     const travel = after.travel ?? walkText(after);
     if (travel) a.append(el('div', 'src', travel));
-    card.append(a);
+    blocks.push(a);
   }
 
   if (nudges?.length) {
@@ -331,7 +427,7 @@ export function decisionCard(pick, {
       b.onclick = () => onNudge(n);
       row.append(b);
     }
-    card.append(row);
+    blocks.push(row);
   }
 
   const wy = el('div', 'wouldyou');
@@ -342,8 +438,13 @@ export function decisionCard(pick, {
     b.onclick = () => onWouldGo(label === 'Yes');
     wy.append(b);
   }
-  card.append(wy);
-  return card;
+  blocks.push(wy);
+
+  // One element back to the caller, holding the card and everything the
+  // board places under it.
+  const stack = el('div', 'cardstack');
+  stack.append(...blocks);
+  return stack;
 }
 
 export const NUDGES = ['Closer', 'Cheaper', 'Indoors', 'Livelier', 'Tomorrow night'];
@@ -359,6 +460,11 @@ export const NUDGES = ['Closer', 'Cheaper', 'Indoors', 'Livelier', 'Tomorrow nig
 function sheet(title, build, onClose, opts = {}) {
   const scrim = el('div', 'dxscrim');
   const s = el('div', 'dx sheet');
+  const close = () => { scrim.remove(); s.remove(); onClose?.(); };
+  // Details.dc.html and NotThis.dc.html both open with a grab handle, and
+  // Details has an explicit close. A sheet you can only dismiss by hitting
+  // the strip of scrim above it is a sheet that feels stuck.
+  s.append(el('div', 'grab'));
   // The board puts her beside the title, not above it: 120 px, pouting,
   // already sulking before you have picked a reason.
   if (opts.face) {
@@ -370,9 +476,20 @@ function sheet(title, build, onClose, opts = {}) {
     head.append(words);
     s.append(head);
   } else {
-    s.append(el('h3', null, title));
+    const head = el('div', 'sheettitle');
+    const words = el('div');
+    // "Details / Jalan Alor", not "Details for Jalan Alor": the place is
+    // the heading, and the word above it says what you are looking at.
+    if (opts.eyebrow) words.append(el('div', 'eyebrow', opts.eyebrow));
+    words.append(el('h3', null, title));
+    head.append(words);
+    const x = el('button', 'sheetclose', '\u00D7');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Close');
+    x.onclick = close;
+    head.append(x);
+    s.append(head);
   }
-  const close = () => { scrim.remove(); s.remove(); onClose?.(); };
   s.append(build(close));
   scrim.onclick = close;
   document.body.append(scrim, s);
@@ -425,7 +542,7 @@ export function reactionLine(reaction, savedText) {
 
 /// §5. Details behind one tap. Sources are printed by code.
 export function detailsSheet(pick, { onWrong }) {
-  return sheet(`Details for ${pick.name ?? 'this'}`, () => {
+  return sheet(pick.name ?? 'This place', () => {
     const f = document.createDocumentFragment();
     const section = (title, body) => {
       if (!body) return;
@@ -461,7 +578,7 @@ export function detailsSheet(pick, { onWrong }) {
     wrong.onclick = onWrong;
     f.append(wrong);
     return f;
-  });
+  }, undefined, { eyebrow: 'Details' });
 }
 
 /// §7. What Suna knows: every row editable, Reset clears the lot.
@@ -503,7 +620,8 @@ export function knowsPanel(profile, { onEdit, onRemove, onReset, onAdd }) {
     group('Likes', profile.likes ?? [], 'interests');
     group('Not for me', profile.not_for_me ?? [], 'avoid');
     group('Learned from your Not this taps', profile.learned ?? [], 'learned');
-    const reset = el('button', 'btn', 'Reset what Suna knows');
+    // Knows.dc.html marks it as the destructive action it is.
+    const reset = el('button', 'btn danger', 'Reset what Suna knows');
     reset.type = 'button';
     reset.onclick = onReset;
     f.append(reset);

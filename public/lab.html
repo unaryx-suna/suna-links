@@ -144,6 +144,13 @@
   /* GO-LIVE §3.2. Waiting: no composer, one Cancel. Her line then has the
      bottom of the screen to itself instead of running under the text box. */
   body.waiting #dock .row, body.waiting #dock #attach { display: none; }
+  /* §1. On the Ask screen the composer IS the screen — it has been moved
+     into it — so the dock has nothing left to show. After an answer there is
+     no composer at all: New ask is how you ask again. */
+  /* Answered: nothing to type and nothing to say, so the whole dock goes
+     rather than leaving an empty strip along the bottom. New ask brings
+     the Ask screen, and the composer, back. */
+  body.askmode #dock, body.dx-answered #dock { display: none; }
   #cancel-ask {
     display: block; margin: 2px auto 4px; min-height: 44px; padding: 0 20px;
     border: 0; background: none; font: inherit; font-size: 15px; font-weight: 500;
@@ -433,7 +440,11 @@
   .prow .acts { display: flex; gap: 6px; flex: none; }
   .prow .acts button { min-height: 44px; padding: 10px 12px; font-size: 13px; background: rgba(255,255,255,.08); }
   .prow .acts button.yes[aria-pressed="true"] { background: var(--ok); color: var(--ink); }
-  .empty { color: var(--dim); font-size: 13px; font-style: italic; padding: 8px 0; }
+  /* An empty-state NOTE. Not to be confused with #convo-col.empty ("no
+     turns yet") or #send.empty ("nothing to send") — this rule used to be
+     bare `.empty`, so it inherited into the whole Ask screen and rendered
+     every word of it in synthesised oblique Urbanist. */
+  .emptynote { color: var(--dim); font-size: 13px; font-style: italic; padding: 8px 0; }
   .danger { background: none; color: var(--danger); opacity: .8; font-size: 14px; width: 100%; min-height: 44px; }
   .pref-edit { display: flex; gap: 8px; margin: 8px 0; }
   .pref-edit select { flex: none; width: 38%; }
@@ -606,10 +617,11 @@
 // UI-DECISIONS. The quick-answer UI. Plans keep today's screens.
 import {
   installDecisionsUI, sunaBlock, updateSuna, sunaFound, reactionLine,
-  chipsBlock, decisionCard, detailsSheet, notThisSheet, knowsPanel,
+  askScreen, chipsBlock, chipSheet, textSheet, confirmSheet, decisionCard,
+  detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v35';
+} from './lab/decisions.js?v=lab-v36';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -622,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v35';
+const BUILD = 'lab-v36';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -739,6 +751,12 @@ async function openApp() {
   const wantedSession = params.get('session');
   if (wantedRef) { await openSession(wantedRef.toUpperCase()); return; }
   if (wantedSession) { await openSessionByCode(wantedSession.toUpperCase()); return; }
+
+  // GO-LIVE §1. In decisions mode the landing screen IS the Ask screen, not
+  // an empty thread with a composer under it. askScreen() existed from
+  // lab-v33 and was never called from here, so every tester who opened /lab
+  // got the old chat layout.
+  if (DECISIONS_UI) renderAskScreen();
 
   // §2 comes before anything else on a new visit, then §4.
   await maybeAskDidGo();
@@ -1400,9 +1418,15 @@ async function addPref(key, value, source, confirmed, note) {
   const next = prefs().slice();
   // UI-DECISIONS §6/§7: where a row came from, shown in "What Suna knows"
   // ("From Not this: Too far"). Without it every learned row looks the same.
-  const at = next.findIndex((e) => e.key === key && e.source === source && !e.confirmed);
   const entry = { key, value: v, source, confirmed: !!confirmed, created_at: nowIso(),
                   ...(noteText ? { note: noteText } : {}) };
+  // The same row twice is the same row. Tapping "Too far" on three picks in
+  // a row wrote "closer than this" three times, and What Suna knows listed
+  // it three times — which reads as Suna having learned three things.
+  const same = next.findIndex((e) => e.key === key && e.value === v);
+  if (same >= 0) { next[same] = entry; await setPrefs(next); return; }
+  // An unconfirmed guess of the same kind is REPLACED by what they said.
+  const at = next.findIndex((e) => e.key === key && e.source === source && !e.confirmed);
   if (at >= 0) next[at] = entry; else next.push(entry);
   await setPrefs(next);
 }
@@ -1525,16 +1549,18 @@ $('#ctx-place')?.addEventListener('click', () => {
     learned: rows.filter((r) => String(r.note ?? '').startsWith('From Not this'))
       .map((r) => ({ ...r, source_label: r.note })),
   }, {
-    onEdit: async (r) => {
-      const next = prompt(`Change "${r.value}" to:`, r.value);
-      if (next != null && next.trim()) await addPref(r.key, next.trim(), 'stated', true, 'edited in What Suna knows');
-    },
+    onEdit: (r) => textSheet(`Change "${r.value}"`, r.value, {
+      onSave: (v) => addPref(r.key, v, 'stated', true, 'edited in What Suna knows'),
+    }),
     onRemove: async (r) => { await removePref(r); },
-    onAdd: async (key) => {
-      const v = prompt(key === 'avoid' ? "What's not for you?" : 'What do you like?');
-      if (v && v.trim()) await addPref(key, v.trim(), 'stated', true, 'added in What Suna knows');
-    },
-    onReset: async () => { if (confirm('Clear everything Suna knows about you?')) await resetPrefs(); },
+    onAdd: (key) => textSheet(key === 'avoid' ? "What's not for you?" : 'What do you like?', '', {
+      confirmLabel: 'Add',
+      onSave: (v) => addPref(key, v, 'stated', true, 'added in What Suna knows'),
+    }),
+    onReset: () => confirmSheet('Clear everything Suna knows about you?', {
+      hint: 'Your chips, your likes, and everything learned from Not this.',
+      danger: 'Clear it all', onYes: () => resetPrefs(),
+    }),
   });
 });
 
@@ -1596,7 +1622,7 @@ async function renderPanel() {
   const no = (fb ?? []).filter((f) => f.would_go === false).length;
   const tl = (fb ?? []).filter((f) => f.too_long).length;
   const wr = (fb ?? []).filter((f) => f.wrong).length;
-  if (!fb || fb.length === 0) d.append(el('div', 'empty', 'Nothing yet — rate an answer and this fills in.'));
+  if (!fb || fb.length === 0) d.append(el('div', 'emptynote', 'Nothing yet — rate an answer and this fills in.'));
   else {
     const r = el('div', 'kv'); r.append(el('span', 'k', 'Would go / wouldn’t'), el('span', 'v', `${yes} / ${no}`));
     const r2 = el('div', 'kv'); r2.append(el('span', 'k', 'Too long / wrong'), el('span', 'v', `${tl} / ${wr}`));
@@ -1607,7 +1633,7 @@ async function renderPanel() {
 function fillGroup(host, pairs, isAssumption) {
   host.innerHTML = '';
   if (!pairs.length) {
-    host.append(el('div', 'empty', isAssumption ? 'Nothing assumed yet.' : 'Nothing yet.'));
+    host.append(el('div', 'emptynote', isAssumption ? 'Nothing assumed yet.' : 'Nothing yet.'));
     return;
   }
   for (const [e, i] of pairs) {
@@ -1674,6 +1700,8 @@ $('#new-chat').addEventListener('click', () => {
   $('#dock').style.display = '';
   history.replaceState(null, '', location.pathname);
   ensureSessionCode();
+  // §1: "The header's New ask button returns to this screen, clean."
+  if (DECISIONS_UI) renderAskScreen();
   // New chat means a new situation: drop a typed place and ask the phone again.
   if (location_?.source === 'typed') location_ = { ...location_, source: 'saved' };
   refreshLocation();
@@ -1739,6 +1767,74 @@ function closeMenu() {
 function showTail(on) {
   const t = ensureTail();
   if (t) t.hidden = !on;
+}
+
+// ── the Ask screen ─────────────────────────────────────────────────────────
+//
+// GO-LIVE §3 / Main.dc.html. In decisions mode this is the landing screen,
+// not a composer bar under a thread: her greeting, one big box with Send
+// inside it, and three examples. The page's own #box and #send are MOVED
+// into it, so there is one composer in the document and everything already
+// wired to them keeps working.
+
+let askScreenNode = null;
+
+/// Her greeting comes from the server: the library lives in one place and
+/// the no-repeat record is server-side, so the page does not carry a copy.
+/// First visit gets Ether's 41-43, a returning tester 38-39.
+async function fetchGreeting() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'greeting' }),
+    });
+    return await r.json();
+  } catch { return { text: 'Hey. What are we doing?', face: 'idle' }; }
+}
+
+/// Put #box, #send and #attach back where the markup has them. The dock is
+/// hidden in decisions mode except for the status line and Cancel, so this
+/// is how the composer leaves the screen without being destroyed.
+function stowComposer() {
+  const field = $('#dock').querySelector('.field');
+  const row = $('#dock').querySelector('.row');
+  const box = $('#box'), send = $('#send'), attach = $('#attach');
+  if (!field || !row) return;
+  for (const n of [attach, box]) { if (n) { n.classList.remove('askattach', 'askbox'); field.append(n); } }
+  if (send) { send.classList.remove('asksend'); row.append(send); }
+  if (box) { box.rows = 1; box.placeholder = 'Ask Suna…'; box.style.height = 'auto'; }
+}
+
+function renderAskScreen() {
+  if (!DECISIONS_UI || readOnly) return;
+  document.body.classList.add('askmode');
+  document.body.classList.remove('dx-answered');
+  showWaiting(false);
+  showTail(false);
+  $('#convo-col').replaceChildren();
+  askScreenNode = askScreen({
+    greeting: '',
+    box: $('#box'), send: $('#send'), attach: $('#attach'),
+    // An example TAP sends straight away: the board's three are complete
+    // sentences, so dropping one into the box and waiting for a second tap
+    // would be a step that does nothing.
+    onExample: async (text) => {
+      $('#box').value = text;
+      setStatus("Checking what's open", true);
+      await ensureLocation();
+      prefetchFacts(location_);
+      ask({ chip: null, request: text, askSource: 'example' });
+    },
+  });
+  $('#convo-col').append(askScreenNode);
+  $('#box').value = '';
+  // The greeting arrives a moment later rather than holding up the screen.
+  fetchGreeting().then((g) => {
+    if (askScreenNode?.isConnected) updateSuna(askScreenNode.querySelector('.sunablock'), g.face, g.text);
+  });
 }
 
 /// GO-LIVE §3.2. While Suna is looking there is nothing to type: the
@@ -1921,15 +2017,33 @@ function showMismatch(holder, d) {
 /// §4. Tap a chip to fix it, × to drop it. Either cancels the running
 /// search and re-runs with the change, and every edit is saved as `stated`
 /// with source `chip`.
+/// What you asked, in one muted line at the top, until the chips replace
+/// it. The parse can fail or be slow, and a screen that shows nothing of
+/// the question while it thinks is a screen you cannot check.
+function askSummary(text) {
+  const row = el('div', 'dx asksummary');
+  row.append(el('div', 'summaryline', text));
+  return row;
+}
+
 function renderChipsFor(holder, parse) {
   holder.querySelector('.dx .chips')?.closest('.dx')?.remove();
   const block = chipsBlock(parse, {
-    onEdit: async (key, value, kind) => {
-      const next = prompt(key === 'time' ? 'How long have you got?' : `Change "${value}" to:`, value);
-      if (next == null || next.trim() === '' || next === value) return;
-      chipEdits++;
-      await saveChip(key, next.trim(), kind);
-      rerunWithChips({ ...parse, [key]: kind === 'one' ? next.trim() : parse[key] });
+    onEdit: (key, value, kind) => {
+      // §4 / Ask-chip.dc.html: a sheet, not window.prompt. A blocking
+      // browser dialog is not a design, and on a phone it is a system
+      // alert sitting on top of the thing it is meant to be part of.
+      chipSheet(key, value, {
+        onPick: async (next) => {
+          if (!next || next === value) return;
+          chipEdits++;
+          await saveChip(key, next, kind);
+          const patch = kind === 'one'
+            ? { [key]: next }
+            : { [key]: (parse[key] ?? []).map((v) => (v === value ? next : v)) };
+          rerunWithChips({ ...parse, ...patch });
+        },
+      });
     },
     onRemove: async (key, value, kind) => {
       chipRemovals++;
@@ -1940,7 +2054,32 @@ function renderChipsFor(holder, parse) {
       rerunWithChips(next);
     },
   });
-  holder.append(block);
+  // Above the waiting scene, where Loading.dc.html has them — and in place
+  // of the summary line, not under it.
+  const summary = $('#convo-col').querySelector('.asksummary');
+  if (summary) summary.replaceWith(block);
+  else $('#convo-col').prepend(block);
+}
+
+/// Card.dc.html: "3 hrs · Bukit Bintang · solo · street food, photos · …"
+/// with a pencil, in place of the chip row, once the card is up. Tapping it
+/// brings the chips back — nothing is hidden, only folded.
+function collapseChips() {
+  const chips = $('#convo-col').querySelector('.chips.understood');
+  if (!chips || !lastParse) return;
+  const p = lastParse;
+  const bits = [p.time, p.area, p.who, (p.likes ?? []).join(', '),
+                (p.not_for_me ?? []).map((v) => `no ${v}`).join(', ')]
+    .map((x) => String(x ?? '').trim()).filter(Boolean);
+  if (!bits.length) return;
+  const block = chips.closest('.dx');
+  const row = el('button', 'dx chipsummary');
+  row.type = 'button';
+  row.append(el('span', 'summaryline', bits.join(' · ')));
+  row.append(el('span', 'pencil', '\u270E'));
+  row.setAttribute('aria-label', `Your ask: ${bits.join(', ')}. Edit`);
+  row.onclick = () => { row.replaceWith(block); };
+  block.replaceWith(row);
 }
 
 /// Every chip edit or removal is a stated preference, sourced to the chip.
@@ -2214,7 +2353,14 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // GO-LIVE §3.1. "The design has no thread: each ask is its own screen."
   // Mode B keeps today's screens, but it is not known to be B yet — and a
   // plan replaces the column anyway, so clearing here is safe for both.
-  if (DECISIONS_UI) $('#convo-col').replaceChildren();
+  if (DECISIONS_UI) {
+    // Leaving the Ask screen: the composer goes back to the dock, where
+    // Cancel and the status line live, so it can be hidden as one thing.
+    stowComposer();
+    $('#convo-col').replaceChildren();
+    document.body.classList.remove('askmode');
+    askScreenNode = null;
+  }
   // GO-LIVE §3.4. The header showed the device's city until the server's
   // mode event arrived, then jumped. `placeInText` is the same rule the
   // server uses, so the header can be right from the first frame; the
@@ -2224,7 +2370,11 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
     const named = placeInText(shown);
     if (named) { topicSubject = { name: named, source: 'message' }; renderContext(); }
   }
-  $('#convo-col').append(meTurn(shown));
+  // Loading.dc.html has no message bubble: what you asked is the chip row
+  // under the header, and the waiting scene owns the rest of the screen. A
+  // bubble here is the chat thread the whole design is replacing.
+  if (DECISIONS_UI) $('#convo-col').append(askSummary(shown));
+  else $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
   scroll();
 
@@ -2653,6 +2803,13 @@ async function renderAnswer(holder, bubble, d) {
 
   if (d.mode === 'A' && DECISIONS_UI) {
     // UI-DECISIONS §5. A quick answer is a decision card, not a message.
+    // And it is the whole screen: no composer under it, because the next
+    // move is Go, Not this, a nudge, or New ask.
+    document.body.classList.add('dx-answered');
+    // Card.dc.html collapses the understood chips into one summary row once
+    // the card is up — the chips have done their job and the pick needs the
+    // room. Tapping it puts them back.
+    collapseChips();
     bubble.remove();
     const picks = picksFrom(r, d);
     remainingPicks = picks.slice(1);
