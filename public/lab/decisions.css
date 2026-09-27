@@ -11,54 +11,126 @@
   /* Inherit the PAGE's palette. The lab is a true-black Apple-style ground
    * (UI-R2), and a card painted #fff on top of it is a white slab in a dark
    * app — which is what the first screenshot showed. The brand colours the
-   * brief names are the accents, not the surface. */
-  --ink: var(--text, #111);
-  --paper: var(--card, #1c1c1e);
-  --sand: #F6CB94;
-  --muted: var(--muted, #C2C2C2);
-  --line: var(--line, rgba(84,84,88,0.65));
+   * brief names are the accents, not the surface.
+   *
+   * Prefixed, because `--line: var(--line, …)` is a CYCLE: a custom property
+   * that references itself is invalid at computed-value time and resolves to
+   * nothing at all, not to the fallback and not to the inherited value. It
+   * cost every border and every grey label in this file — `border: 1.5px
+   * solid var(--dx-line)` computed to `0px none`. Never redeclare a token in
+   * terms of itself. */
+  --dx-ink: var(--text, #F4F1EC);
+  --dx-paper: var(--card, #1c1c1e);
+  --dx-sand: #F6CB94;
+  --dx-muted: var(--muted, #C2C2C2);
+  --dx-line: var(--line, rgba(84, 84, 88, 0.65));
   --radius: 18px;
   font-family: Urbanist, system-ui, -apple-system, sans-serif;
-  color: var(--ink);
+  color: var(--dx-ink);
 }
 
 /* ── Suna ─────────────────────────────────────────────────────────────── */
-.dx .suna { display: flex; align-items: flex-end; gap: 10px; }
-.dx .suna svg { width: 56px; height: 67px; flex: none; }
-.dx .suna.small svg { width: 34px; height: 41px; }
-.dx .sunaline {
+/* Her scenes live in suna-motion.css, lifted whole from the canvas and
+ * injected by decisions.js. This is only where she stands and how big she is.
+ *
+ * Not scoped under `.dx`: she is prepended straight into an answer, where
+ * there is no .dx ancestor — the sheet taught us that lesson once already.
+ * And she is `.sunablock`, not `.suna`, because `.suna` is what the page has
+ * always called an answer turn (`class="turn suna"`) — styling that as her
+ * body centred the decision card and pushed it 37 px off both edges.
+ * The heights are the boards': 190 waiting, 150 the moment she finds it,
+ * 56 beside the card, 120 pouting in the sheet. */
+.sunablock {
+  --sunah: 190px;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 4px 0 2px;
+}
+.sunafig {
+  height: var(--sunah); flex: none;
+  display: flex; align-items: flex-end; justify-content: center;
+  transition: height .6s cubic-bezier(.5, 0, .2, 1);
+}
+/* The rig carries width/height attributes so it is right without CSS; here
+ * the container's height governs, which is what lets her shrink smoothly
+ * instead of being redrawn at a new size. */
+.sunafig svg { height: 100%; width: auto; display: block; }
+.sunalines { align-self: stretch; display: flex; flex-direction: column; gap: 12px; }
+.sunaline {
+  font-size: 26px; line-height: 1.25; font-weight: 600;
+  letter-spacing: -.01em; text-wrap: pretty;
+}
+/* The incoming line, faded under the one on screen. It is never a step that
+ * did not run: she says she is going wider only when the search went wider. */
+.sunaline.next {
+  font-size: 20px; line-height: 1.3; font-weight: 500; opacity: .3;
+}
+.sunaline:empty { display: none; }
+/* On the ask screen she is 64x77, beside her greeting (the Main board). */
+.sunablock.hello {
+  --sunah: 77px;
+  flex-direction: row; align-items: flex-end; gap: 10px;
+}
+.sunablock.hello .sunalines { align-self: auto; gap: 0; }
+.sunablock.hello .sunaline {
+  font-size: 19px; line-height: 1.3; font-weight: 600;
+  letter-spacing: 0; padding-bottom: 4px;
+}
+.sunablock.hello .sunaline.next { display: none; }
+/* The found scene, before she takes her seat. */
+.sunablock.entry { --sunah: 150px; }
+/* Beside the card. */
+.sunablock.small {
+  --sunah: 56px;
+  flex-direction: row; align-items: flex-end; gap: 10px;
+}
+.sunablock.small .sunalines { align-self: auto; gap: 0; }
+.sunablock.small .sunaline {
   font-size: 17px; line-height: 1.35; font-weight: 500;
-  padding-bottom: 6px; text-wrap: balance;
+  letter-spacing: 0; padding-bottom: 6px;
+}
+.sunablock.small .sunaline.next { display: none; }
+
+/* §6. Pouting beside the sheet's title, and reacting above the next card. */
+.sheethead { display: flex; align-items: flex-end; gap: 12px; }
+.sheethead p { margin: 4px 0 0; }
+.reaction { display: flex; align-items: flex-end; gap: 10px; padding: 2px 0 10px; }
+.reaction .sunaline { font-size: 17px; line-height: 1.35; font-weight: 600; }
+.sunafig.one { align-self: flex-end; }
+
+/* Invariant 12: everything holds still. The scenes stop in suna-motion.css;
+ * the size change has to stop here, or she still slides across the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .sunafig { transition: none; }
 }
 
 /* ── Ask ──────────────────────────────────────────────────────────────── */
 .dx .ask { display: flex; flex-direction: column; gap: 18px; padding: 8px 0 2px; }
-.dx .asklabel { font-size: 13px; color: var(--muted); font-weight: 600; }
+.dx .asklabel { font-size: 13px; color: var(--dx-muted); font-weight: 600; }
 .dx .askbox {
-  width: 100%; min-height: 108px; resize: none; border: 1.5px solid var(--line);
+  width: 100%; min-height: 108px; resize: none; border: 1.5px solid var(--dx-line);
   border-radius: var(--radius); padding: 14px 16px; font: inherit; font-size: 17px;
-  background: var(--paper); color: var(--ink);
+  background: var(--dx-paper); color: var(--dx-ink);
 }
-.dx .askbox:focus { outline: none; border-color: var(--sand); }
+.dx .askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .examples { display: flex; flex-direction: column; gap: 8px; }
 .dx .example {
-  text-align: left; border: 1px solid var(--line); background: transparent;
+  text-align: left; border: 1px solid var(--dx-line); background: transparent;
   border-radius: 999px; padding: 10px 14px; font: inherit; font-size: 15px;
-  color: var(--ink); cursor: pointer;
+  color: var(--dx-ink); cursor: pointer;
 }
-.dx .example:active { background: color-mix(in srgb, var(--sand) 30%, transparent); }
+.dx .example:active { background: color-mix(in srgb, var(--dx-sand) 30%, transparent); }
 .dx .go {
-  border: none; border-radius: 999px; background: var(--sand); color: #111;
+  border: none; border-radius: 999px; background: var(--dx-sand); color: #111;
   font: inherit; font-size: 17px; font-weight: 700; padding: 15px 18px; cursor: pointer;
 }
 
 /* ── Understood chips ─────────────────────────────────────────────────── */
 .dx .chips, .dx.sheet .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.dx .chiphint { font-size: 12px; color: var(--muted); }
+.dx .chiphint { font-size: 12px; color: var(--dx-muted); }
 .dx .chip2, .dx.sheet .chip2 {
   display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--line); border-radius: 999px; padding: 7px 8px 7px 13px;
-  font-size: 14px; background: color-mix(in srgb, var(--sand) 22%, transparent);
+  border: 1px solid var(--dx-line); border-radius: 999px; padding: 7px 8px 7px 13px;
+  font-size: 14px; background: color-mix(in srgb, var(--dx-sand) 22%, transparent);
 }
 .dx .chip2 button {
   border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0;
@@ -68,29 +140,29 @@
 
 /* ── The card ─────────────────────────────────────────────────────────── */
 .dx .card {
-  border: 1.5px solid var(--line); border-radius: 22px; padding: 18px;
-  display: flex; flex-direction: column; gap: 14px; background: var(--paper);
+  border: 1.5px solid var(--dx-line); border-radius: 22px; padding: 18px;
+  display: flex; flex-direction: column; gap: 14px; background: var(--dx-paper);
 }
 .dx .cardtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.dx .eyebrow, .dx.sheet .eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.dx .eyebrow, .dx.sheet .eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--dx-muted); font-weight: 700; }
 .dx .placename { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
 .dx .why { font-size: 17px; line-height: 1.4; }
-.dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
 .dx .actions .go { flex: 2; }
 .dx .btn, .dx.sheet .btn {
-  flex: 1; border: 1.5px solid var(--line); background: transparent; border-radius: 999px;
-  padding: 15px 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer;
+  flex: 1; border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
+  padding: 15px 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--dx-ink); cursor: pointer;
 }
 .dx .after {
-  border: 1px dashed var(--line); border-radius: 16px; padding: 12px 14px;
+  border: 1px dashed var(--dx-line); border-radius: 16px; padding: 12px 14px;
   display: flex; flex-direction: column; gap: 3px;
 }
 .dx .nudges { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
 .dx .nudges::-webkit-scrollbar { display: none; }
 .dx .nudge {
-  flex: none; border: 1px solid var(--line); background: transparent; border-radius: 999px;
-  padding: 9px 14px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer;
+  flex: none; border: 1px solid var(--dx-line); background: transparent; border-radius: 999px;
+  padding: 9px 14px; font: inherit; font-size: 14px; color: var(--dx-ink); cursor: pointer;
 }
 .dx .wouldyou { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .dx .wouldyou .btn { flex: none; padding: 9px 20px; }
@@ -99,21 +171,22 @@
 /* Both classes sit on ONE element (`class="dx sheet"`), so a descendant
  * selector never matched and the sheet rendered unstyled at the end of the
  * body — present in the DOM, invisible on screen. The scrim is a sibling of
- * .dx entirely. */
+ * .dx entirely, and it is `.dxscrim`: `.scrim` is the menu's. */
 .dx.sheet, .dx .sheet {
-  position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--paper);
+  position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--dx-paper);
   border-radius: 22px 22px 0 0; padding: 18px 18px 26px;
   box-shadow: 0 -8px 40px rgba(0,0,0,.18);
   display: flex; flex-direction: column; gap: 14px; max-height: 82vh; overflow: auto;
 }
 .dx.sheet h3, .dx .sheet h3 { margin: 0; font-size: 20px; font-weight: 700; }
-.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
+/* Named apart from the page's own `.scrim` (the menu's). */
+.dxscrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
 .dx .reasons, .dx.sheet .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
 .dx .reason, .dx.sheet .reason {
-  border: 1.5px solid var(--line); background: transparent; border-radius: 999px;
-  padding: 11px 15px; font: inherit; font-size: 15px; color: var(--ink); cursor: pointer;
+  border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
+  padding: 11px 15px; font: inherit; font-size: 15px; color: var(--dx-ink); cursor: pointer;
 }
-.dx .rowline, .dx.sheet .rowline { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.dx .rowline, .dx.sheet .rowline { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--dx-line); }
 .dx .rowline:last-child { border-bottom: none; }
-.dx .src, .dx.sheet .src { font-size: 12px; color: var(--muted); }
-.dx .linkish2, .dx.sheet .linkish2 { background: none; border: none; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 0; }
+.dx .src, .dx.sheet .src { font-size: 12px; color: var(--dx-muted); }
+.dx .linkish2, .dx.sheet .linkish2 { background: none; border: none; font: inherit; color: var(--dx-muted); text-decoration: underline; cursor: pointer; padding: 0; }

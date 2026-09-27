@@ -1,167 +1,286 @@
-// Suna's faces, lifted from the canvas export.
+// Suna, lifted from the canvas export. Generated — do not hand-edit.
 //
-// Brief: PROMPT-LAB-UI-DECISIONS-BUILD.md §2. "Take the layout, copy, spacing
-// and the mascot's SVG and keyframes from these files." One face per state,
-// each tied to a real stage event — no fake struggle: if she says she is
-// going wider, the search really went wider.
+//   node scripts/lab-extract-mascot.mjs
 //
-// Generated from docs/lab/design/decisions-canvas/project/Suna.dc.html.
-// Re-run scripts/lab-extract-mascot.mjs when the canvas changes; do not hand-edit.
+// Source: docs/lab/design/decisions-canvas/project/{Suna,Card}.dc.html and
+// suna-motion.css, in the app repo. Brief: PROMPT-LAB-UI-DECISIONS-BUILD.md,
+// Sources. Each state is a 7–18 s scene with separately moving parts; the parts
+// rotate from real joints, so the rig and the stylesheet only work together.
+//
+// Sizes (from the boards): about 190 px while waiting, the found scene big for
+// 1.5 s and then 56 px beside the card, 120 px pouting in the Not this sheet.
+// Everything stops under prefers-reduced-motion.
 
-export const SUNA_FACES = {
-  idle: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, idle: bobbing and blinking" role="img" style="overflow: visible;">
-          <g class="sn-bob">
-            <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <path d="M63 40C69 54 68 74 65 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <ellipse class="sn-blink" cx="33" cy="25.5" rx="3.2" ry="4.2" fill="#FFE7A8"></ellipse>
-            <ellipse class="sn-blink" cx="47" cy="25.5" rx="3.2" ry="4.2" fill="#FFE7A8"></ellipse>
-            <path d="M37.5 31.5Q40 33.5 42.5 31.5" fill="none" stroke="#FFE7A8" stroke-width="1.5" stroke-linecap="round"></path>
-          </g>
-        </svg>`,
-  searching: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, searching: side-eye, glancing left and right" role="img" style="overflow: visible;">
-          <g class="sn-lean">
-            <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <path d="M63 40C69 54 68 74 65 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <g class="sn-glance">
-              <ellipse cx="36" cy="27" rx="3.3" ry="2.6" fill="#FFE7A8"></ellipse>
-              <ellipse cx="50" cy="27" rx="3.3" ry="2.6" fill="#FFE7A8"></ellipse>
-              <rect x="31" y="23" width="24" height="3.4" fill="#151416"></rect>
-            </g>
-            <path d="M39 32.5H44" fill="none" stroke="#FFE7A8" stroke-width="1.5" stroke-linecap="round"></path>
-          </g>
-        </svg>`,
-  slow: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, slow: sweat drop sliding down, bobbing fast" role="img" style="overflow: visible;">
-          <g class="sn-bob-fast">
-            <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <path d="M63 40C69 54 68 74 65 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <ellipse cx="33" cy="25" rx="3" ry="3.8" fill="#FFE7A8"></ellipse>
-            <ellipse cx="47" cy="25" rx="3" ry="3.8" fill="#FFE7A8"></ellipse>
-            <path d="M36 32.5q1 -1.2 2 0t2 0t2 0t2 0" fill="none" stroke="#FFE7A8" stroke-width="1.4" stroke-linecap="round"></path>
-            <path class="sn-sweat" d="M59 9C59 9 55.5 13.5 55.5 15.5A3.5 3.5 0 0 0 62.5 15.5C62.5 13.5 59 9 59 9Z" fill="#9FD0EE"></path>
-          </g>
-        </svg>`,
-  mismatch: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, location mismatch: head tilt, squinting" role="img" style="overflow: visible;">
-          <g class="sn-tilt">
-            <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <path d="M63 40C69 54 68 74 65 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <ellipse class="sn-squint" cx="33" cy="26" rx="3.6" ry="1.3" fill="#FFE7A8"></ellipse>
-            <ellipse class="sn-squint" cx="47" cy="26" rx="3.6" ry="1.3" fill="#FFE7A8"></ellipse>
-            <circle cx="40" cy="32" r="1.4" fill="none" stroke="#FFE7A8" stroke-width="1.3"></circle>
-          </g>
-        </svg>`,
-  found: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, found: hopping, arms up, sparkling eyes" role="img" style="overflow: visible;">
-          <g class="sn-hop">
-            <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <path class="sn-wave-l" d="M17 38C9 30 8 18 11 7" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <path class="sn-wave-r" d="M63 38C71 30 72 18 69 7" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <path class="sn-pulse" d="M33 21L34.2 24.8L38 26L34.2 27.2L33 31L31.8 27.2L28 26L31.8 24.8Z" fill="#FFE7A8"></path>
-            <path class="sn-pulse" d="M47 21L48.2 24.8L52 26L48.2 27.2L47 31L45.8 27.2L42 26L45.8 24.8Z" fill="#FFE7A8"></path>
-            <path d="M37 32.2Q40 36 43 32.2Z" fill="#FFE7A8"></path>
-            <path class="sn-pulse-late" d="M4 26L5 28.6L7.6 29.6L5 30.6L4 33.2L3 30.6L0.4 29.6L3 28.6Z" fill="#FFE7A8"></path>
-            <path class="sn-pulse-late" d="M76 18L77 20.6L79.6 21.6L77 22.6L76 25.2L75 22.6L72.4 21.6L75 20.6Z" fill="#FFE7A8"></path>
-          </g>
-        </svg>`,
-  pout: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, pouting: drooping, arms hanging low" role="img" style="overflow: visible;">
-          <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-          <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-          <g class="sn-droop">
-            <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-            <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-            <g class="sn-hang">
-              <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-              <path d="M63 40C69 54 68 74 65 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-            </g>
-            <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-            <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-            <ellipse cx="33" cy="27" rx="3.2" ry="3.4" fill="#FFE7A8"></ellipse>
-            <ellipse cx="47" cy="27" rx="3.2" ry="3.4" fill="#FFE7A8"></ellipse>
-            <path d="M28 22.5H38.5V24.2L28 27Z" fill="#151416"></path>
-            <path d="M41.5 22.5H52V27L41.5 24.2Z" fill="#151416"></path>
-            <path d="M37.5 33.5Q40 31.2 42.5 33.5" fill="none" stroke="#FFE7A8" stroke-width="1.5" stroke-linecap="round"></path>
-          </g>
-        </svg>`,
-  sheepish: `<svg class="sn" viewBox="0 0 80 96" aria-label="Suna, sheepish: rubbing the back of her head, looking down" role="img" style="overflow: visible;">
-          <ellipse cx="32" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-          <ellipse cx="48" cy="73" rx="6" ry="9" fill="#BF8C57"></ellipse>
-          <path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="#D4A373"></path>
-          <ellipse cx="31" cy="10.5" rx="7" ry="2.8" fill="#E6C39A" opacity="0.6"></ellipse>
-          <path d="M17 40C11 54 12 74 15 90" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-          <path class="sn-rub" d="M63 40C72 34 72 18 62 9" fill="none" stroke="#D4A373" stroke-width="3.4" stroke-linecap="round"></path>
-          <rect x="22" y="15" width="36" height="22" rx="11" fill="#151416"></rect>
-          <path d="M27 19.5Q31 17.5 36 18" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.4" stroke-linecap="round"></path>
-          <g class="sn-look">
-            <ellipse cx="33" cy="26" rx="2.8" ry="2.6" fill="#FFE7A8"></ellipse>
-            <ellipse cx="47" cy="26" rx="2.8" ry="2.6" fill="#FFE7A8"></ellipse>
-          </g>
-          <path d="M37 32Q38.5 33.5 40 32.3Q41.5 33.5 43 32" fill="none" stroke="#FFE7A8" stroke-width="1.5" stroke-linecap="round"></path>
-        </svg>`,
+/// The gradients and filters every state points at: sna-body, sna-core, sna-visor, sna-eye, sna-leg, sna-glow, sna-blur, sna-blur2.
+/// Injected once into the document, not into each face.
+export const SUNA_DEFS = `<radialGradient id="sna-body" cx="0.36" cy="0.28" r="0.8" fx="0.3" fy="0.2"><stop offset="0" stop-color="#F0CEA6"></stop><stop offset="0.2" stop-color="#E9C39A"></stop><stop offset="0.52" stop-color="#D4A373"></stop><stop offset="0.84" stop-color="#B8845A"></stop><stop offset="1" stop-color="#A9784E"></stop></radialGradient>
+      <radialGradient id="sna-core" cx="0.74" cy="0.8" r="0.5"><stop offset="0" stop-color="#4A2E16" stop-opacity="0.42"></stop><stop offset="1" stop-color="#4A2E16" stop-opacity="0"></stop></radialGradient>
+      <radialGradient id="sna-visor" cx="0.42" cy="0.32" r="0.75"><stop offset="0" stop-color="#1A1A1A"></stop><stop offset="1" stop-color="#000000"></stop></radialGradient>
+      <radialGradient id="sna-eye" cx="0.5" cy="0.45" r="0.6"><stop offset="0" stop-color="#FFF8E0"></stop><stop offset="0.55" stop-color="#FFE7A8"></stop><stop offset="1" stop-color="#F2C675"></stop></radialGradient>
+      <linearGradient id="sna-leg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A9784E"></stop><stop offset="0.35" stop-color="#C9955F"></stop><stop offset="0.75" stop-color="#D0A06E"></stop><stop offset="1" stop-color="#A9784E"></stop></linearGradient>
+      <filter id="sna-glow" filterUnits="userSpaceOnUse" x="-20" y="-30" width="120" height="150"><feGaussianBlur stdDeviation="1.1" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+      <filter id="sna-blur" filterUnits="userSpaceOnUse" x="-20" y="-30" width="120" height="150"><feGaussianBlur stdDeviation="0.9"></feGaussianBlur></filter>
+      <filter id="sna-blur2" filterUnits="userSpaceOnUse" x="-20" y="-30" width="120" height="150"><feGaussianBlur stdDeviation="1.8"></feGaussianBlur></filter>`;
+
+/// The rigs: her parts, without an <svg> wrapper. Each one is shared by every
+/// state that draws her the same way.
+const RIG = {
+  idle: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse class="p-eyel" cx="33" cy="25.5" rx="3.2" ry="4.2" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse class="p-eyer" cx="47" cy="25.5" rx="3.2" ry="4.2" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><path class="p-mouth" d="M37.5 31.5Q40 33.5 42.5 31.5" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.5" stroke-linecap="round"></path><ellipse class="p-mopen" cx="40" cy="32.5" rx="3" ry="2.4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
+  search: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse class="p-eyel" cx="35" cy="27" rx="3.3" ry="2.6" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse class="p-eyer" cx="49" cy="27" rx="3.3" ry="2.6" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><rect x="30" y="23" width="24" height="3.4" fill="#030303"></rect></g><path class="p-mouth" d="M38.5 32.5H43.5" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.5" stroke-linecap="round"></path></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
+  slow: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse class="p-eyel" cx="33" cy="25" rx="3" ry="3.8" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse class="p-eyer" cx="47" cy="25" rx="3" ry="3.8" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><path class="p-mouth" d="M36 32.5q1 -1.2 2 0t2 0t2 0t2 0" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.4" stroke-linecap="round"></path></g><path class="p-sweat" d="M58 9C58 9 54.5 13.5 54.5 15.5A3.5 3.5 0 0 0 61.5 15.5C61.5 13.5 58 9 58 9Z" fill="#9FD0EE"></path><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
+  where: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse class="p-eyel" cx="33" cy="25.5" rx="3.4" ry="4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse class="p-eyer" cx="47" cy="25.5" rx="3.4" ry="4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><path class="p-mouth" d="M38 32.2Q40 33 42 32.2" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.5" stroke-linecap="round"></path><ellipse class="p-mopen" cx="40" cy="32.5" rx="3" ry="2.4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
+  found: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><path class="p-eyel" d="M33 21L34.2 24.8L38 26L34.2 27.2L33 31L31.8 27.2L28 26L31.8 24.8Z" fill="url(#sna-eye)" filter="url(#sna-glow)"></path><path class="p-eyer" d="M47 21L48.2 24.8L52 26L48.2 27.2L47 31L45.8 27.2L42 26L45.8 24.8Z" fill="url(#sna-eye)" filter="url(#sna-glow)"></path></g><path d="M37 32.2Q40 36 43 32.2Z" fill="url(#sna-eye)" filter="url(#sna-glow)"></path></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g><path class="p-spark" d="M2 22L3.2 25.2L6.4 26.4L3.2 27.6L2 30.8L0.8 27.6L-2.4 26.4L0.8 25.2Z" fill="url(#sna-eye)" filter="url(#sna-glow)"></path><path class="p-spark" d="M78 12L79.2 15.2L82.4 16.4L79.2 17.6L78 20.8L76.8 17.6L73.6 16.4L76.8 15.2Z" fill="url(#sna-eye)" filter="url(#sna-glow)"></path></g></g>`,
+  pout: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse cx="33" cy="27" rx="3.2" ry="3.4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse cx="47" cy="27" rx="3.2" ry="3.4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><path d="M28 22.5H38.5V24.2L28 27Z" fill="#030303"></path><path d="M41.5 22.5H52V27L41.5 24.2Z" fill="#030303"></path></g><path class="p-mouth" d="M37.5 33.5Q40 31.2 42.5 33.5" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.5" stroke-linecap="round"></path><ellipse class="p-mopen" cx="40" cy="32.5" rx="3" ry="2.4" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
+  sheep: `<g class="p-root"><ellipse class="p-shadow" cx="40" cy="83.5" rx="20" ry="3.4" fill="#000000" opacity="0.22" filter="url(#sna-blur2)"></ellipse><g class="p-bob"><g class="p-legl"><rect x="26" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="29.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="32" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-legr"><rect x="42" y="64" width="12" height="18" rx="6" fill="url(#sna-leg)"></rect><ellipse cx="45.4" cy="74" rx="1.3" ry="3.6" fill="#EDC9A0" opacity="0.45"></ellipse><ellipse cx="48" cy="66.5" rx="5.6" ry="2.2" fill="#3A2412" opacity="0.4" filter="url(#sna-blur)"></ellipse></g><g class="p-body"><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-body)"></path><path d="M40 4C56 4 64 17 64 35C64 55 55 68 40 68C25 68 16 55 16 35C16 17 24 4 40 4Z" fill="url(#sna-core)"></path><path d="M21 16C15.5 28 16 50 27 62" fill="none" stroke="#FFD8A6" stroke-opacity="0.5" stroke-width="1.3" stroke-linecap="round" filter="url(#sna-blur)"></path><path d="M60 24C63.5 36 62 52 51 63" fill="none" stroke="#E9B98A" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" filter="url(#sna-blur)"></path><ellipse cx="30" cy="11" rx="9" ry="3.6" fill="#FFFFFF" opacity="0.2" transform="rotate(-24 30 11)" filter="url(#sna-blur)"></ellipse><ellipse cx="17.8" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><ellipse cx="62.2" cy="41.5" rx="2.6" ry="2.2" fill="#3A2412" opacity="0.35" filter="url(#sna-blur)"></ellipse><g class="p-visor"><rect x="21.3" y="14.3" width="37.4" height="23.4" rx="11.7" fill="#F2D1A6" opacity="0.5"></rect><rect x="22" y="15" width="36" height="22" rx="11" fill="url(#sna-visor)"></rect><path d="M27.5 18.6Q38 15.6 51.5 17.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="1.5" stroke-linecap="round"></path><ellipse cx="53.6" cy="20.6" rx="1.2" ry="0.8" fill="#FFFFFF" opacity="0.28"></ellipse><g class="p-eyes"><ellipse cx="33" cy="26" rx="2.8" ry="2.6" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse><ellipse cx="47" cy="26" rx="2.8" ry="2.6" fill="url(#sna-eye)" filter="url(#sna-glow)"></ellipse></g><path d="M37 32Q38.5 33.5 40 32.3Q41.5 33.5 43 32" fill="none" stroke="#FFE7A8" filter="url(#sna-glow)" stroke-width="1.5" stroke-linecap="round"></path></g><g class="p-arml"><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M17 40Q13.6 52 14 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forel"><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M14 64Q13.8 76 15 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="14.3" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g><g class="p-armr"><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#B8845A" stroke-width="4.6" stroke-linecap="round"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#D4A373" stroke-width="3" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M63 40Q66.4 52 66 64" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><g class="p-forer"><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#B8845A" stroke-width="4.4" stroke-linecap="round"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#D4A373" stroke-width="2.9" stroke-linecap="round" transform="translate(-0.5 -0.2)"></path><path d="M66 64Q66.2 76 65 88" fill="none" stroke="#EDC9A0" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round" transform="translate(-1 -0.3)"></path><circle cx="64.4" cy="87.3" r="1.1" fill="#F2D4AE" opacity="0.7"></circle></g></g></g></g></g>`,
 };
 
-export const SUNA_CSS = `
-@keyframes sn-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes sn-blink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(0.1); } }
-@keyframes sn-lean { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-4deg); } }
-@keyframes sn-glance { 0%, 100% { transform: translateX(0); } 25%, 45% { transform: translateX(-7px); } 65%, 85% { transform: translateX(0); } }
-@keyframes sn-sweat { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
-@keyframes sn-tilt { 0%, 100% { transform: rotate(0deg); } 30%, 60% { transform: rotate(-7deg); } }
-@keyframes sn-squint { 0%, 35%, 100% { transform: scaleY(1); } 50%, 75% { transform: scaleY(2.6); } }
-@keyframes sn-hop { 0%, 40%, 100% { transform: translateY(0); } 18% { transform: translateY(-8px); } }
-@keyframes sn-wave-l { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-8deg); } }
-@keyframes sn-wave-r { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(8deg); } }
-@keyframes sn-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.65); opacity: 0.75; } }
-@keyframes sn-droop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2.5px); } }
-@keyframes sn-hang { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
-@keyframes sn-rub { 0% { transform: rotate(-6deg); } 100% { transform: rotate(8deg); } }
-@keyframes sn-look { 0%, 100% { transform: translateY(0); } 40%, 80% { transform: translateY(2.5px); } }
-.sn-bob { animation: sn-bob 2.4s ease-in-out infinite; }
-.sn-bob-fast { animation: sn-bob 0.8s ease-in-out infinite; }
-.sn-blink { transform-box: fill-box; transform-origin: center; animation: sn-blink 3s linear infinite; }
-.sn-lean { transform-box: fill-box; transform-origin: 50% 100%; animation: sn-lean 2.8s ease-in-out infinite; }
-.sn-glance { animation: sn-glance 2.8s ease-in-out infinite; }
-.sn-sweat { animation: sn-sweat 1.5s ease-in infinite; }
-.sn-tilt { transform-box: fill-box; transform-origin: 50% 100%; animation: sn-tilt 2.6s ease-in-out infinite; }
-.sn-squint { transform-box: fill-box; transform-origin: center; animation: sn-squint 2.6s ease-in-out infinite; }
-.sn-hop { animation: sn-hop 1.8s ease-out infinite; }
-.sn-wave-l { transform-box: fill-box; transform-origin: 100% 100%; animation: sn-wave-l 1.8s ease-in-out infinite; }
-.sn-wave-r { transform-box: fill-box; transform-origin: 0% 100%; animation: sn-wave-r 1.8s ease-in-out infinite; }
-.sn-pulse { transform-box: fill-box; transform-origin: center; animation: sn-pulse 1.6s ease-in-out infinite; }
-.sn-pulse-late { transform-box: fill-box; transform-origin: center; animation: sn-pulse 1.6s ease-in-out 0.5s infinite; }
-.sn-droop { animation: sn-droop 2.6s ease-in-out infinite; }
-.sn-hang { animation: sn-hang 2.6s ease-in-out infinite; }
-.sn-rub { transform-box: fill-box; transform-origin: 0% 100%; animation: sn-rub 0.8s ease-in-out infinite alternate; }
-.sn-look { animation: sn-look 2.4s ease-in-out infinite; }
+/// One entry per state class the stylesheet animates.
+export const SUNA_STATES = {
+  "st-found": { label: "Suna, found: crouches, hops high with a spin, lands with a squash, bounces, then points down at the pick", body: RIG.found },
+  "st-found-once": { label: "", body: RIG.found },
+  "st-foundsm": { label: "Suna, sparkle eyes, arms up", body: RIG.found },
+  "st-idle": { label: "Suna idle: bobs and blinks; every few seconds she looks at you, waves, or stretches and yawns", body: RIG.idle },
+  "st-pout": { label: "Suna pouting: droops, arms hang to the floor, kicks the ground, glances back at you, huffs, turns away", body: RIG.pout },
+  "st-search": { label: "Suna searching: walks across, shades her visor to peer left and right, scratches her head, shrugs, walks back", body: RIG.search },
+  "st-sheep": { label: "Suna, sheepish: shrinks down, rubs the back of her head, looks away, shuffles her feet, gives a small wave", body: RIG.sheep },
+  "st-slow": { label: "Suna, slow search: paces, folds her arms and taps her foot, wipes her visor, slumps, then pulls herself back up", body: RIG.slow },
+  "st-where": { label: "Suna, location mismatch: looks away, does a double take, squints, tilts her head and points to each side", body: RIG.where },
+};
 
-/* Respect Reduce Motion: she holds still rather than disappearing. */
-@media (prefers-reduced-motion: reduce) {
-  .suna svg, .suna svg * { animation: none !important; }
+/// The face names lab-suna-lines.ts sends, mapped to their state class.
+export const SUNA_FACE_STATE = {
+  "idle": "st-idle",
+  "searching": "st-search",
+  "slow": "st-slow",
+  "mismatch": "st-where",
+  "found": "st-found",
+  "pout": "st-pout",
+  "sheepish": "st-sheep"
+};
+
+/// Build one. `state` is a state class; height comes from the caller.
+export function sunaSvg(state, height, opts = {}) {
+  const s = SUNA_STATES[state] ?? SUNA_STATES['st-idle'];
+  const extra = opts.extraClass ? ' ' + opts.extraClass : '';
+  const w = Math.round((height * 80) / 96);
+  const label = opts.label ?? s.label;
+  const a11y = label ? ` role="img" aria-label="${label}"` : ' aria-hidden="true"';
+  return `<svg class="sn ${state}${extra}" width="${w}" height="${height}" viewBox="0 0 80 96"${a11y} style="overflow: visible;">${s.body}</svg>`;
 }
-`;
+
+/// Her face for a line's face name.
+export function sunaFace(face, height, opts = {}) {
+  return sunaSvg(SUNA_FACE_STATE[face] ?? 'st-idle', height, opts);
+}
+
+export const SUNA_CSS = `/* Suna rig: parts rotate from real joints (view-box coordinates) */
+.sn g, .sn path, .sn ellipse { transform-box: view-box; }
+.sn .p-root { transform-origin: 40px 82px; }
+.sn .p-bob { transform-origin: 40px 46px; }
+.sn .p-legl { transform-origin: 32px 66px; }
+.sn .p-legr { transform-origin: 48px 66px; }
+.sn .p-body { transform-origin: 40px 68px; }
+.sn .p-visor { transform-origin: 40px 26px; }
+.sn .p-eyes { transform-origin: 40px 26px; }
+.sn .p-eyel { transform-origin: 33px 26px; }
+.sn .p-eyer { transform-origin: 47px 26px; }
+.sn .p-mopen { transform-origin: 40px 32.5px; transform: scale(0); }
+.sn .p-arml { transform-origin: 17px 40px; }
+.sn .p-forel { transform-origin: 14px 64px; }
+.sn .p-armr { transform-origin: 63px 40px; }
+.sn .p-forer { transform-origin: 66px 64px; }
+.sn .p-sweat { transform-origin: 58px 14px; }
+.sn .p-spark { transform-box: fill-box; transform-origin: center; }
+.sn .p-shadow { transform-origin: 40px 84px; }
+
+/* Ground shadow: lives inside p-root, so it walks with her; it counter-moves on hops and breathes with the bob */
+.st-idle .p-shadow { animation: shadow-breathe 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-slow .p-shadow { animation: shadow-breathe 0.8s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-foundsm .p-shadow { animation: shadow-breathe 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+@keyframes shadow-breathe { 0%, 100% { transform: none; opacity: 0.22; } 50% { transform: scale(0.9); opacity: 0.17; } }
+.st-where .p-shadow { animation: where-shadow 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+@keyframes where-shadow { 0%, 15%, 22%, 100% { transform: none; opacity: 0.22; } 17% { transform: translateY(7px) scale(0.8); opacity: 0.14; } 19.5% { transform: translateY(-1px) scaleX(1.15); opacity: 0.26; } }
+.st-found .p-shadow, .st-found-once .p-shadow { animation: found-shadow 7s linear infinite; }
+@keyframes found-shadow {
+  0%, 4% { transform: none; opacity: 0.22; animation-timing-function: cubic-bezier(0.45, 0, 0.3, 1); }
+  10% { transform: translateY(-2px) scaleX(1.14); opacity: 0.26; animation-timing-function: cubic-bezier(0.2, 0.8, 0.35, 1); }
+  20% { transform: translateY(30px) scale(0.5); opacity: 0.08; animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  28% { transform: scaleX(1.32); opacity: 0.28; animation-timing-function: cubic-bezier(0.2, 0.8, 0.35, 1); }
+  38% { transform: translateY(7px) scale(0.82); opacity: 0.16; animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  45%, 100% { transform: none; opacity: 0.22; }
+}
+
+@keyframes sn-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes sn-blink { 0%, 86%, 100% { transform: scaleY(1); } 91% { transform: scaleY(0.1); } 95% { transform: scaleY(1); } }
+@keyframes sn-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.68); opacity: 0.8; } }
+
+/* IDLE, 18 s: bob and blink, with an extra every ~6 s (look at camera, wave, stretch and yawn) */
+.st-idle .p-bob { animation: sn-bob 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-idle .p-eyel, .st-idle .p-eyer { animation: sn-blink 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-idle .p-eyes { animation: idle-eyes 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-body { animation: idle-body 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-arml { animation: idle-arml 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-forel { animation: idle-forel 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-armr { animation: idle-armr 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-forer { animation: idle-forer 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-mouth { animation: idle-mouth 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-idle .p-mopen { animation: idle-mopen 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+@keyframes idle-eyes { 0%, 18%, 32%, 81%, 95%, 100% { transform: none; } 21%, 29% { transform: scale(1.3); } 85%, 91% { transform: scaleY(0.15); } }
+@keyframes idle-body { 0%, 18%, 33%, 78%, 97%, 100% { transform: none; } 22%, 29% { transform: scale(1.05); } 81% { transform: scale(1.08, 0.9); } 86%, 90% { transform: scale(0.94, 1.12); } 94% { transform: scale(1.04, 0.96); } }
+@keyframes idle-arml { 0%, 81%, 100% { transform: none; } 86%, 90% { transform: rotate(174deg); } 94% { transform: rotate(-8deg); } 97% { transform: none; } }
+@keyframes idle-forel { 0%, 82%, 100% { transform: none; } 88% { transform: rotate(-12deg); } 95% { transform: rotate(-16deg); } }
+@keyframes idle-armr { 0%, 44%, 68%, 81%, 100% { transform: none; } 48% { transform: rotate(-162deg); } 50%, 60% { transform: rotate(-146deg); } 64% { transform: rotate(8deg); } 86%, 90% { transform: rotate(-174deg); } 94% { transform: rotate(8deg); } 97% { transform: none; } }
+@keyframes idle-forer { 0%, 46%, 68%, 82%, 100% { transform: none; } 50% { transform: rotate(-32deg); } 53% { transform: rotate(24deg); } 56% { transform: rotate(-32deg); } 59% { transform: rotate(20deg); } 64% { transform: rotate(22deg); } 88% { transform: rotate(12deg); } 95% { transform: rotate(16deg); } }
+@keyframes idle-mouth { 0%, 83%, 93%, 100% { opacity: 1; } 85%, 91% { opacity: 0; } }
+@keyframes idle-mopen { 0%, 83%, 94%, 100% { transform: scale(0); } 86%, 91% { transform: scale(1.1, 1.4); } }
+
+/* SEARCHING, 10 s: walk right, stop, shade visor and peer left then right, scratch head, shrug, walk back */
+.st-search .p-root { animation: search-root 10s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.st-search .p-legl { animation: search-legl 10s ease-in-out infinite; }
+.st-search .p-legr { animation: search-legr 10s ease-in-out infinite; }
+.st-search .p-body { animation: search-body 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-search .p-eyes { animation: search-eyes 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-search .p-eyel, .st-search .p-eyer { animation: sn-blink 3.6s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-search .p-arml { animation: search-arml 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-search .p-forel { animation: search-forel 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-search .p-armr { animation: search-armr 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-search .p-forer { animation: search-forer 10s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+@keyframes search-root { 0% { transform: translateX(-18px); } 20% { transform: translateX(19.5px); } 23%, 60% { transform: translateX(18px); } 88% { transform: translateX(-19.5px); } 91%, 100% { transform: translateX(-18px); } }
+@keyframes search-legl { 0%, 5%, 10%, 15%, 20%, 60%, 65%, 70%, 75%, 80%, 85%, 88%, 100% { transform: none; } 2.5%, 7.5%, 12.5%, 17.5%, 62.5%, 67.5%, 72.5%, 77.5%, 82.5% { transform: translateY(-4px) rotate(10deg); } }
+@keyframes search-legr { 0%, 2.5%, 7.5%, 12.5%, 17.5%, 20%, 60%, 62.5%, 67.5%, 72.5%, 77.5%, 82.5%, 88%, 100% { transform: none; } 5%, 10%, 15%, 65%, 70%, 75%, 80%, 85% { transform: translateY(-4px) rotate(-10deg); } }
+@keyframes search-body { 0%, 26%, 42%, 52%, 59%, 94%, 100% { transform: none; } 2.5%, 7.5%, 12.5%, 17.5% { transform: rotate(5deg) translateY(-2px); } 5%, 10%, 15% { transform: rotate(5deg); } 21% { transform: rotate(-4deg); } 24% { transform: rotate(1.5deg); } 29%, 33% { transform: rotate(-7deg); } 36%, 40% { transform: rotate(7deg); } 54% { transform: scale(1.05, 0.93); } 56.5% { transform: scale(0.96, 1.06); } 62.5%, 67.5%, 72.5%, 77.5%, 82.5% { transform: rotate(-5deg) translateY(-2px); } 65%, 70%, 75%, 80%, 85% { transform: rotate(-5deg); } 89% { transform: rotate(4deg); } 91.5% { transform: rotate(-1.5deg); } }
+@keyframes search-eyes { 0%, 19% { transform: translateX(4px); } 23% { transform: none; } 27%, 32% { transform: translateX(-6px); } 35%, 40% { transform: translateX(5px); } 43%, 51% { transform: translate(0, -2.5px); } 54%, 58% { transform: none; } 62%, 88% { transform: translateX(-5px); } 94% { transform: none; } 100% { transform: translateX(4px); } }
+@keyframes search-arml { 0%, 20%, 38%, 60%, 88%, 100% { transform: none; } 5%, 15% { transform: rotate(12deg); } 10% { transform: rotate(-10deg); } 42% { transform: rotate(178deg); } 44%, 51% { transform: rotate(170deg); } 53.5%, 58% { transform: rotate(52deg); } 65%, 75%, 85% { transform: rotate(-10deg); } 70%, 80% { transform: rotate(12deg); } }
+@keyframes search-forel { 0%, 39%, 60%, 100% { transform: none; } 5%, 15% { transform: rotate(-12deg); } 10% { transform: rotate(10deg); } 43% { transform: rotate(64deg); } 45% { transform: rotate(50deg); } 47% { transform: rotate(76deg); } 49% { transform: rotate(50deg); } 51% { transform: rotate(72deg); } 54%, 58% { transform: rotate(100deg); } 65%, 75%, 85% { transform: rotate(10deg); } 70%, 80% { transform: rotate(-12deg); } }
+@keyframes search-armr { 0%, 20%, 42%, 46%, 51%, 60%, 88%, 100% { transform: none; } 5%, 15% { transform: rotate(-10deg); } 10% { transform: rotate(12deg); } 24% { transform: rotate(-170deg); } 26%, 40% { transform: rotate(-160deg); } 44% { transform: rotate(9deg); } 53.5%, 58% { transform: rotate(-52deg); } 65%, 75%, 85% { transform: rotate(12deg); } 70%, 80% { transform: rotate(-10deg); } }
+@keyframes search-forer { 0%, 21%, 42%, 51%, 60%, 100% { transform: none; } 26%, 40% { transform: rotate(-110deg); } 44% { transform: rotate(18deg); } 54%, 58% { transform: rotate(-100deg); } }
+
+/* SLOW, 8 s: pace, fold arms and tap foot, wipe the visor (drop falls), big slump, back up */
+.st-slow .p-root { animation: slow-root 8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.st-slow .p-bob { animation: sn-bob 0.8s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-slow .p-legl { animation: slow-legl 8s ease-in-out infinite; }
+.st-slow .p-legr { animation: slow-legr 8s ease-in-out infinite; }
+.st-slow .p-body { animation: slow-body 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-eyes { animation: slow-eyes 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-arml { animation: slow-arml 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-forel { animation: slow-forel 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-armr { animation: slow-armr 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-forer { animation: slow-forer 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-slow .p-sweat { animation: slow-sweat 8s cubic-bezier(0.5, 0, 0.7, 0.4) infinite; }
+@keyframes slow-root { 0%, 24%, 100% { transform: translateX(0); } 12% { transform: translateX(11px); } }
+@keyframes slow-legl { 0%, 6%, 12%, 18%, 24%, 100% { transform: none; } 3%, 9%, 15%, 21% { transform: translateY(-3px) rotate(9deg); } }
+@keyframes slow-legr { 0%, 3%, 9%, 15%, 21%, 24%, 30%, 33%, 36%, 39%, 42%, 45%, 100% { transform: none; } 6%, 12%, 18% { transform: translateY(-3px) rotate(-9deg); } 31.5%, 34.5%, 37.5%, 40.5%, 43.5% { transform: rotate(-18deg) translate(2px, -2px); } }
+@keyframes slow-body { 0%, 24%, 28%, 44%, 60%, 92%, 100% { transform: none; } 6%, 12% { transform: rotate(4deg); } 18% { transform: rotate(-4deg); } 26% { transform: scale(1.04, 0.96); } 64% { transform: scale(1.16, 0.82) rotate(3deg); } 70%, 80% { transform: scale(1.12, 0.85) rotate(2deg); } 85% { transform: scale(0.93, 1.1); } 89% { transform: scale(1.03, 0.97); } }
+@keyframes slow-eyes { 0%, 24%, 60%, 88%, 100% { transform: none; } 6%, 11% { transform: translateX(3px); } 15%, 21% { transform: translateX(-3px); } 30%, 44% { transform: translateY(-2px); } 64%, 82% { transform: translateY(2px) scaleY(0.45); } }
+@keyframes slow-arml { 0%, 24%, 46%, 60%, 88%, 100% { transform: none; } 28%, 44% { transform: rotate(-40deg); } 64%, 80% { transform: translateY(4px) rotate(4deg); } 84% { transform: rotate(-8deg); } }
+@keyframes slow-forel { 0%, 24%, 46%, 100% { transform: none; } 28%, 44% { transform: rotate(-50deg); } 66%, 80% { transform: rotate(6deg); } }
+@keyframes slow-armr { 0%, 24%, 60%, 88%, 100% { transform: none; } 28%, 44% { transform: rotate(40deg); } 49% { transform: rotate(-166deg); } 51%, 57% { transform: rotate(-155deg); } 64%, 80% { transform: translateY(4px) rotate(-4deg); } 84% { transform: rotate(8deg); } }
+@keyframes slow-forer { 0%, 24%, 46%, 60%, 100% { transform: none; } 28%, 44% { transform: rotate(50deg); } 50% { transform: rotate(-98deg); } 52% { transform: rotate(-132deg); } 54% { transform: rotate(-94deg); } 56% { transform: rotate(-128deg); } 58% { transform: rotate(-110deg); } 66%, 80% { transform: rotate(-6deg); } }
+@keyframes slow-sweat { 0% { transform: translateY(-4px); opacity: 0; } 6% { transform: translateY(-4px); opacity: 1; } 46% { transform: translateY(6px); opacity: 1; } 53% { transform: translateY(7px); opacity: 1; } 62% { transform: translate(7px, 42px); opacity: 0; } 100% { transform: translateY(-4px); opacity: 0; } }
+
+/* LOCATION MISMATCH, 8 s: look away, double take, squint, tilt and point "here", tilt and point "there" */
+.st-where .p-root { animation: where-root 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-body { animation: where-body 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-eyes { animation: where-eyes 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-arml { animation: where-arml 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-forel { animation: where-forel 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-armr { animation: where-armr 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-forer { animation: where-forer 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-mouth { animation: where-mouth 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-where .p-mopen { animation: where-mopen 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+@keyframes where-root { 0%, 15%, 22%, 100% { transform: none; } 17% { transform: translateY(-7px); } 19.5% { transform: translateY(1px); } }
+@keyframes where-body { 0%, 23%, 36%, 84%, 100% { transform: none; } 5%, 14% { transform: rotate(-3deg); } 17% { transform: rotate(5deg) scale(0.95, 1.07); } 19.5% { transform: scale(1.08, 0.92); } 21% { transform: rotate(-1deg); } 40% { transform: rotate(11deg); } 43%, 54% { transform: rotate(8deg); } 60% { transform: rotate(-11deg); } 63%, 74% { transform: rotate(-8deg); } 80% { transform: rotate(1.5deg); } }
+@keyframes where-eyes { 0%, 100% { transform: none; } 5%, 14% { transform: translate(-6px, 1px); } 17% { transform: translateX(2.5px) scale(1.25); } 20% { transform: scale(1.15); } 23%, 36% { transform: scaleY(0.3); } 40%, 54% { transform: translateX(-3px) scaleY(0.6); } 60%, 74% { transform: translateX(3px) scaleY(0.6); } 80% { transform: none; } 88%, 93% { transform: scaleY(0.35); } }
+@keyframes where-arml { 0%, 36%, 60%, 100% { transform: none; } 41% { transform: rotate(106deg); } 44%, 55% { transform: rotate(95deg); } 58% { transform: rotate(-6deg); } }
+@keyframes where-forel { 0%, 38%, 58%, 100% { transform: none; } 42% { transform: rotate(-22deg); } 45%, 55% { transform: rotate(-4deg); } }
+@keyframes where-armr { 0%, 57%, 82%, 100% { transform: none; } 62% { transform: rotate(-106deg); } 65%, 76% { transform: rotate(-95deg); } 79% { transform: rotate(6deg); } }
+@keyframes where-forer { 0%, 59%, 78%, 100% { transform: none; } 63% { transform: rotate(22deg); } 66%, 76% { transform: rotate(4deg); } }
+@keyframes where-mouth { 0%, 21%, 38%, 86%, 95%, 100% { opacity: 1; } 23%, 36%, 88%, 93% { opacity: 0; } }
+@keyframes where-mopen { 0%, 21%, 38%, 86%, 95%, 100% { transform: scale(0); } 24%, 35%, 89%, 92% { transform: scale(0.45); } }
+
+/* FOUND, 7 s: crouch, big hop with stretch and a spin, squash on landing, bounce, point down at the card */
+.st-found .p-root, .st-found-once .p-root { animation: found-root 7s linear infinite; }
+.st-found .p-bob, .st-found-once .p-bob { animation: found-spin 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-body, .st-found-once .p-body { animation: found-body 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-legl, .st-found .p-legr, .st-found-once .p-legl, .st-found-once .p-legr { animation: found-legs 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-eyes, .st-found-once .p-eyes { animation: found-eyes 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-arml, .st-found-once .p-arml { animation: found-arml 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-forel, .st-found-once .p-forel { animation: found-forel 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-armr, .st-found-once .p-armr { animation: found-armr 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-forer, .st-found-once .p-forer { animation: found-forer 7s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-found .p-eyel, .st-found .p-eyer, .st-found-once .p-eyel, .st-found-once .p-eyer, .st-foundsm .p-eyel, .st-foundsm .p-eyer { animation: sn-pulse 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-found .p-spark, .st-found-once .p-spark, .st-foundsm .p-spark { animation: sn-pulse 1.2s cubic-bezier(0.45, 0, 0.55, 1) 0.4s infinite; }
+.st-found-once .p-shadow, .st-found-once .p-root, .st-found-once .p-bob, .st-found-once .p-body, .st-found-once .p-legl, .st-found-once .p-legr, .st-found-once .p-eyes, .st-found-once .p-arml, .st-found-once .p-forel, .st-found-once .p-armr, .st-found-once .p-forer { animation-duration: 3.2s; animation-iteration-count: 1; animation-fill-mode: both; }
+@keyframes found-root {
+  0%, 4% { transform: none; animation-timing-function: cubic-bezier(0.45, 0, 0.3, 1); }
+  10% { transform: translateY(2px); animation-timing-function: cubic-bezier(0.2, 0.8, 0.35, 1); }
+  20% { transform: translateY(-30px); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  28% { transform: translateY(0); animation-timing-function: cubic-bezier(0.2, 0.8, 0.35, 1); }
+  38% { transform: translateY(-7px); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  45%, 100% { transform: none; }
+}
+@keyframes found-spin { 0%, 14% { transform: rotate(0deg); } 27%, 100% { transform: rotate(360deg); } }
+@keyframes found-body { 0%, 3%, 36%, 49%, 100% { transform: none; } 9%, 11% { transform: scale(1.15, 0.84); } 14% { transform: scale(0.88, 1.16); } 22% { transform: scale(0.96, 1.05); } 28% { transform: scale(1.17, 0.83); } 32% { transform: scale(0.95, 1.07); } 45% { transform: scale(1.07, 0.93); } }
+@keyframes found-legs { 0%, 12%, 27%, 100% { transform: none; } 16%, 23% { transform: translateY(-5px); } }
+@keyframes found-eyes { 0%, 4%, 40%, 100% { transform: none; } 9%, 11% { transform: scaleY(0.4); } 15% { transform: scale(1.15); } 30% { transform: scale(1.22); } }
+@keyframes found-arml { 0%, 3%, 100% { transform: none; } 9%, 11% { transform: rotate(-26deg); } 16%, 24% { transform: rotate(168deg); } 30% { transform: rotate(118deg); } 34% { transform: rotate(150deg); } 44%, 90% { transform: rotate(135deg); } 96% { transform: rotate(-6deg); } }
+@keyframes found-forel { 0%, 3%, 100% { transform: none; } 11% { transform: rotate(12deg); } 17% { transform: rotate(-26deg); } 24% { transform: rotate(12deg); } 31% { transform: rotate(-32deg); } 36%, 90% { transform: rotate(-15deg); } }
+@keyframes found-armr { 0%, 3%, 100% { transform: none; } 9%, 11% { transform: rotate(26deg); } 16%, 24% { transform: rotate(-168deg); } 30% { transform: rotate(-118deg); } 34% { transform: rotate(-150deg); } 44% { transform: rotate(-120deg); } 50% { transform: rotate(-26deg); } 54%, 90% { transform: rotate(-34deg); } 96% { transform: rotate(6deg); } }
+@keyframes found-forer { 0%, 3%, 100% { transform: none; } 11% { transform: rotate(-12deg); } 17% { transform: rotate(26deg); } 24% { transform: rotate(-12deg); } 31% { transform: rotate(32deg); } 36%, 46% { transform: rotate(15deg); } 54%, 90% { transform: rotate(-22deg); } }
+
+/* FOUND, small (after the entry): gentle bob, arms up, sparkles pulse */
+.st-foundsm .p-bob { animation: sn-bob 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.st-foundsm .p-arml { transform: rotate(150deg); }
+.st-foundsm .p-forel { transform: rotate(-15deg); }
+.st-foundsm .p-armr { transform: rotate(-150deg); }
+.st-foundsm .p-forer { transform: rotate(15deg); }
+
+/* POUT, 8 s: heavy droop, arms to the floor, kick, glance back at you, huff, turn away */
+.st-pout .p-bob { animation: pout-bob 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-body { animation: pout-body 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-arml { animation: pout-arml 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-armr { animation: pout-armr 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-legr { animation: pout-legr 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-eyes { animation: pout-eyes 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-visor { animation: pout-visor 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-pout .p-mopen { animation: pout-mopen 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+@keyframes pout-bob { 0%, 100% { transform: translateY(1px); } 8%, 50% { transform: translateY(4px); } 53% { transform: translateY(-1.5px); } 56% { transform: translateY(5px); } 60%, 94% { transform: translateY(4px); } }
+@keyframes pout-body { 0%, 100% { transform: none; } 8%, 18%, 30%, 50% { transform: scale(1.05, 0.92); } 21% { transform: scale(1.05, 0.92) rotate(3deg); } 24% { transform: scale(1.05, 0.92) rotate(-5deg); } 27% { transform: scale(1.05, 0.92) rotate(1deg); } 53% { transform: scale(0.96, 1.08); } 57% { transform: scale(1.09, 0.89); } 62%, 92% { transform: scale(0.95, 0.93) rotate(-3deg); } }
+@keyframes pout-arml { 0%, 100% { transform: none; } 8%, 50% { transform: translateY(8px) rotate(4deg); } 53% { transform: translateY(2px) rotate(-12deg); } 57%, 92% { transform: translateY(8px) rotate(3deg); } }
+@keyframes pout-armr { 0%, 100% { transform: none; } 8%, 50% { transform: translateY(8px) rotate(-4deg); } 53% { transform: translateY(2px) rotate(12deg); } 57%, 92% { transform: translateY(8px) rotate(-3deg); } }
+@keyframes pout-legr { 0%, 18%, 32%, 100% { transform: none; } 21% { transform: rotate(10deg) translateX(-1px); } 24% { transform: rotate(-34deg) translate(3px, -3px); } 27% { transform: rotate(-8deg); } }
+@keyframes pout-eyes { 0%, 30%, 100% { transform: translate(-4px, 2px); } 36%, 46% { transform: scale(1.12); } 49% { transform: translate(-4px, 2px); } 53%, 57% { transform: translate(-2px, 1px) scaleY(0.5); } 62%, 92% { transform: translate(-9px, 1px); } }
+@keyframes pout-visor { 0%, 58%, 100% { transform: none; } 64%, 92% { transform: translateX(-5px) scaleX(0.9); } }
+@keyframes pout-mopen { 0%, 51%, 58%, 100% { transform: scale(0); } 53%, 56% { transform: scale(0.6, 0.45); } }
+
+/* SHEEPISH, 8 s: shrink, rub the back of the head, look away, shuffle feet, small apologetic wave */
+.st-sheep .p-root { animation: sheep-root 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-body { animation: sheep-body 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-eyes { animation: sheep-eyes 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-armr { animation: sheep-armr 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-forer { animation: sheep-forer 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-arml { animation: sheep-arml 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-forel { animation: sheep-forel 8s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+.st-sheep .p-legl { animation: sheep-legl 8s ease-in-out infinite; }
+.st-sheep .p-legr { animation: sheep-legr 8s ease-in-out infinite; }
+@keyframes sheep-root { 0%, 48%, 64%, 100% { transform: none; } 52% { transform: translateX(-2.5px); } 56% { transform: translateX(2.5px); } 60% { transform: translateX(-1px); } }
+@keyframes sheep-body { 0%, 64%, 94%, 100% { transform: scale(0.94, 0.88); } 5% { transform: scale(0.91, 0.84); } 10% { transform: scale(0.94, 0.88); } 70%, 88% { transform: scale(0.98, 0.96); } }
+@keyframes sheep-eyes { 0%, 60%, 94%, 100% { transform: translate(5px, 2px); } 66% { transform: translate(-4px, 2.5px); } 70%, 88% { transform: none; } }
+@keyframes sheep-armr { 0%, 12%, 50%, 100% { transform: none; } 18% { transform: rotate(-178deg); } 20%, 42% { transform: rotate(-170deg); } 47% { transform: rotate(7deg); } }
+@keyframes sheep-forer { 0%, 14%, 49%, 100% { transform: none; } 20% { transform: rotate(-64deg); } 24% { transform: rotate(-48deg); } 28% { transform: rotate(-78deg); } 32% { transform: rotate(-48deg); } 36% { transform: rotate(-78deg); } 40% { transform: rotate(-56deg); } 45% { transform: rotate(-18deg); } }
+@keyframes sheep-arml { 0%, 66%, 95%, 100% { transform: none; } 71% { transform: rotate(142deg); } 73%, 88% { transform: rotate(132deg); } 92% { transform: rotate(-6deg); } }
+@keyframes sheep-forel { 0%, 70%, 95%, 100% { transform: none; } 74% { transform: rotate(-22deg); } 77% { transform: rotate(14deg); } 80% { transform: rotate(-22deg); } 83% { transform: rotate(14deg); } 86% { transform: rotate(-10deg); } 92% { transform: rotate(-16deg); } }
+@keyframes sheep-legl { 0%, 48%, 54%, 60%, 100% { transform: none; } 51%, 57% { transform: rotate(12deg) translateY(-2px); } }
+@keyframes sheep-legr { 0%, 49.5%, 55.5%, 61.5%, 100% { transform: none; } 52.5%, 58.5% { transform: rotate(-12deg) translateY(-2px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sn, .sn * { animation: none !important; }
+  .sn-entry { display: none !important; }
+  .sn-after { animation: none !important; opacity: 1 !important; }
+}
+
+/* The card: the found scene plays big, then flies to her seat beside it. */
+@keyframes card-entry { 0%, 72% { transform: none; opacity: 1; } 96% { transform: translate(-100px, -20px) scale(0.373); opacity: 1; } 100% { transform: translate(-100px, -20px) scale(0.373); opacity: 0; } }
+@keyframes card-after { 0% { opacity: 0; } 100% { opacity: 1; } }
+.sn-entry { animation: card-entry 2.1s cubic-bezier(0.5, 0, 0.2, 1) 1 both; transform-origin: 0 0; pointer-events: none; }
+.sn.sn-after { animation: card-after 0.2s ease-out 2s 1 both; }`;

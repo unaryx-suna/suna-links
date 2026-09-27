@@ -142,6 +142,8 @@
   #convo .col { padding-top: 16px; padding-bottom: 8px; display: flex; flex-direction: column; min-height: 100%; }
   /* §6. 24px between messages. */
   .turn { display: flex; margin-bottom: 24px; }
+  .suna { display: block; }
+  .suna > .bubble { max-width: 88%; }
   .turn.me { justify-content: flex-end; }
   .bubble {
     max-width: 88%; padding: 12px 14px; border-radius: 18px;
@@ -149,8 +151,6 @@
     font-size: 17px; line-height: 1.47; white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .turn.me .bubble { background: var(--sand); color: var(--ink); border-color: transparent; }
-  .suna { display: block; }
-  .suna > .bubble { max-width: 88%; }
 
   /* §2. The link lives inside the bubble, bottom-left. */
   .why-link { display: block; margin-top: 12px; }
@@ -593,9 +593,11 @@
 <script type="module">
 // UI-DECISIONS. The quick-answer UI. Plans keep today's screens.
 import {
-  installDecisionsUI, sunaBlock, updateSuna, chipsBlock, decisionCard,
-  detailsSheet, notThisSheet, knowsPanel, reorderByReason, NUDGES,
-} from './lab/decisions.js';
+  installDecisionsUI, sunaBlock, updateSuna, sunaFound, reactionLine,
+  chipsBlock, decisionCard, detailsSheet, notThisSheet, knowsPanel,
+  reorderByReason, NUDGES,
+// ?v= so a phone that has the page cached still gets the new module.
+} from './lab/decisions.js?v=lab-v34';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -608,7 +610,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v33';
+const BUILD = 'lab-v34';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1978,7 +1980,20 @@ function renderDecisionCard(holder, d, picks, i = 0) {
     return;
   }
   if (msToCard === null) msToCard = Date.now() - sentAt;
-  updateSuna(sunaNode, 'found', undefined, true);   // she shrinks when a card lands
+  // §2/§5. The found scene plays big for 1.5 s, then she takes her 56 px seat
+  // beside the card — the canvas's entry, not a jump cut.
+  //
+  // The thread scrolls to the bottom the moment anything lands, which put the
+  // whole scene above the fold: she hopped, spun and pointed at a card nobody
+  // could see her next to. So the view holds on HER until she has shrunk, and
+  // then follows the card down.
+  sunaFound(sunaNode);
+  if (sunaNode) {
+    holdScroll(2200);
+    const c = $('#convo');
+    c.scrollTop = Math.max(0, sunaNode.offsetTop - 8);
+    setTimeout(() => { holdScrollUntil = 0; scroll(); }, 2200);
+  }
 
   const host = el('div', 'dx');
   const card = decisionCard(pick, {
@@ -1996,7 +2011,14 @@ function renderDecisionCard(holder, d, picks, i = 0) {
     onNotThis: () => notThisSheet(pick.name, {
       onReason: async (key, label) => {
         notThisCount++; notThisReasons.push(key);
-        await learnFromNotThis(key, label, pick, d.ref);
+        // §6. Her reaction, then the next card. The line came down with the
+        // answer, so neither waits on anything.
+        const reaction = d.not_this_lines?.[key] ?? null;
+        if (reaction?.text) {
+          holder.append(reactionLine(reaction, `"${label}" saved to what Suna knows`));
+          recordLineShown(reaction.line_id ?? reaction.id, `not_this:${key}`);
+        }
+        learnFromNotThis(key, label, pick, d.ref);
         // §6: the next card straight away, from the remaining picks.
         const rest = reorderByReason(picks, key, pick);
         host.remove();
@@ -2044,6 +2066,24 @@ async function reportWrong(ref, placeName, kind = 'other') {
                              wrong_place: placeName, session_id: sessionId }),
     });
   } catch { /* a lost report must never cost the answer */ }
+}
+
+/// §2's no-repeat rule, for the one Not this reaction that got shown. The
+/// other five travelled down with the answer and were never used, so they
+/// must not be marked as seen. Fire-and-forget: the card is already up.
+function recordLineShown(lineId, event) {
+  if (!Number.isInteger(lineId)) return;
+  (async () => {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                   'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'line_shown', line_id: lineId, event }),
+      });
+    } catch { /* a lost record costs a repeat, never an answer */ }
+  })();
 }
 
 async function recordWouldGo(ref, yes, isFirst) {
@@ -3492,7 +3532,16 @@ function typeName(uploadId, box) {
 // ── odds and ends ──────────────────────────────────────────────────────────
 function meTurn(t) { const d = el('div', 'turn me'); d.append(el('div', 'bubble', t)); return d; }
 function sunaTurn(t) { const d = el('div', 'turn suna'); d.append(el('div', 'bubble', t)); return d; }
-function scroll() { const c = $('#convo'); c.scrollTop = c.scrollHeight; }
+// The thread follows the newest thing — except while Suna's found scene is
+// playing. Everything that lands calls scroll(), including the `finally` of
+// the request, so a scrollIntoView inside the card renderer was undone a
+// frame later and she hopped, spun and pointed off the top of the screen.
+let holdScrollUntil = 0;
+function holdScroll(ms) { holdScrollUntil = Date.now() + ms; }
+function scroll() {
+  if (Date.now() < holdScrollUntil) return;
+  const c = $('#convo'); c.scrollTop = c.scrollHeight;
+}
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function nowString() {
   const d = new Date(); const p = (n) => String(n).padStart(2, '0');

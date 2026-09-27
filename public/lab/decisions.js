@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_FACES, SUNA_CSS } from './suna-faces.js';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v34';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,33 +24,123 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css';
+  link.href = '/lab/decisions.css?v=lab-v34';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
   document.head.append(st);
+  // Her gradients and filters live once in the document, not once per face:
+  // every rig points at the same url(#sna-…) ids.
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  defs.setAttribute('width', '0'); defs.setAttribute('height', '0');
+  defs.setAttribute('aria-hidden', 'true');
+  defs.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  defs.innerHTML = `<defs>${SUNA_DEFS}</defs>`;
+  document.body.prepend(defs);
 }
 
 // ── Suna ───────────────────────────────────────────────────────────────────
+//
+// The canvas's motion, lifted whole (suna-motion.css). Each state is a 7–18 s
+// scene with separately moving parts, so a state is a CLASS on one <svg>, not
+// a different drawing: swapping the markup would restart every part mid-scene.
+//
+// Sizes are the boards': about 190 px while she is waiting, the found scene
+// big for 1.5 s and then 56 px beside the card, 120 px pouting in the sheet.
 
-/// Her face and her line. She shrinks when a card lands (§2).
+export const SUNA_WAIT_H = 190;
+export const SUNA_CARD_H = 56;
+export const SUNA_POUT_H = 120;
+export const SUNA_REACT_H = 58;
+/// The found scene plays at full size this long before she takes her seat.
+const FOUND_BIG_MS = 1500;
+/// st-found-once runs 3.2 s once; after it she settles into the small loop.
+const FOUND_ONCE_MS = 3200;
+/// A new line arrives faded under the old one, then takes its place.
+const LINE_SWAP_MS = 500;
+
+const stillness = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+const stateFor = (face) => SUNA_FACE_STATE[face] ?? 'st-idle';
+
+/// Put her in a state. Where two states draw her the same way — the found
+/// scene at three sizes and three speeds — only the class changes, so the
+/// scene carries on instead of snapping back to frame zero.
+function setState(fig, state) {
+  const svg = fig.querySelector('svg');
+  const now = fig.dataset.state;
+  if (svg && now && SUNA_STATES[now]?.body === SUNA_STATES[state]?.body) {
+    svg.setAttribute('class', `sn ${state}`);
+    const label = SUNA_STATES[state]?.label;
+    if (label) svg.setAttribute('aria-label', label);
+  } else {
+    fig.innerHTML = sunaSvg(state, SUNA_WAIT_H);
+  }
+  fig.dataset.state = state;
+}
+
+/// Her face and her line.
 export function sunaBlock(face = 'idle', text = '', opts = {}) {
-  const wrap = el('div', `suna${opts.small ? ' small' : ''}`);
-  const holder = el('div');
-  holder.innerHTML = SUNA_FACES[face] ?? SUNA_FACES.idle;
-  wrap.append(holder);
-  if (text) wrap.append(el('div', 'sunaline', text));
+  installDecisionsUI();
+  const wrap = el('div', `dx sunablock${opts.hello ? ' hello' : ''}${opts.small ? ' small' : ''}`);
+  const fig = el('div', 'sunafig');
+  setState(fig, stateFor(face));
+  const lines = el('div', 'sunalines');
+  lines.append(el('div', 'sunaline', text ?? ''));
+  lines.append(el('div', 'sunaline next'));
+  wrap.append(fig, lines);
   return wrap;
+}
+
+/// A new line appears faded below the one on screen, then takes its place —
+/// the canvas's two-line composition, and the reason the second line is only
+/// ever a step that really ran.
+function sayLine(node, text) {
+  if (!text) return;
+  const now = node.querySelector('.sunaline:not(.next)');
+  const next = node.querySelector('.sunaline.next');
+  if (!now || !next) return;
+  if (!now.textContent.trim() || stillness()) {
+    now.textContent = text; next.textContent = '';
+    return;
+  }
+  if (now.textContent === text) return;
+  clearTimeout(node._swap);
+  next.textContent = text;
+  node._swap = setTimeout(() => { now.textContent = text; next.textContent = ''; }, LINE_SWAP_MS);
 }
 
 export function updateSuna(node, face, text, small) {
   if (!node) return;
-  const holder = node.firstElementChild;
-  if (holder && SUNA_FACES[face]) holder.innerHTML = SUNA_FACES[face];
-  let line = node.querySelector('.sunaline');
-  if (!line) { line = el('div', 'sunaline'); node.append(line); }
-  if (text) line.textContent = text;
-  node.classList.toggle('small', !!small);
+  const fig = node.querySelector('.sunafig');
+  if (fig && face) setState(fig, stateFor(face));
+  sayLine(node, text);
+  if (small) node.classList.add('small');
+}
+
+/// §5. A card has landed. She plays the found scene big, then takes her
+/// 56 px seat beside it — the card board's entry, without its fixed frame.
+export function sunaFound(node) {
+  if (!node) return;
+  const fig = node.querySelector('.sunafig');
+  if (!fig) return;
+  clearTimeout(node._big); clearTimeout(node._settle);
+  if (stillness()) { setState(fig, 'st-foundsm'); node.classList.add('small'); return; }
+  setState(fig, 'st-found-once');
+  node.classList.add('entry');
+  node._big = setTimeout(() => { node.classList.remove('entry'); node.classList.add('small'); }, FOUND_BIG_MS);
+  node._settle = setTimeout(() => setState(fig, 'st-foundsm'), FOUND_ONCE_MS);
+}
+
+/// One face on its own, at a given height — the sheet's pout, the reaction
+/// beside a Not this line.
+export function sunaFigure(face, height) {
+  installDecisionsUI();
+  const fig = el('div', 'sunafig one');
+  fig.style.setProperty('--sunah', `${height}px`);
+  fig.innerHTML = sunaSvg(stateFor(face), height);
+  fig.dataset.state = stateFor(face);
+  return fig;
 }
 
 // ── Ask ────────────────────────────────────────────────────────────────────
@@ -67,7 +157,7 @@ export function askScreen({ greeting, onSend }) {
   installDecisionsUI();
   const root = el('div', 'dx');
   const ask = el('div', 'ask');
-  ask.append(sunaBlock('idle', greeting));
+  ask.append(sunaBlock('idle', greeting, { hello: true }));
 
   const label = el('div', 'asklabel', "Tell Suna what you're up for");
   const box = el('textarea', 'askbox');
@@ -229,12 +319,30 @@ export const NUDGES = ['Closer', 'Cheaper', 'Indoors', 'Livelier', 'Tomorrow nig
 
 // ── Sheets ─────────────────────────────────────────────────────────────────
 
-function sheet(title, build, onClose) {
-  const scrim = el('div', 'scrim');
+/// `build` is handed the sheet's own `close`. It used to close itself with
+/// `document.querySelector('.scrim').remove()`, and the page already has a
+/// `.scrim` — the menu's, sitting earlier in the document. So every Not this
+/// removed the MENU's scrim and left the sheet's own one covering the app:
+/// the whole screen stayed dimmed for the rest of the session, and the menu
+/// stopped closing. Nothing here queries the document for its own nodes.
+function sheet(title, build, onClose, opts = {}) {
+  const scrim = el('div', 'dxscrim');
   const s = el('div', 'dx sheet');
-  s.append(el('h3', null, title));
-  s.append(build());
+  // The board puts her beside the title, not above it: 120 px, pouting,
+  // already sulking before you have picked a reason.
+  if (opts.face) {
+    const head = el('div', 'sheethead');
+    head.append(sunaFigure(opts.face, SUNA_POUT_H));
+    const words = el('div');
+    words.append(el('h3', null, title));
+    if (opts.hint) words.append(el('p', 'src', opts.hint));
+    head.append(words);
+    s.append(head);
+  } else {
+    s.append(el('h3', null, title));
+  }
   const close = () => { scrim.remove(); s.remove(); onClose?.(); };
+  s.append(build(close));
   scrim.onclick = close;
   document.body.append(scrim, s);
   return close;
@@ -251,26 +359,37 @@ export const NOT_THIS_REASONS = [
 ];
 
 export function notThisSheet(placeName, { onReason, onSkip, onUndo }) {
-  return sheet(`What's off about ${placeName}?`, () => {
+  return sheet(`What's off about ${placeName}?`, (close) => {
     const f = document.createDocumentFragment();
-    f.append(el('div', 'src', 'One tap. Your next pick is already here.'));
     const row = el('div', 'reasons');
     for (const [key, label] of NOT_THIS_REASONS) {
       const b = el('button', 'reason', label);
       b.type = 'button';
-      b.onclick = () => { onReason(key, label); document.querySelector('.dx.sheet')?.remove(); document.querySelector('.scrim')?.remove(); };
+      b.onclick = () => { close(); onReason(key, label); };
       row.append(b);
     }
     f.append(row);
     const skip = el('button', 'btn', 'Skip, just show it');
     skip.type = 'button';
-    skip.onclick = () => { onSkip(); document.querySelector('.dx.sheet')?.remove(); document.querySelector('.scrim')?.remove(); };
+    skip.onclick = () => { close(); onSkip(); };
     const undo = el('button', 'linkish2', 'Undo');
     undo.type = 'button';
-    undo.onclick = () => { onUndo(); document.querySelector('.dx.sheet')?.remove(); document.querySelector('.scrim')?.remove(); };
+    undo.onclick = () => { close(); onUndo(); };
     f.append(skip, undo);
     return f;
-  });
+  }, undefined, { face: 'pout', hint: 'One tap. Your next pick is already here.' });
+}
+
+/// §6. Her reaction to the reason, above the next card. The line came down
+/// with the answer, so this costs nothing and lands with the card.
+export function reactionLine(reaction, savedText) {
+  const wrap = el('div', 'dx reaction');
+  wrap.append(sunaFigure(reaction?.face ?? 'pout', SUNA_REACT_H));
+  const words = el('div', 'sunalines');
+  words.append(el('div', 'sunaline', reaction?.text ?? ''));
+  if (savedText) words.append(el('div', 'src', savedText));
+  wrap.append(words);
+  return wrap;
 }
 
 /// §5. Details behind one tap. Sources are printed by code.
