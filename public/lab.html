@@ -621,7 +621,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v38';
+} from './lab/decisions.js?v=lab-v39';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v38';
+const BUILD = 'lab-v39';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1208,6 +1208,26 @@ addEventListener('load', syncBarHeights);
 /// nothing to do with the question.
 let topicSubject = null;   // { name, source } | null
 
+/// Where the place in the header came from, in the tester's words. Three
+/// states and no fourth: a fix taken just now, a place we stored, or a
+/// place they typed. Anything vaguer and a confidently wrong answer has
+/// nothing on screen admitting why.
+function placeProvenance() {
+  const src = location_?.source;
+  const age = locationAgeS(location_);
+  if (src === 'typed') return ['You set this · tap to update'];
+  if (src === 'saved') {
+    const when = location_?.at
+      ? ` ${new Date(location_.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
+      : '';
+    return [`Saved${when} · tap to update`];
+  }
+  if (age !== null && age > FRESH_FOR_S) return ['tap to update'];
+  if (location_?.accuracy_m != null && location_.accuracy_m > 2000) return ['Your location, roughly'];
+  if (location_?.lat != null) return ['Your location'];
+  return [];
+}
+
 function renderContext() {
   const n = rightNow();
   // The header follows the topic. The tester's own location comes back the
@@ -1219,10 +1239,14 @@ function renderContext() {
   // thing in the bar: R5 §2 still requires a visible count, and the bar is
   // allowed two buttons and no more.
   const bits = [n.local_time];
+  // A-0227. The subtitle must be TRUE. It said "From your message" for a
+  // subject the server had marked `device` — a place Brian typed hours
+  // earlier — so the one line admitting where the place came from was
+  // saying the wrong thing. The source decides, not the presence of a name.
   if (topicSubject?.name) {
-    // Said plainly, because the alternative reads as if Suna has lost track
-    // of where the tester is.
-    bits.push('From your message');
+    const src = String(topicSubject.source ?? '');
+    if (src.startsWith('message')) bits.push('From your message');
+    else bits.push(...placeProvenance());
     if (dailyState && !dailyState.exempt) {
       const q0 = Number(dailyState.quick_left ?? 0);
       bits.push(q0 === 0 ? 'none left today' : `${q0} left`);
@@ -1233,20 +1257,7 @@ function renderContext() {
   // §3: the subtitle says so when the place is not a fresh fix, because a
   // wrong place produces a confidently wrong answer and nothing on screen
   // would otherwise admit it.
-  const src = location_?.source;
-  const age = locationAgeS(location_);
-  if (src === 'saved' && location_?.at) {
-    const d = new Date(location_.at);
-    bits.push(`Saved ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}: tap to update`);
-  } else if (src === 'saved') {
-    bits.push('Saved: tap to update');
-  } else if (src === 'typed') {
-    bits.push('You set this');
-  } else if (location_?.accuracy_m != null && location_.accuracy_m > 2000) {
-    bits.push('Approximate');
-  } else if (age !== null && age > FRESH_FOR_S) {
-    bits.push('tap to update');
-  }
+  bits.push(...placeProvenance());
   if (dailyState && !dailyState.exempt) {
     const q = Number(dailyState.quick_left ?? 0);
     bits.push(q === 0 ? 'none left today' : `${q} left`);
@@ -1263,10 +1274,39 @@ function renderContext() {
 /// point really is in Tongzhou; he is not.
 ///
 /// A typed place wins until New chat, because someone who typed it meant it.
+/// A-0227. A typed place with no coordinates is not a location: the lookup
+/// has a name and nothing to look near, the catalogue comes back
+/// `device:no-fix`, and the tester is told their own city has not been
+/// explored. So it is geocoded before it is stored, through the same
+/// endpoint the answer uses — one Places call, once, on the way in.
+async function typedPlace(name) {
+  const base = { name, lat: null, lng: null, accuracy_m: null,
+                 at: new Date().toISOString(), source: 'typed' };
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'geocode', place_name: name }),
+    });
+    const g = await r.json();
+    if (typeof g?.lat === 'number' && typeof g?.lng === 'number') {
+      return { ...base, name: g.name || name, lat: g.lat, lng: g.lng };
+    }
+  } catch { /* a name with no fix is still better than refusing to save it */ }
+  return base;
+}
+
 async function ensureLocation() {
-  if (location_?.source === 'typed') return location_;
+  // A-0227. This used to return here for ANY typed place, so once Brian
+  // typed "Beiyunhe Xi" every request for the rest of the day went out with
+  // a name and no lat/lng — on a desktop, forever, because nothing ever
+  // asked the browser again. A typed place still wins, but only once it
+  // has coordinates.
+  if (location_?.source === 'typed' && location_?.lat != null) return location_;
   const age = locationAgeS(location_);
-  if (location_ && age !== null && age <= FRESH_FOR_S) return location_;
+  if (location_ && location_.lat != null && age !== null && age <= FRESH_FOR_S) return location_;
 
   const fresh = await refreshLocation();
   if (fresh) return fresh;
@@ -1286,8 +1326,7 @@ async function ensureLocation() {
       const name = $('#loc-input').value.trim();
       if (!name) return;
       sheet.dataset.open = '0';
-      location_ = { name, lat: null, lng: null, accuracy_m: null,
-                    at: new Date().toISOString(), source: 'typed' };
+      location_ = await typedPlace(name);
       await saveTester({ last_location: location_ });
       renderContext();
       resolve(location_);
@@ -1587,8 +1626,7 @@ $('#p-loctype').addEventListener('click', () => {
     const name = $('#loc-input').value.trim();
     if (!name) return;
     sheet.dataset.open = '0';
-    location_ = { name, lat: null, lng: null, accuracy_m: null,
-                  at: new Date().toISOString(), source: 'typed' };
+    location_ = await typedPlace(name);
     await saveTester({ last_location: location_ });
     renderContext();
   };
@@ -2585,6 +2623,16 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         if (event === 'unavailable') { inner.textContent = d.message; }
         // §2. A request that fails says so, in her voice, with a way out.
         // The phone showed the browser's raw "Load failed" for two minutes.
+        // A-0227. No coordinates and the stored name would not resolve, so
+        // there is nowhere to look. Her line, and the one button that fixes
+        // it — rather than a search on a bare name, which is what told
+        // Brian that Beijing had not been explored.
+        if (event === 'need_location') {
+          answered = true;
+          showWaiting(false);
+          holder.replaceChildren(needLocationCard(d, request || CHIP_TEXT[chip] || ''));
+          scroll();
+        }
         if (event === 'error') {
           answered = true;
           if (DECISIONS_UI) {
@@ -3556,6 +3604,28 @@ async function renderTracker() {
 /// §2. Line 40, and Try again. `d.message` is the server's own sentence
 /// when it has one ("That took too long, so I stopped"); her line is the
 /// fallback for anything else.
+/// A-0227. "Where you at?" and a button that asks the browser, then
+/// re-sends. The typed-place sheet is the way out if they say no.
+function needLocationCard(d, request) {
+  const host = el('div', 'dx');
+  host.append(sunaBlock(d?.face ?? 'mismatch', d?.message || 'Where you at?', { small: true }));
+  const row = el('div', 'actions');
+  const use = el('button', 'go', 'Use my location');
+  use.type = 'button';
+  use.onclick = async () => {
+    use.disabled = true;
+    const fresh = await refreshLocation();
+    if (!fresh?.lat) { use.disabled = false; $('#loc-sheet').dataset.open = '1'; $('#loc-input').focus(); return; }
+    ask({ chip: null, request });
+  };
+  const type = el('button', 'btn', 'Type a place');
+  type.type = 'button';
+  type.onclick = () => { $('#loc-sheet').dataset.open = '1'; $('#loc-input').focus(); };
+  row.append(use, type);
+  host.append(row);
+  return host;
+}
+
 function errorCard(d, request) {
   const host = el('div', 'dx');
   const block = sunaBlock('sheepish', d?.message || "I'm having a moment. Try me again in a sec?", { small: true });
