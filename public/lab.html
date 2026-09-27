@@ -616,12 +616,12 @@
 <script type="module">
 // UI-DECISIONS. The quick-answer UI. Plans keep today's screens.
 import {
-  installDecisionsUI, sunaBlock, updateSuna, sunaFound, reactionLine,
+  installDecisionsUI, sunaBlock, updateSuna, sunaFound, hushSuna, reactionLine,
   askScreen, chipsBlock, chipSheet, textSheet, confirmSheet, decisionCard,
   detailsSheet, notThisSheet, knowsPanel,
-  reorderByReason, NUDGES,
+  reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v39';
+} from './lab/decisions.js?v=lab-v40';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v39';
+const BUILD = 'lab-v40';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2971,6 +2971,24 @@ async function renderAnswer(holder, bubble, d) {
       // why the round-3 fixes looked done: this path never ran.
       holder.append(box);
     }
+  } else if (DECISIONS_UI) {
+    // §4. Plans get the new design: a strip of day cards titled by their
+    // anchor place, each opening a day of stops with the same three
+    // actions as a decision card. The old THE PLAN / WORTH EATING /
+    // CAVEATS rows and "Save plan" are gone.
+    document.body.classList.add('dx-answered');
+    collapseChips();
+    bubble.remove();
+    // A-0228: she stayed full size with "Checking Mongolia…" above the
+    // plan. An answer has landed, so she shrinks, the same as for a card.
+    sunaFound(sunaNode);
+    hushSuna(sunaNode);
+    const host = el('div');
+    holder.append(host);
+    renderPlanScreens(host, r, d);
+    renderContext();
+    scroll();
+    return;
   } else {
     bubble.remove();
     const host = el('div');
@@ -3085,6 +3103,67 @@ const DAY_TYPE_LABEL = {
 };
 function dayTypeLabel(t) {
   return DAY_TYPE_LABEL[String(t ?? '').toLowerCase()] ?? String(t ?? '');
+}
+
+/// §4. The strip, and a day when one is tapped. The names and every number
+/// come off the places code enriched, never out of the writer's prose.
+function renderPlanScreens(host, r, d) {
+  const byId = new Map((d.places ?? []).map((p) => [String(p.id ?? p.place_id), p]));
+  const placeOf = (item) => byId.get(String(item?.place_id ?? '')) ?? null;
+  const nameOf = (item) => placeOf(item)?.name ?? item?.name ?? null;
+  // A leg code measured, between two stops of the same day.
+  const legBetween = (a, b) => {
+    const from = nameOf(a), to = nameOf(b);
+    if (!from || !to) return null;
+    const leg = (d.places ? (d.travel ?? []) : []).find?.((l) =>
+      String(l.from) === from && String(l.to) === to);
+    if (leg?.minutes) return `${leg.source === 'estimate' ? 'about ' : ''}${leg.minutes} min walk`;
+    const pa = placeOf(a), pb = placeOf(b);
+    if (pa?.km != null && pb?.km != null) return null;
+    return null;
+  };
+
+  const showStrip = () => {
+    host.replaceChildren(planScreen(r, {
+      nameOf,
+      headline: String(r?.title ?? '').trim() || null,
+      onDay: (block, day) => showDay(block, day),
+    }));
+    scroll();
+  };
+  const showDay = (block, day) => {
+    host.replaceChildren(planDayScreen(block, day, {
+      nameOf, placeOf, legBetween,
+      onBack: showStrip,
+      onGo: (item, place) => {
+        recordTap('go', nameOf(item), d.ref);
+        if (place?.maps_uri) window.open(place.maps_uri, '_blank', 'noopener');
+      },
+      onSave: (item) => recordTap('save', nameOf(item), d.ref),
+      onNotThis: (item, place, theDay) => notThisSheet(nameOf(item) ?? 'this stop', {
+        onReason: async (key, label) => {
+          notThisCount++; notThisReasons.push(key);
+          const reaction = d.not_this_lines?.[key] ?? null;
+          await learnFromNotThis(key, label, { name: nameOf(item), kind: place?.kind }, d.ref);
+          // The stop goes, and the day redraws without it. Nothing is
+          // re-asked: the rest of the plan is still the plan.
+          theDay.items = (theDay.items ?? []).filter((x) => x !== item);
+          showDay(block, theDay);
+          if (reaction?.text) {
+            host.prepend(reactionLine(reaction, {
+              skipped: nameOf(item), savedText: `"${label}" saved to what Suna knows`,
+            }));
+            recordLineShown(reaction.line_id ?? reaction.id, `not_this:${key}`);
+          }
+        },
+        onSkip: () => {},
+        onUndo: () => {},
+      }),
+    }));
+    window.scrollTo?.(0, 0);
+    $('#convo').scrollTop = 0;
+  };
+  showStrip();
 }
 
 function renderPlan(inner, r, research) {

@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v39';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v40';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v39';
+  link.href = '/lab/decisions.css?v=lab-v40';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -139,6 +139,14 @@ export function sunaFound(node) {
   node.classList.add('entry');
   node._big = setTimeout(() => { node.classList.remove('entry'); node.classList.add('small'); }, FOUND_BIG_MS);
   node._settle = setTimeout(() => setState(fig, 'st-foundsm'), FOUND_ONCE_MS);
+}
+
+/// A-0228. The waiting line goes when the answer lands. A plan has no
+/// "found" line to replace it with, so she is left small and silent beside
+/// it rather than still saying "Checking Mongolia…" over a finished plan.
+export function hushSuna(node) {
+  if (!node) return;
+  for (const l of node.querySelectorAll('.sunaline')) l.textContent = '';
 }
 
 /// One face on its own, at a given height — the sheet's pout, the reaction
@@ -715,4 +723,132 @@ export function reorderByReason(picks, reason, rejected) {
     default:
       return rest;   // by rank, as given
   }
+}
+
+// ── Plans ──────────────────────────────────────────────────────────────────
+//
+// Plan.dc.html and PlanDay.dc.html. A plan is a strip of day cards titled by
+// their anchor place, and a day is its stops as small cards with the same
+// three actions as a decision card. No THE PLAN / WORTH EATING / CAVEATS
+// rows, and no "Save plan": the day cards ARE the plan.
+
+/// The stops of a day, in the order they are done, for the strip's summary.
+function stopNames(day, nameOf) {
+  return ((day?.items ?? []).map((it) => nameOf(it)).filter(Boolean));
+}
+
+/// A day's heading is its anchor place. The writer's own label is used when
+/// it names one; otherwise the day's first stop is the honest answer, and
+/// `generic_day_title` has already counted the writer's miss.
+export function dayHeading(block, day, nameOf) {
+  const names = stopNames(day, nameOf);
+  const label = String(block?.label ?? '').trim();
+  const partOfDay = /\b(morning|afternoon|evening|night|arrival|arriving|departure|departing|dawn|dusk|midday|noon|lunch|dinner|breakfast)\b/i;
+  if (label && !partOfDay.test(label)) return label;
+  return names[0] ?? String(block?.base ?? 'Your day');
+}
+
+/// §4. The strip: one card per day, titled by where it goes.
+export function planScreen(parsed, { nameOf, onDay, headline }) {
+  installDecisionsUI();
+  const root = el('div', 'dx plan');
+
+  const title = headline ?? String(parsed?.title ?? '').trim();
+  if (title) root.append(el('h1', 'planhead', title));
+
+  // "Sort these first" survives from the old screens because it is the one
+  // part a tester has to act on before the trip, not while reading it.
+  const first = (parsed?.sort_first ?? []).filter((x) => x?.headline);
+  if (first.length) {
+    const sec = el('section', 'sortfirst');
+    sec.append(el('h2', null, 'Sort these first'));
+    for (const f of first) {
+      const row = el('label', 'sortrow');
+      const box = el('input'); box.type = 'checkbox';
+      const words = el('span');
+      words.append(el('span', 'sortline', f.headline));
+      if (f.detail) words.append(el('span', 'src', f.detail));
+      row.append(box, words);
+      sec.append(row);
+    }
+    root.append(sec);
+  }
+
+  root.append(el('h2', 'daysHead', 'Your days'));
+  const strip = el('div', 'daystrip');
+  let n = 0;
+  for (const block of (parsed?.plan ?? [])) {
+    for (const day of (block?.days ?? [])) {
+      n += 1;
+      const card = el('button', 'daycard');
+      card.type = 'button';
+      const words = el('div', 'daywords');
+      words.append(el('div', 'eyebrow', day?.day ? String(day.day) : `Day ${n}`));
+      words.append(el('div', 'daytitle', dayHeading(block, day, nameOf)));
+      const stops = stopNames(day, nameOf);
+      if (stops.length) words.append(el('div', 'daystops', stops.join(' · ')));
+      card.append(words);
+      card.append(el('span', 'chev', '›'));
+      const d = day, b = block;
+      card.onclick = () => onDay(b, d);
+      strip.append(card);
+    }
+  }
+  root.append(strip);
+  return root;
+}
+
+/// §4. One day: its stops as small cards, each with Go / Not this / Save,
+/// and the walk between them where code measured one.
+export function planDayScreen(block, day, {
+  nameOf, placeOf, onBack, onGo, onNotThis, onSave, legBetween,
+}) {
+  installDecisionsUI();
+  const root = el('div', 'dx planday');
+
+  const back = el('button', 'planback', `‹ ${block?.base ?? 'the plan'}`);
+  back.type = 'button';
+  back.onclick = onBack;
+  root.append(back);
+
+  root.append(el('div', 'eyebrow', String(day?.day ?? '')));
+  root.append(el('h1', 'planhead', dayHeading(block, day, nameOf)));
+
+  const list = el('ol', 'stops');
+  const items = day?.items ?? [];
+  items.forEach((item, i) => {
+    const place = placeOf(item) ?? {};
+    const name = nameOf(item);
+    const li = el('li', 'stop');
+    if (item?.duration) li.append(el('div', 'eyebrow', String(item.duration)));
+    li.append(el('h2', 'stopname', name ?? 'Somewhere'));
+    if (item?.line) li.append(el('p', 'stopline', String(item.line)));
+
+    const facts = el('div', 'facts');
+    const closes = lastCloseOf(item?.hours ?? place.hours_today);
+    if (closes) facts.append(withIcon('span', 'fact', 'clock', `Open till ${ampm(closes)}`));
+    else if (item?.hours) facts.append(withIcon('span', 'fact', 'clock', String(item.hours)));
+    if (facts.children.length) li.append(facts);
+
+    const acts = el('div', 'actions');
+    const go = withIcon('button', 'go', 'go', 'Go');
+    go.type = 'button'; go.onclick = () => onGo(item, place);
+    const not = el('button', 'btn', 'Not this');
+    not.type = 'button'; not.onclick = () => onNotThis(item, place, day);
+    const save = withIcon('button', 'btn', 'save', 'Save');
+    save.type = 'button'; save.onclick = () => onSave(item, place);
+    acts.append(go, not, save);
+    li.append(acts);
+    list.append(li);
+
+    // The walk to the next stop, when code measured one.
+    const leg = i < items.length - 1 ? legBetween?.(item, items[i + 1]) : null;
+    if (leg) {
+      const hop = el('li', 'leg');
+      hop.append(withIcon('span', 'fact', 'walk', leg));
+      list.append(hop);
+    }
+  });
+  root.append(list);
+  return root;
 }
