@@ -52,9 +52,9 @@
 }
 
 /* ── Understood chips ─────────────────────────────────────────────────── */
-.dx .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.dx .chips, .dx.sheet .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .dx .chiphint { font-size: 12px; color: var(--muted); }
-.dx .chip2 {
+.dx .chip2, .dx.sheet .chip2 {
   display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--line); border-radius: 999px; padding: 7px 8px 7px 13px;
   font-size: 14px; background: color-mix(in srgb, var(--sand) 22%, transparent);
@@ -71,13 +71,13 @@
   display: flex; flex-direction: column; gap: 14px; background: var(--paper);
 }
 .dx .cardtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.dx .eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.dx .eyebrow, .dx.sheet .eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .dx .placename { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
 .dx .why { font-size: 17px; line-height: 1.4; }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
 .dx .actions .go { flex: 2; }
-.dx .btn {
+.dx .btn, .dx.sheet .btn {
   flex: 1; border: 1.5px solid var(--line); background: transparent; border-radius: 999px;
   padding: 15px 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer;
 }
@@ -95,20 +95,24 @@
 .dx .wouldyou .btn { flex: none; padding: 9px 20px; }
 
 /* ── Sheets ───────────────────────────────────────────────────────────── */
-.dx .sheet {
+/* Both classes sit on ONE element (`class="dx sheet"`), so a descendant
+ * selector never matched and the sheet rendered unstyled at the end of the
+ * body — present in the DOM, invisible on screen. The scrim is a sibling of
+ * .dx entirely. */
+.dx.sheet, .dx .sheet {
   position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--paper);
   border-radius: 22px 22px 0 0; padding: 18px 18px 26px;
   box-shadow: 0 -8px 40px rgba(0,0,0,.18);
   display: flex; flex-direction: column; gap: 14px; max-height: 82vh; overflow: auto;
 }
-.dx .sheet h3 { margin: 0; font-size: 20px; font-weight: 700; }
-.dx .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
-.dx .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
-.dx .reason {
+.dx.sheet h3, .dx .sheet h3 { margin: 0; font-size: 20px; font-weight: 700; }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
+.dx .reasons, .dx.sheet .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.dx .reason, .dx.sheet .reason {
   border: 1.5px solid var(--line); background: transparent; border-radius: 999px;
   padding: 11px 15px; font: inherit; font-size: 15px; color: var(--ink); cursor: pointer;
 }
-.dx .rowline { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.dx .rowline, .dx.sheet .rowline { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .dx .rowline:last-child { border-bottom: none; }
-.dx .src { font-size: 12px; color: var(--muted); }
-.dx .linkish2 { background: none; border: none; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 0; }
+.dx .src, .dx.sheet .src { font-size: 12px; color: var(--muted); }
+.dx .linkish2, .dx.sheet .linkish2 { background: none; border: none; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 0; }
