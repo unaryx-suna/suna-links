@@ -97,7 +97,17 @@
 /* §6. Pouting beside the sheet's title, and reacting above the next card. */
 .sheethead { display: flex; align-items: flex-end; gap: 12px; }
 .sheethead p { margin: 4px 0 0; }
-.reaction { display: flex; align-items: flex-end; gap: 10px; padding: 2px 0 10px; }
+/* NotThis.dc.html: "Skipping X", her face and line, and Undo, in one strip
+   above the next card. */
+.reaction { display: flex; flex-direction: column; gap: 6px; padding: 2px 16px 10px; }
+.reaction .skiprow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reaction .skipped {
+  font-size: 15px; color: var(--dx-muted); min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reaction .undo { flex: none; padding: 0 4px; min-height: 36px; font-size: 15px; }
+.reaction .saidrow { display: flex; align-items: flex-end; gap: 10px; }
+.reaction .sunalines { flex: 1; min-width: 0; gap: 2px; }
 .reaction .sunaline { font-size: 17px; line-height: 1.35; font-weight: 600; }
 .sunafig.one { align-self: flex-end; }
 
@@ -159,8 +169,10 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 }
 .dx .example:active { background: color-mix(in srgb, var(--dx-sand) 30%, transparent); }
 .dx .go {
-  border: none; border-radius: 999px; background: var(--dx-sand); color: #111;
-  font: inherit; font-size: 17px; font-weight: 700; padding: 15px 18px; cursor: pointer;
+  border: none; border-radius: 16px; background: var(--dx-sand); color: #1B1510;
+  min-height: 52px; padding: 0 18px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: inherit; font-size: 19px; font-weight: 700; cursor: pointer;
 }
 
 /* The ask folded to one line once the card is up (Card.dc.html). */
@@ -181,27 +193,36 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 }
 
 /* ── Understood chips ─────────────────────────────────────────────────── */
+/* Ask-chip.dc.html. Every chip the parse returned, wrapped — a single
+   scrolling row hid four of seven behind the right edge, which read as a
+   parse that had dropped them. 44 px, radius 22, filled #26262a for a like
+   and outlined #4a4a50 for a "not for me", measured off the board. */
 .dx .chips, .dx.sheet .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Loading.dc.html keeps the understood chips on ONE row that scrolls, so
-   the waiting scene stays above the fold. Wrapped, seven of them pushed
-   Suna a third of the way down the screen. The sheets' chips still wrap. */
-.dx .chips.understood {
-  flex-wrap: nowrap; overflow-x: auto; padding: 0 20px 2px;
-  scrollbar-width: none;
-}
-.dx .chips.understood::-webkit-scrollbar { display: none; }
-.dx .chips.understood .chip2 { flex: none; }
-.dx .chiphint { font-size: 12px; color: var(--dx-muted); padding: 0 20px; }
+.dx .chips.understood { padding: 0 16px 2px; }
+.dx .chiphint { font-size: 14px; font-weight: 600; color: var(--dx-muted); padding: 0 16px; }
 .dx .chip2, .dx.sheet .chip2 {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--dx-line); border-radius: 999px; padding: 7px 8px 7px 13px;
-  font-size: 14px; background: color-mix(in srgb, var(--dx-sand) 22%, transparent);
+  display: inline-flex; align-items: center; box-sizing: border-box;
+  height: 44px; border-radius: 22px;
+  background: #26262a; border: 1px solid #26262a;
+  font-size: 15px; font-weight: 600; color: var(--dx-ink);
 }
 .dx .chip2 button {
-  border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0;
+  border: none; background: none; font: inherit; color: inherit; cursor: pointer;
+  height: 42px; padding: 0 2px 0 14px;
 }
-.dx .chip2 .x { font-size: 16px; line-height: 1; opacity: .55; padding: 0 4px; }
-.dx .chip2.no { background: transparent; }
+.dx .chip2 .x {
+  width: 36px; height: 42px; padding: 0; font-size: 17px; line-height: 1;
+  color: var(--dx-muted); display: flex; align-items: center; justify-content: center;
+}
+/* Ruled out, not wanted: outlined, not filled. */
+.dx .chip2.no { background: transparent; border-color: #4a4a50; }
+/* "Add something Suna missed" — the board's dashed round +. */
+.dx .chipadd {
+  width: 44px; height: 44px; flex: none; border-radius: 22px;
+  border: 1px dashed #55555c; background: transparent; color: var(--dx-muted);
+  font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* ── The card ─────────────────────────────────────────────────────────── */
 .dx .card {
@@ -216,30 +237,55 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .why { font-size: 17px; line-height: 1.4; }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
-.dx .actions .go { flex: 2; }
+.dx .actions .go { flex: 1.5; }
+.dx .actions .btn { flex: 1; }
+/* "Not this" broke over two lines at 390 px. These are labels, not prose. */
+.dx .actions .go, .dx .actions .btn { white-space: nowrap; padding: 0 12px; }
+/* Card.dc.html, measured: filled #2a2a2e, radius 16, 52 px, no border. */
 .dx .btn, .dx.sheet .btn {
-  flex: 1; border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
-  padding: 15px 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--dx-ink); cursor: pointer;
+  flex: 1; border: 0; background: #2a2a2e; border-radius: 16px;
+  min-height: 52px; padding: 0 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: inherit; font-size: 16px; font-weight: 600; color: var(--dx-ink); cursor: pointer;
 }
 /* Card.dc.html stacks the card, then "After that", then the nudges, then
    "Would you go?" — four blocks down the screen, not one card holding
    everything. */
 .dx .cardstack { display: flex; flex-direction: column; gap: 14px; }
+/* Card.dc.html: a compact row, not a second card. */
 .dx .after {
-  border: 1px solid var(--dx-line); border-radius: 18px; padding: 14px 16px;
-  background: var(--dx-paper);
-  display: flex; flex-direction: column; gap: 3px;
+  border: 0; border-radius: 18px; padding: 14px 16px; background: var(--dx-paper);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.dx .afterhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.dx .aftername { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+.dx .afterwords { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dx .aftername { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.dx .aftergo {
+  flex: none; min-height: 44px; padding: 0 18px; border-radius: 22px;
+  border: 1px solid var(--dx-sand); background: transparent; color: var(--dx-sand);
+  font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+
+/* Icons sit with their text, never on their own. */
+.dx .fact { display: inline-flex; align-items: center; gap: 6px; }
+.dx .gi { display: inline-flex; align-items: center; }
+.dx .linkish2.withicon { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+
+/* Plain text that happens to be tappable: "Yes", "No", "Skip, just show it". */
+.dx .plain, .dx.sheet .plain {
+  border: 0; background: none; font: inherit; font-size: 16px; font-weight: 600;
+  color: var(--dx-ink); min-height: 44px; padding: 0 14px; cursor: pointer;
+}
+.dx .plain.muted, .dx.sheet .plain.muted { color: var(--dx-muted); font-weight: 500; font-size: 15px; }
 .dx .nudges { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
 .dx .nudges::-webkit-scrollbar { display: none; }
+/* Outlined pills, as on the board — the one control that is NOT filled. */
 .dx .nudge {
-  flex: none; border: 1px solid var(--dx-line); background: transparent; border-radius: 999px;
-  padding: 9px 14px; font: inherit; font-size: 14px; color: var(--dx-ink); cursor: pointer;
+  flex: none; border: 1px solid #3C3C42; background: transparent; border-radius: 22px;
+  min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center;
+  font: inherit; font-size: 15px; font-weight: 500; color: #E6E2DB; cursor: pointer;
 }
-.dx .wouldyou { display: flex; align-items: center; gap: 10px; font-size: 15px; }
-.dx .wouldyou .btn { flex: none; padding: 9px 20px; }
+.dx .wouldyou { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.dx .wouldyou .wylabel { font-size: 15px; color: var(--dx-muted); margin-right: 8px; }
 
 /* ── Sheets ───────────────────────────────────────────────────────────── */
 /* Both classes sit on ONE element (`class="dx sheet"`), so a descendant
@@ -270,14 +316,15 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 /* Named apart from the page's own `.scrim` (the menu's). */
 .dxscrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
 .dx .reasons, .dx.sheet .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+/* NotThis.dc.html and the time sheet: filled, radius 16, 52 px, no border. */
 .dx .reason, .dx.sheet .reason {
-  border: 1.5px solid var(--dx-line); background: transparent; border-radius: 999px;
-  padding: 11px 15px; font: inherit; font-size: 15px; color: var(--dx-ink); cursor: pointer;
+  border: 0; background: #2a2a2e; border-radius: 16px;
+  min-height: 52px; padding: 0 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 16px; font-weight: 600; color: var(--dx-ink); cursor: pointer;
 }
 .dx .btn.danger, .dx.sheet .btn.danger { border-color: transparent; color: #E8836F; }
-.dx .reason.on, .dx.sheet .reason.on {
-  background: var(--dx-ink); color: var(--dx-paper); border-color: var(--dx-ink);
-}
+.dx .reason.on, .dx.sheet .reason.on { background: #F4F1EC; color: #141414; }
 .dx.sheet .askown {
   width: 100%; box-sizing: border-box; padding: 13px 15px; border-radius: 14px;
   border: 1.5px solid var(--dx-line); background: transparent; color: var(--dx-ink);

@@ -621,7 +621,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v36';
+} from './lab/decisions.js?v=lab-v37';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v36';
+const BUILD = 'lab-v37';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2029,6 +2029,15 @@ function askSummary(text) {
 function renderChipsFor(holder, parse) {
   holder.querySelector('.dx .chips')?.closest('.dx')?.remove();
   const block = chipsBlock(parse, {
+    onAdd: () => textSheet('Anything Suna missed?', '', {
+      confirmLabel: 'Add',
+      hint: 'A like, or something you would rather not.',
+      onSave: async (v) => {
+        chipEdits++;
+        await saveChip('likes', v, 'like');
+        rerunWithChips({ ...parse, likes: [...(parse.likes ?? []), v] });
+      },
+    }),
     onEdit: (key, value, kind) => {
       // §4 / Ask-chip.dc.html: a sheet, not window.prompt. A blocking
       // browser dialog is not a design, and on a phone it is a system
@@ -2054,17 +2063,21 @@ function renderChipsFor(holder, parse) {
       rerunWithChips(next);
     },
   });
-  // Above the waiting scene, where Loading.dc.html has them — and in place
-  // of the summary line, not under it.
+  // Under the tester's message and above the waiting scene, where the
+  // boards have them.
   const summary = $('#convo-col').querySelector('.asksummary');
-  if (summary) summary.replaceWith(block);
-  else $('#convo-col').prepend(block);
+  if (summary) { summary.replaceWith(block); return; }
+  const me = $('#convo-col').querySelector('.turn.me');
+  if (me) me.after(block); else $('#convo-col').prepend(block);
 }
 
 /// Card.dc.html: "3 hrs · Bukit Bintang · solo · street food, photos · …"
 /// with a pencil, in place of the chip row, once the card is up. Tapping it
 /// brings the chips back — nothing is hidden, only folded.
 function collapseChips() {
+  // Card.dc.html shows the ask as ONE summary row and no message bubble:
+  // the pick is the screen now. The bubble comes back with New ask.
+  $('#convo-col').querySelector('.turn.me')?.remove();
   const chips = $('#convo-col').querySelector('.chips.understood');
   if (!chips || !lastParse) return;
   const p = lastParse;
@@ -2214,7 +2227,14 @@ function renderDecisionCard(holder, d, picks, i = 0) {
         // answer, so neither waits on anything.
         const reaction = d.not_this_lines?.[key] ?? null;
         if (reaction?.text) {
-          holder.append(reactionLine(reaction, `"${label}" saved to what Suna knows`));
+          const strip = reactionLine(reaction, {
+            skipped: pick.name,
+            savedText: `"${label}" saved to what Suna knows`,
+            // Undo puts the pick back and drops the strip. Nothing was
+            // spent, so there is nothing to undo on the server.
+            onUndo: () => { strip.remove(); holder.append(host); },
+          });
+          holder.append(strip);
           recordLineShown(reaction.line_id ?? reaction.id, `not_this:${key}`);
         }
         learnFromNotThis(key, label, pick, d.ref);
@@ -2370,11 +2390,10 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
     const named = placeInText(shown);
     if (named) { topicSubject = { name: named, source: 'message' }; renderContext(); }
   }
-  // Loading.dc.html has no message bubble: what you asked is the chip row
-  // under the header, and the waiting scene owns the rest of the screen. A
-  // bubble here is the chat thread the whole design is replacing.
-  if (DECISIONS_UI) $('#convo-col').append(askSummary(shown));
-  else $('#convo-col').append(meTurn(shown));
+  // Ask-chip.dc.html keeps the message as a bubble above the chips: it is
+  // what she is answering, and without it the chips are the only record of
+  // a question the tester may have typed thirty words of.
+  $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
   scroll();
 

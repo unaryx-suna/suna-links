@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v36';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v37';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v36';
+  link.href = '/lab/decisions.css?v=lab-v37';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -100,14 +100,14 @@ function sayLine(node, text) {
   const now = node.querySelector('.sunaline:not(.next)');
   const next = node.querySelector('.sunaline.next');
   if (!now || !next) return;
-  if (!now.textContent.trim() || stillness()) {
-    now.textContent = text; next.textContent = '';
-    return;
-  }
-  if (now.textContent === text) return;
-  clearTimeout(node._swap);
+  if (!now.textContent.trim()) { now.textContent = text; return; }
+  if (now.textContent === text || next.textContent === text) return;
+  // Loading.dc.html rests on TWO lines: the one she is on, and the one that
+  // has just queued behind it, faded. The queued one only ever exists
+  // because its stage really fired — there is no line for a step that did
+  // not run. When a third arrives the faded one is promoted.
+  if (next.textContent.trim()) now.textContent = next.textContent;
   next.textContent = text;
-  node._swap = setTimeout(() => { now.textContent = text; next.textContent = ''; }, LINE_SWAP_MS);
 }
 
 export function updateSuna(node, face, text, small) {
@@ -122,6 +122,15 @@ export function updateSuna(node, face, text, small) {
 /// 56 px seat beside it — the card board's entry, without its fixed frame.
 export function sunaFound(node) {
   if (!node) return;
+  // The found line was queued behind the one she was on, and going small
+  // hides the queued slot — so the card landed under "…so damn tough?".
+  // Finding it IS the current stage, so its line is promoted here.
+  const now = node.querySelector('.sunaline:not(.next)');
+  const next = node.querySelector('.sunaline.next');
+  if (now && next && next.textContent.trim()) {
+    now.textContent = next.textContent;
+    next.textContent = '';
+  }
   const fig = node.querySelector('.sunafig');
   if (!fig) return;
   clearTimeout(node._big); clearTimeout(node._settle);
@@ -205,7 +214,7 @@ const CHIP_KEYS = [
 
 /// §4. What Suna understood, tappable to fix, × to drop. Either one cancels
 /// the running search and re-runs it with the change.
-export function chipsBlock(parse, { onEdit, onRemove }) {
+export function chipsBlock(parse, { onEdit, onRemove, onAdd }) {
   const wrap = el('div', 'dx');
   wrap.append(el('div', 'chiphint', 'Suna understood · tap to fix, × to drop'));
   const row = el('div', 'chips understood');
@@ -227,6 +236,15 @@ export function chipsBlock(parse, { onEdit, onRemove }) {
   for (const [k] of CHIP_KEYS) add(k, parse?.[k], 'one');
   for (const v of (parse?.likes ?? [])) add('likes', v, 'like');
   for (const v of (parse?.not_for_me ?? [])) add('not_for_me', v, 'not');
+  // Ask-chip.dc.html: "Add something Suna missed". The chips are what she
+  // heard, so there has to be a way to tell her what she did not.
+  if (onAdd) {
+    const plus = el('button', 'chipadd', '+');
+    plus.type = 'button';
+    plus.setAttribute('aria-label', 'Add something Suna missed');
+    plus.onclick = onAdd;
+    row.append(plus);
+  }
   wrap.append(row);
   return wrap;
 }
@@ -321,6 +339,35 @@ export function confirmSheet(title, { hint, danger = 'Delete', onYes }) {
 /// §5. Walk, open till and price are CODE's, from Routes or distance,
 /// weekly_hours at for_time, and the price level. The writer never writes
 /// them, so they are read off the pick rather than out of its prose.
+/// The board's glyphs, inline so there is no second request for them.
+const ICON = {
+  walk: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="1.6"/><path d="M11 21l1.5-6-2.5-2 1-5 3 2 2.5 1"/><path d="M9.5 12L8 16"/><path d="M13 15l3 6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg>',
+  info: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>',
+  save: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>',
+  go: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg>',
+};
+
+/// A glyph beside its text, in one element.
+function withIcon(tag, cls, icon, text) {
+  const n = el(tag, cls);
+  const g = el('span', 'gi');
+  g.innerHTML = ICON[icon] ?? '';
+  n.append(g, el('span', null, text));
+  return n;
+}
+
+/// 24-hour times are a data format; the card speaks. "00:00" is "12am".
+export function ampm(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
+  if (!m) return t ?? null;
+  const h = Number(m[1]), mins = m[2];
+  if (!Number.isFinite(h) || h > 24) return t;
+  const suffix = h >= 12 && h < 24 ? 'pm' : 'am';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return mins === '00' ? `${h12}${suffix}` : `${h12}:${mins}${suffix}`;
+}
+
 /// GO-LIVE §2.1. Beyond this the walk stops being a walk and the card shows
 /// the distance instead.
 const WALK_MAX_KM = 2;
@@ -337,22 +384,26 @@ export function walkText(pick) {
 }
 
 function factsLine(pick) {
-  const bits = [];
+  const out = [];
   const walk = walkText(pick);
-  if (walk) bits.push(walk);
+  if (walk) out.push(withIcon('span', 'fact', 'walk', walk));
   // "Open till 14:30–00:00" is a range wearing the wrong label. The hours
   // string can hold several sessions; what the card face wants is the last
   // closing time of the day.
   const closes = lastCloseOf(pick.open_till);
-  if (closes) bits.push(`Open till ${closes}`);
-  else if (pick.open_till) bits.push(pick.open_till);
-  else if (pick.open_now === false) bits.push('Closed now');
+  if (closes) out.push(withIcon('span', 'fact', 'clock', `Open till ${ampm(closes)}`));
+  else if (pick.open_till) out.push(withIcon('span', 'fact', 'clock', pick.open_till));
+  else if (pick.open_now === false) out.push(withIcon('span', 'fact', 'clock', 'Closed now'));
   // §2.1: "Show price on the card only when the place has a price level.
   // Otherwise leave it off; don't show a placeholder." A row of empty dollar
   // signs is a claim about a place nobody priced.
   const level = Number(pick.price_level);
-  if (Number.isFinite(level) && level >= 1) bits.push('$'.repeat(Math.min(4, Math.round(level))));
-  return bits;
+  if (Number.isFinite(level) && level >= 1) {
+    const p = el('span', 'fact', '$'.repeat(Math.min(4, Math.round(level))));
+    p.setAttribute('aria-label', `Price: ${'$'.repeat(Math.min(4, Math.round(level)))}`);
+    out.push(p);
+  }
+  return out;
 }
 
 /// The last closing time in an hours string, or null when it is not a
@@ -372,7 +423,7 @@ export function decisionCard(pick, {
 
   const top = el('div', 'cardtop');
   top.append(el('div', 'eyebrow', 'Your pick for tonight'));
-  const details = el('button', 'linkish2', 'Details');
+  const details = withIcon('button', 'linkish2 withicon', 'info', 'Details');
   details.type = 'button';
   details.onclick = onDetails;
   top.append(details);
@@ -382,15 +433,15 @@ export function decisionCard(pick, {
   if (pick.why) card.append(el('div', 'why', pick.why));
 
   const facts = el('div', 'facts');
-  for (const f of factsLine(pick)) facts.append(el('span', null, f));
+  for (const f of factsLine(pick)) facts.append(f);
   if (facts.children.length) card.append(facts);
 
   const actions = el('div', 'actions');
-  const go = el('button', 'go', 'Go');
+  const go = withIcon('button', 'go', 'go', 'Go');
   go.type = 'button'; go.onclick = onGo;
   const not = el('button', 'btn', 'Not this');
   not.type = 'button'; not.onclick = onNotThis;
-  const save = el('button', 'btn', 'Save');
+  const save = withIcon('button', 'btn', 'save', 'Save');
   save.type = 'button'; save.onclick = onSave;
   actions.append(go, not, save);
   card.append(actions);
@@ -401,21 +452,20 @@ export function decisionCard(pick, {
   // and on Card.dc.html it sits BELOW the pick's card, not inside its
   // border: it is a second place, not a footnote on the first.
   if (after?.name) {
+    // Card.dc.html: one compact row — the label, the name, the travel — with
+    // an outlined sand Go on the right. Not a second full card.
     const a = el('div', 'after');
-    const head = el('div', 'afterhead');
-    head.append(el('div', 'eyebrow', 'After that'));
-    if (after.maps_uri) {
-      const go = el('button', 'linkish2', 'Go');
-      go.type = 'button';
-      go.onclick = () => onAfterGo?.(after);
-      head.append(go);
-    }
-    a.append(head);
-    a.append(el('div', 'aftername', after.name));
-    if (after.line) a.append(el('div', null, after.line));
-    // The walk to it, computed the same way as the pick's own.
+    const words = el('div', 'afterwords');
+    words.append(el('div', 'eyebrow', 'After that'));
+    words.append(el('div', 'aftername', after.name));
     const travel = after.travel ?? walkText(after);
-    if (travel) a.append(el('div', 'src', travel));
+    if (travel) words.append(el('div', 'src', travel));
+    a.append(words);
+    const go = el('button', 'aftergo', 'Go');
+    go.type = 'button';
+    go.setAttribute('aria-label', `Go to ${after.name}`);
+    go.onclick = () => onAfterGo?.(after);
+    a.append(go);
     blocks.push(a);
   }
 
@@ -430,10 +480,12 @@ export function decisionCard(pick, {
     blocks.push(row);
   }
 
+  // Centred, and plain: the board does not put these in buttons, because
+  // they are a question about the pick, not another thing to do with it.
   const wy = el('div', 'wouldyou');
-  wy.append(el('span', null, 'Would you go?'));
+  wy.append(el('span', 'wylabel', 'Would you go?'));
   for (const label of ['Yes', 'No']) {
-    const b = el('button', 'btn', label);
+    const b = el('button', 'plain', label);
     b.type = 'button';
     b.onclick = () => onWouldGo(label === 'Yes');
     wy.append(b);
@@ -517,7 +569,7 @@ export function notThisSheet(placeName, { onReason, onSkip, onUndo }) {
       row.append(b);
     }
     f.append(row);
-    const skip = el('button', 'btn', 'Skip, just show it');
+    const skip = el('button', 'plain muted', 'Skip, just show it');
     skip.type = 'button';
     skip.onclick = () => { close(); onSkip(); };
     const undo = el('button', 'linkish2', 'Undo');
@@ -530,13 +582,29 @@ export function notThisSheet(placeName, { onReason, onSkip, onUndo }) {
 
 /// §6. Her reaction to the reason, above the next card. The line came down
 /// with the answer, so this costs nothing and lands with the card.
-export function reactionLine(reaction, savedText) {
+export function reactionLine(reaction, { skipped, savedText, onUndo } = {}) {
+  // NotThis.dc.html: one strip above the next card — what was skipped, her
+  // reaction with her face, what got saved, and Undo.
   const wrap = el('div', 'dx reaction');
-  wrap.append(sunaFigure(reaction?.face ?? 'pout', SUNA_REACT_H));
+  // Top row: what was skipped, and the way back. The board keeps these two
+  // on one line because they are the same thought.
+  const top = el('div', 'skiprow');
+  top.append(el('span', 'skipped', skipped ? `Skipping ${skipped}` : ''));
+  if (onUndo) {
+    const u = el('button', 'plain undo', 'Undo');
+    u.type = 'button';
+    u.onclick = onUndo;
+    top.append(u);
+  }
+  wrap.append(top);
+  // Then her face and what she said about it.
+  const said = el('div', 'saidrow');
+  said.append(sunaFigure(reaction?.face ?? 'pout', SUNA_REACT_H));
   const words = el('div', 'sunalines');
   words.append(el('div', 'sunaline', reaction?.text ?? ''));
   if (savedText) words.append(el('div', 'src', savedText));
-  wrap.append(words);
+  said.append(words);
+  wrap.append(said);
   return wrap;
 }
 
