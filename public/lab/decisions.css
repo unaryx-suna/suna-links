@@ -43,7 +43,10 @@
 .sunablock {
   --sunah: 190px;
   display: flex; flex-direction: column; align-items: center; gap: 18px;
-  padding: 4px 0 2px;
+  /* The thread column has NO horizontal padding — the message bubbles get
+     their inset from being 88% wide and aligned to one side. Her line is
+     full width, so without this it runs off both edges. */
+  padding: 4px 20px 2px;
 }
 .sunafig {
   height: var(--sunah); flex: none;
@@ -82,6 +85,7 @@
 .sunablock.small {
   --sunah: 56px;
   flex-direction: row; align-items: flex-end; gap: 10px;
+  padding: 2px 20px;
 }
 .sunablock.small .sunalines { align-self: auto; gap: 0; }
 .sunablock.small .sunaline {
@@ -158,6 +162,8 @@
   border: 1px dashed var(--dx-line); border-radius: 16px; padding: 12px 14px;
   display: flex; flex-direction: column; gap: 3px;
 }
+.dx .afterhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.dx .aftername { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
 .dx .nudges { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
 .dx .nudges::-webkit-scrollbar { display: none; }
 .dx .nudge {

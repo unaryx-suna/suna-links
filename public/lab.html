@@ -141,6 +141,18 @@
      thumb reach, instead of stranding them at the top of an empty screen. */
   #convo .col { padding-top: 16px; padding-bottom: 8px; display: flex; flex-direction: column; min-height: 100%; }
   /* §6. 24px between messages. */
+  /* GO-LIVE §3.2. Waiting: no composer, one Cancel. Her line then has the
+     bottom of the screen to itself instead of running under the text box. */
+  body.waiting #dock .row, body.waiting #dock #attach { display: none; }
+  #cancel-ask {
+    display: block; margin: 2px auto 4px; min-height: 44px; padding: 0 20px;
+    border: 0; background: none; font: inherit; font-size: 15px; font-weight: 500;
+    color: var(--muted); cursor: pointer;
+  }
+  /* An answer turn holds an empty bubble until the first token lands. Under
+     the decisions UI no token ever arrives — the answer is a card — so it sat
+     on the waiting screen as a stray rounded rectangle under Suna's line. */
+  .turn.suna .bubble:empty { display: none; }
   .turn { display: flex; margin-bottom: 24px; }
   .suna { display: block; }
   .suna > .bubble { max-width: 88%; }
@@ -597,7 +609,7 @@ import {
   chipsBlock, decisionCard, detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v34';
+} from './lab/decisions.js?v=lab-v35';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -610,7 +622,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v34';
+const BUILD = 'lab-v35';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -730,7 +742,11 @@ async function openApp() {
 
   // §2 comes before anything else on a new visit, then §4.
   await maybeAskDidGo();
-  await maybeCheckIn();
+  // GO-LIVE §3.1. The decisions design has no thread: each ask is its own
+  // screen, so a survey card parked at the top of the column ends up ABOVE
+  // the next question, which is what the v34 screenshots showed. It waits
+  // for a Go tap instead — the moment a tester has actually decided.
+  if (!DECISIONS_UI) await maybeCheckIn();
 }
 
 /// Replays a stored thread. Read-only: the composer is hidden, because this is
@@ -1725,6 +1741,25 @@ function showTail(on) {
   if (t) t.hidden = !on;
 }
 
+/// GO-LIVE §3.2. While Suna is looking there is nothing to type: the
+/// composer goes and Cancel takes its place, as `Loading.dc.html` has it.
+/// Her line then has the bottom of the screen to itself instead of running
+/// underneath the text box.
+let cancelAsk = null;
+function showWaiting(on, onCancel) {
+  cancelAsk = on ? onCancel : null;
+  document.body.classList.toggle('waiting', !!on);
+  let btn = $('#cancel-ask');
+  if (!on) { btn?.remove(); return; }
+  if (!btn) {
+    btn = el('button', null, 'Cancel');
+    btn.id = 'cancel-ask';
+    btn.type = 'button';
+    btn.onclick = () => { cancelAsk?.(); showWaiting(false); setStatus(''); };
+    $('#dock').querySelector('.col').append(btn);
+  }
+}
+
 function renderChips() {
   const t = ensureTail();
   if (!t) return;
@@ -1744,7 +1779,12 @@ function renderChips() {
   }
   // UI-DECISIONS §3: three examples to tap, and no sentence builder. The
   // starter chips stay for Mode B, which keeps today's screens.
-  if (DECISIONS_UI) {
+  // GO-LIVE §3.3. "Example prompts show on the Ask screen only." Under the
+  // card there should be only the nudges and "Would you go?" — a row of
+  // starter prompts there reads as a fourth set of buttons competing with
+  // the decision the tester is being asked to make.
+  const askScreen = !$('#convo-col').querySelector('.card, .plan, .refused');
+  if (DECISIONS_UI && askScreen) {
     for (const text of ['Got 3 hours, surprise me', 'Somewhere good to eat nearby']) {
       const b = el('button', 'chip', text);
       b.disabled = busy;
@@ -1756,7 +1796,7 @@ function renderChips() {
       host.append(b);
     }
   }
-  for (const s of START_CHIPS) {
+  for (const s of (DECISIONS_UI && !askScreen ? [] : START_CHIPS)) {
     const b = el('button', 'chip', s.label);
     b.dataset.chip = s.chip;
     b.disabled = busy;
@@ -1934,15 +1974,28 @@ function rerunWithChips(parse) {
 /// writer wrote — walk, open till and price all come off the enriched place.
 function picksFrom(r, d) {
   if (Array.isArray(r?.picks) && r.picks.length) {
+    // v2.5 is live. A pick is an id and a reason; every number on the card
+    // comes off the place code enriched, never out of the writer's prose.
     const byId = new Map((d.places ?? []).map((p) => [String(p.id ?? p.place_id), p]));
+    const face = (f, over = {}) => ({
+      km: f.km, walk_minutes: f.walk_minutes, open_till: f.open_till ?? f.hours_today,
+      open_now: f.open_now, price_level: f.price_level, kind: f.kind,
+      rating_count: f.user_rating_count, maps_uri: f.maps_uri, hours_today: f.hours_today,
+      ...over,
+    });
     return r.picks.map((p) => {
       const f = byId.get(String(p.place_id)) ?? {};
+      // GO-LIVE §3.5. `after_that` is `{place_id, line}` — the name, the walk
+      // and the map link are code's, looked up the same way as the pick's.
+      let after = null;
+      if (p.after_that?.place_id) {
+        const af = byId.get(String(p.after_that.place_id));
+        if (af) after = face(af, { name: af.name, line: p.after_that.line ?? null });
+      }
       return {
         name: p.name ?? f.name, why: p.why, fits: p.fits, heads_up: p.heads_up,
-        after_that: p.after_that, claims: p.claims, unknowns: p.unknowns,
-        km: f.km, walk_minutes: f.walk_minutes, open_till: f.open_till ?? f.hours_today,
-        open_now: f.open_now, price_level: f.price_level, kind: f.kind,
-        rating_count: f.user_rating_count, maps_uri: f.maps_uri, hours_today: f.hours_today,
+        after_that: after, claims: p.claims, unknowns: p.unknowns,
+        ...face(f),
       };
     });
   }
@@ -2000,14 +2053,21 @@ function renderDecisionCard(holder, d, picks, i = 0) {
     onGo: () => {
       recordTap('go', pick.name, d.ref);
       if (pick.maps_uri) window.open(pick.maps_uri, '_blank', 'noopener');
+      // GO-LIVE §3.1. "The survey belongs after a Go tap or at session end."
+      // This is the moment a tester has actually decided something, which is
+      // the only moment the two questions are worth asking.
+      if (DECISIONS_UI) setTimeout(() => maybeCheckIn().catch(() => {}), 1200);
     },
     onSave: () => recordTap('save', pick.name, d.ref),
     onDetails: () => detailsSheet(pick, { onWrong: () => reportWrong(d.ref, pick.name) }),
     onWouldGo: (yes) => recordWouldGo(d.ref, yes, i === 0),
     onNudge: (n) => ask({ chip: null, request: `${lastAsk} — ${n.toLowerCase()}` }),
     nudges: NUDGES,
-    after: pick.after_that ? { name: pick.after_that.name ?? pick.after_that,
-                               travel: pick.after_that.travel ?? null } : null,
+    after: pick.after_that ?? null,
+    onAfterGo: (a) => {
+      recordTap('go_after', a.name, d.ref);
+      if (a.maps_uri) window.open(a.maps_uri, '_blank', 'noopener');
+    },
     onNotThis: () => notThisSheet(pick.name, {
       onReason: async (key, label) => {
         notThisCount++; notThisReasons.push(key);
@@ -2151,6 +2211,19 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // mid-sentence is noise. It comes back in the `finally`, below the answer.
   showTail(false);
   const shown = request || CHIP_TEXT[chip] || '';
+  // GO-LIVE §3.1. "The design has no thread: each ask is its own screen."
+  // Mode B keeps today's screens, but it is not known to be B yet — and a
+  // plan replaces the column anyway, so clearing here is safe for both.
+  if (DECISIONS_UI) $('#convo-col').replaceChildren();
+  // GO-LIVE §3.4. The header showed the device's city until the server's
+  // mode event arrived, then jumped. `placeInText` is the same rule the
+  // server uses, so the header can be right from the first frame; the
+  // server's fuller subject ("Bukit Bintang, Kuala Lumpur") replaces it a
+  // second later, and a null one never wipes it.
+  if (DECISIONS_UI) {
+    const named = placeInText(shown);
+    if (named) { topicSubject = { name: named, source: 'message' }; renderContext(); }
+  }
   $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
   scroll();
@@ -2165,6 +2238,11 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // event puts it behind a network round trip and the whole facts step, which
   // is exactly the silence that reads as broken.
   setStatus("Checking what's open", true);
+  // GO-LIVE §3.2. Her line ran underneath the text box. While she is
+  // looking there is nothing to type, so the composer goes and Cancel takes
+  // its place, as Loading.dc.html has it.
+  const abort = new AbortController();
+  if (DECISIONS_UI) showWaiting(true, () => abort.abort());
 
   const slowTimer = setTimeout(() => {
     $('#status').classList.add('slow');
@@ -2183,6 +2261,7 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
     const n = rightNow();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
       method: 'POST',
+      signal: abort.signal,
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${session.access_token}`,
@@ -2240,7 +2319,10 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         if (event === 'mode') {
           modeKnown = d.mode;
           // SCENARIO-1 §4: the header updates before the answer streams.
-          topicSubject = d.subject ? { name: d.subject, source: d.subject_source } : null;
+          // GO-LIVE §3.4: the server's subject is the fuller one ("Bukit
+          // Bintang, Kuala Lumpur"), so it may replace the parse's guess —
+          // but a NULL subject must not wipe a header that is already right.
+          if (d.subject) topicSubject = { name: d.subject, source: d.subject_source };
           renderContext();
         }
         // §0a. The divider is the tester's only signal that we have re-scoped,
@@ -2268,6 +2350,14 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         if (event === 'chips') {
           if (msToChips === null) msToChips = Date.now() - sentAt;
           lastParse = d;
+          // GO-LIVE §3.4. The header read "Kuala Lumpur" — where the phone
+          // is — until the mode event arrived, then jumped to "Bukit
+          // Bintang". The parse knows the area first, so the header follows
+          // it, and nothing moves it again for the rest of this ask.
+          if (!topicSubject && d.area) {
+            topicSubject = { name: String(d.area), source: 'message' };
+            renderContext();
+          }
           renderChipsFor(holder, d);
         }
         if (event === 'token')  {
@@ -2339,6 +2429,7 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
     else console.error('[lab] after the answer:', e);
   } finally {
     clearTimeout(slowTimer);
+    if (DECISIONS_UI) showWaiting(false);
     setStatus('');
     $('#status').classList.remove('slow');
     // renderChips() re-parents the tail to the END of the column, so it lands
@@ -2565,6 +2656,11 @@ async function renderAnswer(holder, bubble, d) {
     bubble.remove();
     const picks = picksFrom(r, d);
     remainingPicks = picks.slice(1);
+    // §5. `nothing_fits` is her saying the exclusions left nothing — line 37.
+    // It is shown ABOVE whatever she could still offer, never instead of it.
+    if (r.nothing_fits) {
+      holder.append(sunaBlock('sheepish', String(r.nothing_fits), { small: true }));
+    }
     renderDecisionCard(holder, d, picks, 0);
     // The card already asks "Would you go?" and offers Wrong inside
     // Details; the old bar asked both again, one above the other.
@@ -3241,24 +3337,32 @@ async function renderTracker() {
 /// widen request from the count, the same way it excludes a reply.
 function noFactsCard(d, request) {
   const card = el('div', 'refused');
-  const q = d?.response?.question || d?.response?.context
+  // GO-LIVE §2.2. v2.5 puts the line in `nothing_fits`: "I haven't explored
+  // X yet. Want me to look into it?" The older shapes stay readable while
+  // v2.4 is the rollback.
+  const q = d?.response?.nothing_fits || d?.response?.question || d?.response?.context
     || "I haven't looked into this one yet. Want me to?";
   card.append(el('p', null, q));
 
   const row = el('div', 'chips');
-  const yes = el('button', 'chip answer', 'Yes, look');
+  // One button under the decisions UI. The line already asks the question;
+  // a "No" beside it is a second decision nobody needs to make.
+  const yes = el('button', 'chip answer', DECISIONS_UI ? 'Look into it' : 'Yes, look');
   yes.onclick = () => {
     for (const b of row.querySelectorAll('button')) b.disabled = true;
     card.append(el('p', null, 'Looking…'));
     // The same question, told to search wider. Not a new question.
     ask({ chip: null, request, widenFacts: true });
   };
-  const no = el('button', 'chip', 'No');
-  no.onclick = () => {
-    row.remove();
-    card.append(el('p', null, 'Fair enough — ask me something else.'));
-  };
-  row.append(yes, no);
+  row.append(yes);
+  if (!DECISIONS_UI) {
+    const no = el('button', 'chip', 'No');
+    no.onclick = () => {
+      row.remove();
+      card.append(el('p', null, 'Fair enough — ask me something else.'));
+    };
+    row.append(no);
+  }
   card.append(row);
   return card;
 }

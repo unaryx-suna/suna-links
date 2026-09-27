@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v34';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v35';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v34';
+  link.href = '/lab/decisions.css?v=lab-v35';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -228,10 +228,25 @@ export function chipsBlock(parse, { onEdit, onRemove }) {
 /// §5. Walk, open till and price are CODE's, from Routes or distance,
 /// weekly_hours at for_time, and the price level. The writer never writes
 /// them, so they are read off the pick rather than out of its prose.
+/// GO-LIVE §2.1. Beyond this the walk stops being a walk and the card shows
+/// the distance instead.
+const WALK_MAX_KM = 2;
+
+export function walkText(pick) {
+  // "about", because Mode A has no Routes: these legs are a straight line
+  // x 1.3 at 4.8 km/h, and the server marks them `estimate`. Printing "12 min
+  // walk" would dress a guess up as a measurement.
+  const far = pick.km != null && Number(pick.km) >= WALK_MAX_KM;
+  if (pick.walk_minutes != null && !far) return `about ${pick.walk_minutes} min walk`;
+  if (pick.km != null) return `${pick.km} km away`;
+  if (pick.walk_minutes != null) return `about ${pick.walk_minutes} min walk`;
+  return null;
+}
+
 function factsLine(pick) {
   const bits = [];
-  if (pick.walk_minutes != null) bits.push(`${pick.walk_minutes} min walk`);
-  else if (pick.km != null) bits.push(`${pick.km} km away`);
+  const walk = walkText(pick);
+  if (walk) bits.push(walk);
   // "Open till 14:30–00:00" is a range wearing the wrong label. The hours
   // string can hold several sessions; what the card face wants is the last
   // closing time of the day.
@@ -239,7 +254,11 @@ function factsLine(pick) {
   if (closes) bits.push(`Open till ${closes}`);
   else if (pick.open_till) bits.push(pick.open_till);
   else if (pick.open_now === false) bits.push('Closed now');
-  if (pick.price_level) bits.push('·'.repeat(0) + '$'.repeat(Math.max(1, Number(pick.price_level))));
+  // §2.1: "Show price on the card only when the place has a price level.
+  // Otherwise leave it off; don't show a placeholder." A row of empty dollar
+  // signs is a claim about a place nobody priced.
+  const level = Number(pick.price_level);
+  if (Number.isFinite(level) && level >= 1) bits.push('$'.repeat(Math.min(4, Math.round(level))));
   return bits;
 }
 
@@ -254,7 +273,7 @@ export function lastCloseOf(hours) {
 }
 
 export function decisionCard(pick, {
-  onGo, onNotThis, onSave, onDetails, onNudge, onWouldGo, after, nudges,
+  onGo, onNotThis, onSave, onDetails, onNudge, onWouldGo, onAfterGo, after, nudges,
 }) {
   const card = el('div', 'card');
 
@@ -283,12 +302,24 @@ export function decisionCard(pick, {
   actions.append(go, not, save);
   card.append(actions);
 
-  // §5. "After that": the next place, with its travel time from code.
+  // §5 / GO-LIVE §3.5. "After that" is its own small card with its own Go —
+  // it is a second place to walk to, not a footnote under the first.
   if (after?.name) {
     const a = el('div', 'after');
-    a.append(el('div', 'eyebrow', 'After that'));
-    a.append(el('div', null, after.name));
-    if (after.travel) a.append(el('div', 'src', after.travel));
+    const head = el('div', 'afterhead');
+    head.append(el('div', 'eyebrow', 'After that'));
+    if (after.maps_uri) {
+      const go = el('button', 'linkish2', 'Go');
+      go.type = 'button';
+      go.onclick = () => onAfterGo?.(after);
+      head.append(go);
+    }
+    a.append(head);
+    a.append(el('div', 'aftername', after.name));
+    if (after.line) a.append(el('div', null, after.line));
+    // The walk to it, computed the same way as the pick's own.
+    const travel = after.travel ?? walkText(after);
+    if (travel) a.append(el('div', 'src', travel));
     card.append(a);
   }
 
