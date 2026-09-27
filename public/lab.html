@@ -591,6 +591,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script type="module">
+// UI-DECISIONS. The quick-answer UI. Plans keep today's screens.
+import {
+  installDecisionsUI, sunaBlock, updateSuna, chipsBlock, decisionCard,
+  detailsSheet, notThisSheet, knowsPanel, reorderByReason, NUDGES,
+} from './lab/decisions.js';
+installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
  * build step, no framework.
@@ -602,7 +608,10 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v32';
+const BUILD = 'lab-v33';
+/// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
+/// `?ui=chat` falls back, so a tester can be shown the old one side by side.
+const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1365,16 +1374,30 @@ function prefs() { return Array.isArray(tester?.preferences) ? tester.preference
 
 async function setPrefs(next) { await saveTester({ preferences: next }); renderPanel(); }
 
-async function addPref(key, value, source, confirmed) {
+async function addPref(key, value, source, confirmed, note) {
   if (!PREF_KEYS.includes(key)) return;
   const v = String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!v) return;
+  const noteText = note ? String(note).slice(0, 60) : undefined;
   const next = prefs().slice();
+  // UI-DECISIONS §6/§7: where a row came from, shown in "What Suna knows"
+  // ("From Not this: Too far"). Without it every learned row looks the same.
   const at = next.findIndex((e) => e.key === key && e.source === source && !e.confirmed);
-  const entry = { key, value: v, source, confirmed: !!confirmed, created_at: nowIso() };
+  const entry = { key, value: v, source, confirmed: !!confirmed, created_at: nowIso(),
+                  ...(noteText ? { note: noteText } : {}) };
   if (at >= 0) next[at] = entry; else next.push(entry);
   await setPrefs(next);
 }
+
+/// UI-DECISIONS §7. Every row in "What Suna knows" can be removed, and
+/// Reset clears the lot. Both write to the same profile the chips and the
+/// prompt read — there is no second store.
+async function removePref(row) {
+  const next = prefs().filter((e) =>
+    !(e.key === row.key && e.value === row.value && e.source === row.source));
+  await setPrefs(next);
+}
+async function resetPrefs() { await setPrefs([]); }
 
 async function confirmPref(i, yes, newValue) {
   const next = prefs().slice();
@@ -1471,6 +1494,32 @@ function titleish(s) {
 }
 
 // ── the panel ──────────────────────────────────────────────────────────────
+// UI-DECISIONS §7. The header's place and time opens what Suna knows.
+$('#ctx-place')?.addEventListener('click', () => {
+  if (!DECISIONS_UI) return;
+  const rows = prefs();
+  const pick = (keys) => rows.filter((r) => keys.includes(r.key))
+    .map((r) => ({ ...r, source_label: r.note ?? (r.source === 'stated' ? 'you said' : 'assumed') }));
+  knowsPanel({
+    trip: pick(['company', 'transport', 'accommodation', 'time_of_day']),
+    likes: pick(['interests', 'diet', 'pace', 'budget']),
+    not_for_me: pick(['avoid', 'accessibility', 'max_travel']),
+    learned: rows.filter((r) => String(r.note ?? '').startsWith('From Not this'))
+      .map((r) => ({ ...r, source_label: r.note })),
+  }, {
+    onEdit: async (r) => {
+      const next = prompt(`Change "${r.value}" to:`, r.value);
+      if (next != null && next.trim()) await addPref(r.key, next.trim(), 'stated', true, 'edited in What Suna knows');
+    },
+    onRemove: async (r) => { await removePref(r); },
+    onAdd: async (key) => {
+      const v = prompt(key === 'avoid' ? "What's not for you?" : 'What do you like?');
+      if (v && v.trim()) await addPref(key, v.trim(), 'stated', true, 'added in What Suna knows');
+    },
+    onReset: async () => { if (confirm('Clear everything Suna knows about you?')) await resetPrefs(); },
+  });
+});
+
 $('#ctx-btn').addEventListener('click', async () => { await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1'; });
 $('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; });
 
@@ -1691,6 +1740,20 @@ function renderChips() {
     host.append(skip);
     return;
   }
+  // UI-DECISIONS §3: three examples to tap, and no sentence builder. The
+  // starter chips stay for Mode B, which keeps today's screens.
+  if (DECISIONS_UI) {
+    for (const text of ['Got 3 hours, surprise me', 'Somewhere good to eat nearby']) {
+      const b = el('button', 'chip', text);
+      b.disabled = busy;
+      b.onclick = async () => {
+        setStatus("Checking what's open", true);
+        await ensureLocation();
+        ask({ chip: null, request: text, askSource: 'example' });
+      };
+      host.append(b);
+    }
+  }
   for (const s of START_CHIPS) {
     const b = el('button', 'chip', s.label);
     b.dataset.chip = s.chip;
@@ -1779,6 +1842,223 @@ function prefetchWhileTyping(text) {
   }, 1200);
 }
 
+
+// ── UI-DECISIONS. The quick-answer screens ────────────────────────────────
+//
+// Plans are untouched: renderPlan still draws them, with day titles named
+// after places. Everything below is Mode A only.
+
+let sunaNode = null;       // her face and line for the answer in flight
+let lastParse = null;      // what the parse understood, for the chips
+let sentAt = 0;            // when Send was tapped, for the §8 measures
+let msToFirstLine = null, msToChips = null, msToCard = null;
+let notThisCount = 0;
+const notThisReasons = [];
+let chipEdits = 0, chipRemovals = 0;
+let remainingPicks = [];   // picks not yet shown, reordered by the last reason
+
+/// §1. "You said X, your phone says Y." Two lines, two tap buttons.
+function showMismatch(holder, d) {
+  const box = el('div', 'dx');
+  for (const line of d.lines) box.append(el('div', 'sunaline', line));
+  const row = el('div', 'chips');
+  for (const [label, which] of [[d.said, 'said'], [d.device, 'device']]) {
+    if (!label) continue;
+    const b = el('button', 'reason', label);
+    b.onclick = () => {
+      box.remove();
+      // The choice sets the subject and re-runs the search.
+      ask({ chip: null, request: lastAsk, subjectOverride: label, subjectSource: which });
+    };
+    row.append(b);
+  }
+  box.append(row);
+  holder.append(box);
+}
+
+/// §4. Tap a chip to fix it, × to drop it. Either cancels the running
+/// search and re-runs with the change, and every edit is saved as `stated`
+/// with source `chip`.
+function renderChipsFor(holder, parse) {
+  holder.querySelector('.dx .chips')?.closest('.dx')?.remove();
+  const block = chipsBlock(parse, {
+    onEdit: async (key, value, kind) => {
+      const next = prompt(key === 'time' ? 'How long have you got?' : `Change "${value}" to:`, value);
+      if (next == null || next.trim() === '' || next === value) return;
+      chipEdits++;
+      await saveChip(key, next.trim(), kind);
+      rerunWithChips({ ...parse, [key]: kind === 'one' ? next.trim() : parse[key] });
+    },
+    onRemove: async (key, value, kind) => {
+      chipRemovals++;
+      const next = { ...parse };
+      if (kind === 'one') next[key] = null;
+      else next[key] = (next[key] ?? []).filter((v) => v !== value);
+      await saveChip(key, value, kind, true);
+      rerunWithChips(next);
+    },
+  });
+  holder.append(block);
+}
+
+/// Every chip edit or removal is a stated preference, sourced to the chip.
+async function saveChip(key, value, kind, removed = false) {
+  const vocabKey = kind === 'not' ? 'avoid' : (key === 'likes' ? 'interests' : key);
+  // PREF_KEYS is the page's own vocabulary; a second copy would drift.
+  if (!PREF_KEYS.includes(vocabKey)) return;
+  try { await addPref(vocabKey, value, 'stated', true, removed ? 'chip: removed' : 'chip'); }
+  catch { /* a lost preference must never cost the answer */ }
+}
+
+/// A chip change cancels the running search and re-runs it.
+function rerunWithChips(parse) {
+  lastParse = parse;
+  const bits = [];
+  if (parse.time) bits.push(parse.time);
+  if (parse.area) bits.push(`in ${parse.area}`);
+  if (parse.who) bits.push(parse.who);
+  for (const v of (parse.likes ?? [])) bits.push(v);
+  for (const v of (parse.not_for_me ?? [])) bits.push(`no ${v}`);
+  ask({ chip: null, request: bits.join(', ') || lastAsk });
+}
+
+
+/// §5. The picks the card shows.
+///
+/// v2.5's shape is `picks[]`, each with why/fits/heads_up/after_that. It is
+/// not seeded yet, so until it lands the same card is built from what v2.4
+/// returns: the places code already enriched, and the answer's own text as
+/// the "why" for the first one. The card face never shows a number the
+/// writer wrote — walk, open till and price all come off the enriched place.
+function picksFrom(r, d) {
+  if (Array.isArray(r?.picks) && r.picks.length) {
+    const byId = new Map((d.places ?? []).map((p) => [String(p.id ?? p.place_id), p]));
+    return r.picks.map((p) => {
+      const f = byId.get(String(p.place_id)) ?? {};
+      return {
+        name: p.name ?? f.name, why: p.why, fits: p.fits, heads_up: p.heads_up,
+        after_that: p.after_that, claims: p.claims, unknowns: p.unknowns,
+        km: f.km, walk_minutes: f.walk_minutes, open_till: f.open_till ?? f.hours_today,
+        open_now: f.open_now, price_level: f.price_level, kind: f.kind,
+        rating_count: f.user_rating_count, maps_uri: f.maps_uri, hours_today: f.hours_today,
+      };
+    });
+  }
+  // v2.4 bridge. The named places, in the order the answer named them.
+  const named = (d.place_names?.length ? d.place_names : (r?.place_ids ?? []))
+    .filter((x) => typeof x === 'string' && !/^[0-9a-f-]{20,}$/i.test(x));
+  const byName = new Map((d.places ?? []).map((p) => [String(p.name).toLowerCase(), p]));
+  const picks = named.map((n, i) => {
+    const f = byName.get(String(n).toLowerCase()) ?? {};
+    return {
+      name: n, why: i === 0 ? (r?.text ?? '') : null,
+      fits: [], unknowns: r?.details?.unknowns ?? [], claims: r?.details?.claims ?? [],
+      km: f.km, walk_minutes: f.walk_minutes, open_till: f.hours_today,
+      open_now: f.open_now, price_level: f.price_level, kind: f.kind,
+      rating_count: f.user_rating_count, maps_uri: f.maps_uri, hours_today: f.hours_today,
+    };
+  });
+  // Nothing named: fall back to the enriched places themselves, nearest first.
+  if (!picks.length) {
+    return (d.places ?? []).slice(0, 3).map((f) => ({
+      name: f.name, why: r?.text ?? '', fits: [], unknowns: [], claims: [],
+      km: f.km, walk_minutes: f.walk_minutes, open_till: f.hours_today,
+      open_now: f.open_now, price_level: f.price_level, kind: f.kind,
+      rating_count: f.user_rating_count, maps_uri: f.maps_uri, hours_today: f.hours_today,
+    }));
+  }
+  return picks;
+}
+
+/// §5. The decision card, with Not this, Details and the nudges.
+function renderDecisionCard(holder, d, picks, i = 0) {
+  const pick = picks[i];
+  if (!pick) {
+    holder.append(el('div', 'dx sunaline', "That's everything I had. Want me to look wider?"));
+    return;
+  }
+  if (msToCard === null) msToCard = Date.now() - sentAt;
+  updateSuna(sunaNode, 'found', undefined, true);   // she shrinks when a card lands
+
+  const host = el('div', 'dx');
+  const card = decisionCard(pick, {
+    onGo: () => {
+      recordTap('go', pick.name, d.ref);
+      if (pick.maps_uri) window.open(pick.maps_uri, '_blank', 'noopener');
+    },
+    onSave: () => recordTap('save', pick.name, d.ref),
+    onDetails: () => detailsSheet(pick, { onWrong: () => reportWrong(d.ref, pick.name) }),
+    onWouldGo: (yes) => recordWouldGo(d.ref, yes, i === 0),
+    onNudge: (n) => ask({ chip: null, request: `${lastAsk} — ${n.toLowerCase()}` }),
+    nudges: NUDGES,
+    after: pick.after_that ? { name: pick.after_that.name ?? pick.after_that,
+                               travel: pick.after_that.travel ?? null } : null,
+    onNotThis: () => notThisSheet(pick.name, {
+      onReason: async (key, label) => {
+        notThisCount++; notThisReasons.push(key);
+        await learnFromNotThis(key, label, pick, d.ref);
+        // §6: the next card straight away, from the remaining picks.
+        const rest = reorderByReason(picks, key, pick);
+        host.remove();
+        if (notThisCount >= 3) {
+          // After the third, re-run with the reasons and already_suggested.
+          ask({ chip: null, request: lastAsk, notThis: notThisReasons.slice(),
+                alreadySuggested: picks.map((p) => p.name) });
+        } else {
+          renderDecisionCard(holder, d, [pick, ...rest], 1);
+        }
+      },
+      onSkip: () => { host.remove(); renderDecisionCard(holder, d, picks, i + 1); },
+      onUndo: () => {},
+    }),
+  });
+  host.append(card);
+  holder.append(host);
+}
+
+/// §6. Every reason is a learned row, with its source.
+async function learnFromNotThis(key, label, pick, ref) {
+  const map = { too_far: 'max_travel', too_pricey: 'budget', not_my_thing: 'avoid',
+                too_busy: 'avoid', been_there: 'visited', looks_shut: null };
+  const vocab = map[key];
+  if (vocab) {
+    const value = key === 'been_there' ? pick.name
+      : key === 'too_far' ? 'closer than this'
+      : key === 'too_pricey' ? 'cheaper'
+      : `${pick.kind ?? 'places like this'}`;
+    try { await addPref(vocab, value, 'stated', true, `From Not this: ${label}`); } catch {}
+  }
+  // "Looks shut" logs a Wrong and shows her humble line.
+  if (key === 'looks_shut') { try { await reportWrong(ref, pick.name, 'shut'); } catch {} }
+}
+
+/// §5/§6. "Something wrong?" from Details, and "Looks shut" from Not this.
+async function reportWrong(ref, placeName, kind = 'other') {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    await fetch(`${SUPABASE_URL}/rest/v1/lab_feedback`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ answer_ref: ref, wrong: true, wrong_kind: kind,
+                             wrong_place: placeName, session_id: sessionId }),
+    });
+  } catch { /* a lost report must never cost the answer */ }
+}
+
+async function recordWouldGo(ref, yes, isFirst) {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    await fetch(`${SUPABASE_URL}/rest/v1/lab_feedback`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ answer_ref: ref, would_go: yes, session_id: sessionId,
+                             reason: isFirst ? 'first card' : 'later card' }),
+    });
+  } catch {}
+}
+
 // ── asking ─────────────────────────────────────────────────────────────────
 $('#send').addEventListener('click', async () => {
   const text = $('#box').value.trim();
@@ -1788,7 +2068,7 @@ $('#send').addEventListener('click', async () => {
   // include a reverse-geocode round trip, and the target is one second.
   setStatus("Checking what's open", true);
   await ensureLocation();
-  ask({ chip: null, request: text });
+  ask({ chip: null, request: text, askSource: 'typed' });
 });
 $('#box').addEventListener('input', (e) => {
   // Warm the place she is typing about, before she sends.
@@ -1814,11 +2094,19 @@ const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip
 /// request makes the facts step look up the word "yes", which is how the
 /// widen path would have failed even once the chip existed.
 let askedLast = '';
+let lastAsk = '';
 
-async function ask({ chip, request, scopeOverride, widenFacts }) {
+async function ask({ chip, request, scopeOverride, widenFacts, askSource,
+                    subjectOverride, notThis, alreadySuggested }) {
   if (readOnly) return;
   busy = true; setBusy(true);
   if (!widenFacts) askedLast = request || CHIP_TEXT[chip] || '';
+  // UI-DECISIONS §8. Every measure is per send.
+  sentAt = Date.now();
+  msToFirstLine = null; msToChips = null; msToCard = null;
+  sunaNode = null; lastParse = null;
+  lastAsk = request || CHIP_TEXT[chip] || '';
+  if (!notThis) { notThisCount = 0; notThisReasons.length = 0; }
   // Out of the way while the answer streams — offering the next move
   // mid-sentence is noise. It comes back in the `finally`, below the answer.
   showTail(false);
@@ -1866,6 +2154,11 @@ async function ask({ chip, request, scopeOverride, widenFacts }) {
         // v2: "Yes, look" — the same question, searched wider, and excluded
         // from the daily count server-side.
         widen_facts: widenFacts === true,
+        // UI-DECISIONS §3/§6
+        ask_source: askSource ?? null,
+        subject_override: subjectOverride ?? null,
+        not_this: notThis ?? null,
+        already_suggested_names: alreadySuggested ?? null,
         session_id: sessionId,
         // Ignored by the function for anyone without lab_admin, so
         // this is a convenience, not a permission.
@@ -1913,7 +2206,30 @@ async function ask({ chip, request, scopeOverride, widenFacts }) {
         // §0a. The divider is the tester's only signal that we have re-scoped,
         // so it shows before the answer rather than after it.
         if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
-        if (event === 'stage')  setStatus(stageLabel(d.stage), true);
+        if (event === 'stage') {
+          // UI-DECISIONS §1/§2. Every event carries Suna's line and her face,
+          // chosen server-side so it is never a repeat. The old status line
+          // is still set for Mode B, which keeps today's screens.
+          if (d.text && modeKnown !== 'B') {
+            if (msToFirstLine === null) msToFirstLine = Date.now() - sentAt;
+            if (!sunaNode) { sunaNode = sunaBlock(d.face ?? 'searching', d.text); holder.prepend(sunaNode); }
+            else updateSuna(sunaNode, d.face, d.text, false);
+            setStatus('', false);
+          } else {
+            setStatus(stageLabel(d.stage), true);
+          }
+          // §1. The message named one place and the phone is elsewhere:
+          // two lines, two tap buttons, and the choice re-runs the search.
+          if (d.event === 'location_mismatch' && Array.isArray(d.lines)) {
+            showMismatch(holder, d);
+          }
+        }
+        // §4. The chips arrive on their own event, whenever the parse lands.
+        if (event === 'chips') {
+          if (msToChips === null) msToChips = Date.now() - sentAt;
+          lastParse = d;
+          renderChipsFor(holder, d);
+        }
         if (event === 'token')  {
           answered = true;
           if (!streamed) setStatus('Suna is typing', true);
@@ -2203,6 +2519,18 @@ function linkPlacesInText(bubble, d) {
 // ── rendering the answer ───────────────────────────────────────────────────
 async function renderAnswer(holder, bubble, d) {
   const r = d.response ?? {};
+
+  if (d.mode === 'A' && DECISIONS_UI) {
+    // UI-DECISIONS §5. A quick answer is a decision card, not a message.
+    bubble.remove();
+    const picks = picksFrom(r, d);
+    remainingPicks = picks.slice(1);
+    renderDecisionCard(holder, d, picks, 0);
+    (holder.lastElementChild ?? holder).append(feedbackBar(d));
+    renderContext();
+    scroll();
+    return;
+  }
 
   if (d.mode === 'A') {
     // §0. The master prompt puts the closing question inside `text` AND in
