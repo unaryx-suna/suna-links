@@ -602,7 +602,7 @@
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v31';
+const BUILD = 'lab-v32';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -779,6 +779,7 @@ $('#m-fresh').addEventListener('click', () => {
   sessionId = crypto.randomUUID();
   lastQuestion = null;
   topicSubject = null;
+  typedPrefetched.clear();
   ensureSessionCode();
   $('#convo-col').append(sunaTurn('Starting fresh — new topic.'));
   renderChips();
@@ -1727,6 +1728,57 @@ async function answerChip(c) {
   else ask({ chip: null, request: c.reply });
 }
 
+
+// ── SCENARIO-1. Prefetch while she types ───────────────────────────────────
+//
+// A place she NAMES is always cold: the page prefetched where the phone is,
+// and she asked about somewhere else. Measured, that grounded lookup is the
+// whole cost of a cold first answer — 47 s of a 59 s first word.
+//
+// The composer knows the place several seconds before she presses send.
+// Firing the lookup then is free time: by the time the message arrives the
+// area cell is warm and the facts step is a cache hit.
+//
+// Deliberately conservative. It fires once per distinct place per chat, only
+// after she stops typing, and only when the text really does name somewhere
+// — a speculative grounded call for every keystroke would spend the
+// project's daily allowance on sentences nobody sent.
+const typedPrefetched = new Set();
+let typeTimer = null;
+
+/// The same rule the server uses (logic.ts destinationOf), kept simple: a
+/// base phrase, or a bare preposition and a capitalised name.
+function placeInText(text) {
+  const t = String(text ?? '');
+  const base = /\b(?:[Ss]taying (?:in|at)|[Ii]'?m (?:in|at)|[Ww]e'?re (?:in|at)|[Bb]ased (?:in|at)|[Nn]ear)\s+([A-Z][a-zA-Z']+(?:\s+[A-Z][a-zA-Z']+)?)/.exec(t);
+  if (base) return base[1].trim();
+  const any = /\b(?:[Ii]n|[Tt]o|[Aa]round|[Vv]isiting|[Aa]t)\s+([A-Z][a-zA-Z']+(?:\s+[A-Z][a-zA-Z']+)?)/.exec(t);
+  return any ? any[1].trim() : null;
+}
+
+function prefetchWhileTyping(text) {
+  clearTimeout(typeTimer);
+  // Long enough that it is a sentence, not a stray capital.
+  if (!text || text.trim().length < 12) return;
+  typeTimer = setTimeout(async () => {
+    const place = placeInText(text);
+    if (!place || place.length < 3) return;
+    const key = place.toLowerCase();
+    if (typedPrefetched.has(key)) return;
+    typedPrefetched.add(key);
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) return;
+      await fetch(`${SUPABASE_URL}/functions/v1/lab-answer`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                   'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prefetch_facts', place_name: place, now: rightNow().local_time }),
+      });
+    } catch { /* a warm cache is a bonus, never a blocker */ }
+  }, 1200);
+}
+
 // ── asking ─────────────────────────────────────────────────────────────────
 $('#send').addEventListener('click', async () => {
   const text = $('#box').value.trim();
@@ -1739,6 +1791,8 @@ $('#send').addEventListener('click', async () => {
   ask({ chip: null, request: text });
 });
 $('#box').addEventListener('input', (e) => {
+  // Warm the place she is typing about, before she sends.
+  prefetchWhileTyping(e.target.value);
   e.target.style.height = 'auto';
   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   // The circular send stays dimmed until there is something to send.
