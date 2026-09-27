@@ -2526,7 +2526,8 @@ async function renderAnswer(holder, bubble, d) {
     const picks = picksFrom(r, d);
     remainingPicks = picks.slice(1);
     renderDecisionCard(holder, d, picks, 0);
-    (holder.lastElementChild ?? holder).append(feedbackBar(d));
+    // The card already asks "Would you go?" and offers Wrong inside
+    // Details; the old bar asked both again, one above the other.
     renderContext();
     scroll();
     return;

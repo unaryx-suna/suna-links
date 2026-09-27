@@ -142,10 +142,25 @@ function factsLine(pick) {
   const bits = [];
   if (pick.walk_minutes != null) bits.push(`${pick.walk_minutes} min walk`);
   else if (pick.km != null) bits.push(`${pick.km} km away`);
-  if (pick.open_till) bits.push(`Open till ${pick.open_till}`);
+  // "Open till 14:30–00:00" is a range wearing the wrong label. The hours
+  // string can hold several sessions; what the card face wants is the last
+  // closing time of the day.
+  const closes = lastCloseOf(pick.open_till);
+  if (closes) bits.push(`Open till ${closes}`);
+  else if (pick.open_till) bits.push(pick.open_till);
   else if (pick.open_now === false) bits.push('Closed now');
   if (pick.price_level) bits.push('·'.repeat(0) + '$'.repeat(Math.max(1, Number(pick.price_level))));
   return bits;
+}
+
+/// The last closing time in an hours string, or null when it is not a
+/// simple one. "09:00–17:30" → "17:30"; "08:00–13:00, 14:00–04:00" → "04:00".
+export function lastCloseOf(hours) {
+  const t = String(hours ?? '');
+  if (!t.trim() || /closed/i.test(t)) return null;
+  if (/open 24 hours/i.test(t)) return null;
+  const times = [...t.matchAll(/(\d{1,2}:\d{2}|\d{1,2}\s?[ap]m)/gi)].map((m) => m[1]);
+  return times.length >= 2 ? times[times.length - 1] : null;
 }
 
 export function decisionCard(pick, {

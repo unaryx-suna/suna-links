@@ -8,17 +8,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap');
 
 .dx {
-  --ink: #111;
+  /* Inherit the PAGE's palette. The lab is a true-black Apple-style ground
+   * (UI-R2), and a card painted #fff on top of it is a white slab in a dark
+   * app — which is what the first screenshot showed. The brand colours the
+   * brief names are the accents, not the surface. */
+  --ink: var(--text, #111);
+  --paper: var(--card, #1c1c1e);
   --sand: #F6CB94;
-  --muted: #C2C2C2;
-  --paper: #fff;
-  --line: color-mix(in srgb, var(--ink) 12%, transparent);
+  --muted: var(--muted, #C2C2C2);
+  --line: var(--line, rgba(84,84,88,0.65));
   --radius: 18px;
   font-family: Urbanist, system-ui, -apple-system, sans-serif;
   color: var(--ink);
-}
-@media (prefers-color-scheme: dark) {
-  .dx:not([data-theme="light"]) { --ink: #F4F2EF; --paper: #141315; --muted: #6E6B68; }
 }
 
 /* ── Suna ─────────────────────────────────────────────────────────────── */
