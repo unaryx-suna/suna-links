@@ -621,7 +621,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v37';
+} from './lab/decisions.js?v=lab-v38';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v37';
+const BUILD = 'lab-v38';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1823,7 +1823,7 @@ function renderAskScreen() {
     // would be a step that does nothing.
     onExample: async (text) => {
       $('#box').value = text;
-      setStatus("Checking what's open", true);
+      if (!DECISIONS_UI) setStatus("Checking what's open", true);
       await ensureLocation();
       prefetchFacts(location_);
       ask({ chip: null, request: text, askSource: 'example' });
@@ -1835,6 +1835,15 @@ function renderAskScreen() {
   fetchGreeting().then((g) => {
     if (askScreenNode?.isConnected) updateSuna(askScreenNode.querySelector('.sunablock'), g.face, g.text);
   });
+}
+
+/// The line she opens with, before the server has said anything. Deliberately
+/// one of the plain ones: the library lives server-side and picking from a
+/// copy here would break the no-repeat rule. The server's own `started` line
+/// replaces this within a second or two.
+function openingLine(text) {
+  const place = placeInText(text) || topicSubject?.name || location_?.name;
+  return place ? `Checking ${place}\u2026` : 'Right, let me look\u2026';
 }
 
 /// GO-LIVE §3.2. While Suna is looking there is nothing to type: the
@@ -1885,7 +1894,7 @@ function renderChips() {
       const b = el('button', 'chip', text);
       b.disabled = busy;
       b.onclick = async () => {
-        setStatus("Checking what's open", true);
+        if (!DECISIONS_UI) setStatus("Checking what's open", true);
         await ensureLocation();
         ask({ chip: null, request: text, askSource: 'example' });
       };
@@ -1897,7 +1906,7 @@ function renderChips() {
     b.dataset.chip = s.chip;
     b.disabled = busy;
     b.onclick = async () => {
-      setStatus("Checking what's open", true);
+      if (!DECISIONS_UI) setStatus("Checking what's open", true);
       await ensureLocation();
       // Again on the tap: the fix may have moved since load, and a warm cell
       // is the difference between an instant answer and a 20-second wait.
@@ -1920,7 +1929,7 @@ async function answerChip(c) {
     else if (c.confirm === 'correct') await confirmPref(q.assumptionIndex, true, c.reply);
     else await confirmPref(q.assumptionIndex, false);
   }
-  setStatus(c.widen ? 'Looking wider' : "Checking what's open", true);
+  if (!DECISIONS_UI) setStatus(c.widen ? 'Looking wider' : "Checking what's open", true);
   await ensureLocation();
   // A "Yes, look" is the same question asked wider, not a new question — so
   // it re-sends what was originally asked, not the word "Yes". The server
@@ -2325,7 +2334,7 @@ $('#send').addEventListener('click', async () => {
   // §2: the instant the tester sends, before anything is awaited. Measured at
   // 1001 ms when this sat after `await ensureLocation()` — that await can
   // include a reverse-geocode round trip, and the target is one second.
-  setStatus("Checking what's open", true);
+  if (!DECISIONS_UI) setStatus("Checking what's open", true);
   await ensureLocation();
   ask({ chip: null, request: text, askSource: 'typed' });
 });
@@ -2402,11 +2411,21 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   holder.append(inner);
   $('#convo-col').append(holder);
 
-  // §2, Ether 25 Sep: a stage line on screen within 1 second of sending. Shown
-  // by the page the instant the tester sends — waiting for the server's first
-  // event puts it behind a network round trip and the whole facts step, which
-  // is exactly the silence that reads as broken.
-  setStatus("Checking what's open", true);
+  // §1, Brian 27 Sep: Suna shows the INSTANT Send is tapped. Not after the
+  // round trip, not after the facts step — measured, `started` was arriving
+  // at 17-19 s because it sat below the lookup on the server.
+  //
+  // So the client draws the waiting screen and puts a searching line on it
+  // straight away. The server's `started` replaces the text when it lands;
+  // the screen is already there.
+  if (DECISIONS_UI) {
+    sunaNode = sunaBlock('searching', openingLine(shown));
+    holder.append(sunaNode);
+    msToFirstLine = 0;
+    setStatus('', false);
+  } else {
+    setStatus("Checking what's open", true);
+  }
   // GO-LIVE §3.2. Her line ran underneath the text box. While she is
   // looking there is nothing to type, so the composer goes and Cancel takes
   // its place, as Loading.dc.html has it.
@@ -2496,7 +2515,13 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         }
         // §0a. The divider is the tester's only signal that we have re-scoped,
         // so it shows before the answer rather than after it.
-        if (event === 'topic' && d.is_new) { currentTopic = d; showTopicDivider(d, holder); }
+        // §1: no "New: … Start fresh" divider in decisions mode. Each ask is
+        // already its own screen, so a divider announces a change nobody can
+        // see — it is the thread's furniture, and there is no thread.
+        if (event === 'topic' && d.is_new) {
+          currentTopic = d;
+          if (!DECISIONS_UI) showTopicDivider(d, holder);
+        }
         if (event === 'stage') {
           // UI-DECISIONS §1/§2. Every event carries Suna's line and her face,
           // chosen server-side so it is never a repeat. The old status line
@@ -2558,7 +2583,18 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         // A transient upstream failure. The tester sees a sentence, not a
         // status code; the code is in the function log.
         if (event === 'unavailable') { inner.textContent = d.message; }
-        if (event === 'error')  { inner.textContent = `That didn't work: ${d.message}`; }
+        // §2. A request that fails says so, in her voice, with a way out.
+        // The phone showed the browser's raw "Load failed" for two minutes.
+        if (event === 'error') {
+          answered = true;
+          if (DECISIONS_UI) {
+            showWaiting(false);
+            holder.replaceChildren(errorCard(d, request || CHIP_TEXT[chip] || ''));
+            scroll();
+          } else {
+            inner.textContent = `That didn't work: ${d.message}`;
+          }
+        }
         if (event === 'done') {
           answered = true;
           // v2: nothing was found. Replace the whole turn with the offer —
@@ -2594,7 +2630,13 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
     // what happened with `inner is not defined`: a complete, correct answer
     // was overwritten by an error about a variable name.
     reportClientError(e, { ref: lastAnswerRef, where: 'ask' });
-    if (!answered) inner.textContent = `That didn't work: ${e.message}`;
+    // §2. A dropped stream is the case Brian hit: the browser's own
+    // "Load failed", with no way forward. Her line and a Try again.
+    if (!answered && DECISIONS_UI) {
+      showWaiting(false);
+      holder.replaceChildren(errorCard({ message: null }, request || CHIP_TEXT[chip] || ''));
+      scroll();
+    } else if (!answered) { inner.textContent = `That didn't work: ${e.message}`; }
     else console.error('[lab] after the answer:', e);
   } finally {
     clearTimeout(slowTimer);
@@ -3511,6 +3553,26 @@ async function renderTracker() {
 ///
 /// Neither reply costs the tester one of their five: the server excludes a
 /// widen request from the count, the same way it excludes a reply.
+/// §2. Line 40, and Try again. `d.message` is the server's own sentence
+/// when it has one ("That took too long, so I stopped"); her line is the
+/// fallback for anything else.
+function errorCard(d, request) {
+  const host = el('div', 'dx');
+  const block = sunaBlock('sheepish', d?.message || "I'm having a moment. Try me again in a sec?", { small: true });
+  host.append(block);
+  const row = el('div', 'actions');
+  const again = el('button', 'go', 'Try again');
+  again.type = 'button';
+  again.onclick = async () => {
+    again.disabled = true;
+    await ensureLocation();
+    ask({ chip: null, request, askSource: 'retry' });
+  };
+  row.append(again);
+  host.append(row);
+  return host;
+}
+
 function noFactsCard(d, request) {
   const card = el('div', 'refused');
   // GO-LIVE §2.2. v2.5 puts the line in `nothing_fits`: "I haven't explored
