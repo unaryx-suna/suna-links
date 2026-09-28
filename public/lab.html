@@ -621,7 +621,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v41';
+} from './lab/decisions.js?v=lab-v42';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +634,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v41';
+const BUILD = 'lab-v42';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1862,6 +1862,7 @@ function renderAskScreen() {
     onExample: async (text) => {
       $('#box').value = text;
       if (!DECISIONS_UI) setStatus("Checking what's open", true);
+      beginWaiting(text);
       await ensureLocation();
       prefetchFacts(location_);
       ask({ chip: null, request: text, askSource: 'example' });
@@ -1933,6 +1934,7 @@ function renderChips() {
       b.disabled = busy;
       b.onclick = async () => {
         if (!DECISIONS_UI) setStatus("Checking what's open", true);
+        beginWaiting(text);
         await ensureLocation();
         ask({ chip: null, request: text, askSource: 'example' });
       };
@@ -2373,6 +2375,7 @@ $('#send').addEventListener('click', async () => {
   // 1001 ms when this sat after `await ensureLocation()` — that await can
   // include a reverse-geocode round trip, and the target is one second.
   if (!DECISIONS_UI) setStatus("Checking what's open", true);
+  beginWaiting(text);
   await ensureLocation();
   ask({ chip: null, request: text, askSource: 'typed' });
 });
@@ -2402,15 +2405,48 @@ const CHIP_TEXT = { hours: "I've got a few hours", weekend: 'This weekend', trip
 let askedLast = '';
 let lastAsk = '';
 
+/// A-0228 follow-up. "Suna must show the instant Send is tapped" — and the
+/// send button awaits a location fix first, which on a cold permission is
+/// 1.8 s of nothing. So the screen is painted HERE, on the tap, and ask()
+/// adopts it instead of painting its own.
+///
+/// The same bug was fixed once for the old status bar; the comment in the
+/// send handler still records it. The decisions waiting screen inherited it
+/// because it is painted inside ask(), which is behind the same await.
+let waitingPainted = false;
+function beginWaiting(text) {
+  if (!DECISIONS_UI || readOnly || busy) return;
+  stowComposer();
+  $('#convo-col').replaceChildren();
+  document.body.classList.remove('askmode');
+  askScreenNode = null;
+  const named = placeInText(text);
+  if (named) { topicSubject = { name: named, source: 'message' }; renderContext(); }
+  $('#convo-col').append(meTurn(text));
+  $('#convo-col').append(askSummary(text));
+  const holder = el('div', 'turn suna');
+  holder.append(el('div', 'bubble'));
+  $('#convo-col').append(holder);
+  sunaNode = sunaBlock('searching', openingLine(text));
+  holder.append(sunaNode);
+  showWaiting(true, null);
+  scroll();
+  waitingPainted = true;
+  return holder;
+}
+
 async function ask({ chip, request, scopeOverride, widenFacts, askSource,
                     subjectOverride, notThis, alreadySuggested }) {
   if (readOnly) return;
+  const adopted = waitingPainted ? $('#convo-col').querySelector('.turn.suna') : null;
+  waitingPainted = false;
   busy = true; setBusy(true);
   if (!widenFacts) askedLast = request || CHIP_TEXT[chip] || '';
   // UI-DECISIONS §8. Every measure is per send.
   sentAt = Date.now();
-  msToFirstLine = null; msToChips = null; msToCard = null;
-  sunaNode = null; lastParse = null;
+  msToFirstLine = adopted ? 0 : null; msToChips = null; msToCard = null;
+  if (!adopted) sunaNode = null;
+  lastParse = null;
   lastAsk = request || CHIP_TEXT[chip] || '';
   if (!notThis) { notThisCount = 0; notThisReasons.length = 0; }
   // Out of the way while the answer streams — offering the next move
@@ -2420,7 +2456,7 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // GO-LIVE §3.1. "The design has no thread: each ask is its own screen."
   // Mode B keeps today's screens, but it is not known to be B yet — and a
   // plan replaces the column anyway, so clearing here is safe for both.
-  if (DECISIONS_UI) {
+  if (DECISIONS_UI && !adopted) {
     // Leaving the Ask screen: the composer goes back to the dock, where
     // Cancel and the status line live, so it can be hidden as one thing.
     stowComposer();
@@ -2433,21 +2469,21 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // server uses, so the header can be right from the first frame; the
   // server's fuller subject ("Bukit Bintang, Kuala Lumpur") replaces it a
   // second later, and a null one never wipes it.
-  if (DECISIONS_UI) {
+  if (DECISIONS_UI && !adopted) {
     const named = placeInText(shown);
     if (named) { topicSubject = { name: named, source: 'message' }; renderContext(); }
   }
   // Ask-chip.dc.html keeps the message as a bubble above the chips: it is
   // what she is answering, and without it the chips are the only record of
   // a question the tester may have typed thirty words of.
-  $('#convo-col').append(meTurn(shown));
+  if (!adopted) $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
   scroll();
 
-  const holder = el('div', 'turn suna');
-  const inner = el('div', 'bubble');
-  holder.append(inner);
-  $('#convo-col').append(holder);
+  const holder = adopted ?? el('div', 'turn suna');
+  const inner = holder.querySelector('.bubble') ?? el('div', 'bubble');
+  if (!inner.isConnected) holder.append(inner);
+  if (!adopted) $('#convo-col').append(holder);
 
   // §1, Brian 27 Sep: Suna shows the INSTANT Send is tapped. Not after the
   // round trip, not after the facts step — measured, `started` was arriving
@@ -2456,10 +2492,12 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // So the client draws the waiting screen and puts a searching line on it
   // straight away. The server's `started` replaces the text when it lands;
   // the screen is already there.
-  if (DECISIONS_UI) {
+  if (DECISIONS_UI && !adopted) {
     sunaNode = sunaBlock('searching', openingLine(shown));
     holder.append(sunaNode);
     msToFirstLine = 0;
+    setStatus('', false);
+  } else if (DECISIONS_UI) {
     setStatus('', false);
   } else {
     setStatus("Checking what's open", true);
