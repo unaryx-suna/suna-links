@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v51';
+} from './lab/decisions.js?v=lab-v52';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v51';
+const BUILD = 'lab-v52';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2411,7 +2411,10 @@ function ensureTail() {
   $('#convo-col').classList.toggle('empty', empty);
   // "Report this chat" is in the ⋯ menu; it has no business appearing under
   // a chat with nothing in it.
-  $('#tail-prompt').hidden = !empty;
+  // Null-safe: this is rebuild code, and one missing child must not throw on
+  // the path that renders every answer.
+  const prompt = $('#tail-prompt');
+  if (prompt) prompt.hidden = !empty;
   return tailEl;
 }
 
@@ -2724,7 +2727,10 @@ function clearPending() {
   }
   // A question with tap buttons, unanswered. The answer replaced it.
   lastQuestion = null;
-  $('#tail')?.replaceChildren?.();
+  // NOT the tail: emptying it destroyed #tail-prompt and #chips inside the
+  // cached node, and ensureTail then dereferenced #tail-prompt and threw on
+  // every answer. The tail's chips are example prompts, not an unanswered
+  // question — they were never in scope here.
 }
 
 function showMismatch(holder, d) {
