@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v46';
+} from './lab/decisions.js?v=lab-v47';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v46';
+const BUILD = 'lab-v47';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -759,6 +759,9 @@ const PREF_KEYS = ['transport', 'company', 'budget', 'pace', 'diet', 'interests'
 
 let tester = null;
 let location_ = null;
+/// True while a fix is in flight, so the header can say "Finding you…"
+/// rather than naming a place we do not have.
+let locating = false;
 let busy = false;
 let lastQuestion = null;      // drives the answer chips in §4
 let weather_ = null;          // {temp_c, conditions, at} — see refreshWeather
@@ -776,6 +779,7 @@ let sessionCode = null;
 // LAB-R5 §2. What's left today, read from the same function the server
 // enforces with — so the number on screen is never a guess.
 let dailyState = null;
+let clockTimer = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -1028,6 +1032,15 @@ async function openApp() {
 
   renderContext();
   renderChips();
+  // The subtitle carries the local time and nothing was redrawing it, so a
+  // tab left open showed the minute it was opened at. Every 15 s, and again
+  // the moment the tab comes back — a phone that has been asleep is the
+  // worst case, not the rare one.
+  clearInterval(clockTimer);
+  clockTimer = setInterval(renderContext, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) renderContext();
+  });
 
   await ensureSessionCode();
 
@@ -1141,6 +1154,8 @@ function forgetEverything() {
   // code step for the account you just left.
   try { sessionStorage.removeItem(GATE_KEY); } catch {}
   clearInterval(resendTimer);
+  clearInterval(clockTimer);
+  locating = false;
 
   // Back to the sign-in screen, with nothing of theirs still on it.
   //
@@ -1503,10 +1518,20 @@ function rightNow() {
 /// pushed the bar's buttons off the edge, so the trailing administrative word
 /// is dropped — the district or neighbourhood is what a person would say.
 function shortPlace(name) {
-  if (!name) return 'somewhere';
+  if (!name) return null;
   let t = String(name).split(',')[0].trim();
   t = t.replace(/\s+(District|Province|Prefecture|County|Municipality|Region|Territory|City)$/i, '');
-  return t || 'somewhere';
+  return t || null;
+}
+
+/// What the header says when there is no place yet.
+///
+/// It used to say "somewhere", which reads like a place and is a lie — a new
+/// tester saw it before they had sent anything at all. Say what is actually
+/// happening instead: we are asking, or we could not, and tapping fixes it.
+function placeless() {
+  if (locating) return 'Finding you…';
+  return 'Set your location';
 }
 
 /// Keep the thread clear of the two fixed bars by MEASURING them.
@@ -1599,9 +1624,7 @@ function renderContext() {
   const n = rightNow();
   // The header follows the topic. The tester's own location comes back the
   // moment a topic has no subject of its own.
-  $('#ctx-place').textContent = topicSubject?.name
-    ? shortPlace(topicSubject.name)
-    : shortPlace(n.location);
+  $('#ctx-place').textContent = shortPlace(topicSubject?.name ?? n.location) ?? placeless();
   // The daily counter rides here, in the subtitle, rather than as a third
   // thing in the bar: R5 §2 still requires a visible count, and the bar is
   // allowed two buttons and no more.
@@ -1839,8 +1862,11 @@ async function getFix() {
 
 /// A fresh fix, saved and rendered. Null if the phone would not give one.
 async function refreshLocation() {
+  locating = true;
+  renderContext();
   const got = await getFix();
-  if (!got) return null;
+  locating = false;
+  if (!got) { renderContext(); return null; }
   got.name = await reverseName(got.lat, got.lng, got.accuracy_m);
   location_ = got;
   await saveTester({ last_location: location_ });
