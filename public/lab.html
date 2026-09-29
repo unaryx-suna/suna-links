@@ -1252,6 +1252,11 @@ function renderContext() {
   if (topicSubject?.name) {
     const src = String(topicSubject.source ?? '');
     if (src.startsWith('message')) bits.push('From your message');
+    // A country resolved to its arrival city is not "Your location", which
+    // is what A-0245 printed under a header reading Ulaanbaatar while the
+    // phone was in Beijing. Say where it came from.
+    else if (src === 'assumed') bits.push('Assuming you land here · tap to change');
+    else if (src === 'chip') bits.push('You picked this');
     else bits.push(...placeProvenance());
     if (dailyState && !dailyState.exempt) {
       const q0 = Number(dailyState.quick_left ?? 0);
