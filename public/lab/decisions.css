@@ -186,7 +186,7 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx.chipsummary .pencil { flex: none; opacity: .7; }
 
 /* The ask, before the parse lands. Loading.dc.html has the chip row here. */
-.dx.asksummary { padding: 6px 20px 2px; }
+.dx.asksummary { padding: 0; }   /* an anchor for the chips, not a row */
 .dx .summaryline {
   font-size: 15px; color: var(--dx-muted); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

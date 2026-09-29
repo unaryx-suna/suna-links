@@ -2152,10 +2152,15 @@ function showMismatch(holder, d) {
 /// What you asked, in one muted line at the top, until the chips replace
 /// it. The parse can fail or be slow, and a screen that shows nothing of
 /// the question while it thinks is a screen you cannot check.
-function askSummary(text) {
-  const row = el('div', 'dx asksummary');
-  row.append(el('div', 'summaryline', text));
-  return row;
+/// The slot the understood chips land in, once the parse returns.
+///
+/// It used to print the tester's message verbatim — directly under the
+/// bubble that already said it, so every waiting screen showed the same
+/// sentence twice (seen on the phone-sized shots, 29 Sep). The boards have
+/// nothing here before the chips arrive, so neither does this: an anchor
+/// with no words.
+function askSummary(_text) {
+  return el('div', 'dx asksummary');
 }
 
 function renderChipsFor(holder, parse) {
