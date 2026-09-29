@@ -394,6 +394,12 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .eatname { font-size: 16px; font-weight: 600; }
 .dx .eatlocal { font-size: 14px; color: var(--dx-muted); }
 .dx .eatwhat { font-size: 14px; line-height: 1.4; color: #D9D4CC; margin-top: 4px; }
+/* v2.6's `where`: a small grey tag, under the dish, quieter than its name. */
+.dx .eatwhere {
+  align-self: flex-start; margin-top: 6px; font-size: 12px; line-height: 1.3;
+  color: var(--dx-muted); background: rgba(255,255,255,.06);
+  border-radius: 8px; padding: 3px 7px;
+}
 
 .dx .daystrip { display: flex; flex-direction: column; gap: 10px; }
 .dx .daycard {

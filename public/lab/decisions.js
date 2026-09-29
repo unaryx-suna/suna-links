@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v49';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v50';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v49';
+  link.href = '/lab/decisions.css?v=lab-v50';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -731,20 +731,28 @@ function stopNames(day, nameOf) {
 export function dayHeading(block, day, nameOf) {
   const names = stopNames(day, nameOf);
   const label = String(block?.label ?? '').trim();
+  const dayLabel = String(day?.day ?? '').trim();
   const partOfDay = /\b(morning|afternoon|evening|night|weekend|arrival|arriving|departure|departing|dawn|dusk|midday|noon|lunch|dinner|breakfast)\b/i;
-  // The label is only a heading if it NAMES one of the day's places. A-0233
-  // came back labelled "Weekend" for a two-day block, so both days read
-  // "Weekend" — a heading that says when, for the second time.
-  //
-  // And a block covering several days cannot title them all: each day is
-  // headed by its own first stop.
+
+  // v2.6 writes the day as "Day N · <anchor place>", so the anchor is the
+  // writer's own choice of what the day is about. Take it.
+  const anchor = /·/.test(dayLabel) ? dayLabel.split('·').pop().trim() : '';
+  if (anchor && !partOfDay.test(anchor) && anchor.toLowerCase() !== 'free') return anchor;
+
+  // The block label counts only when it names one of the day's places.
   const oneDay = (block?.days ?? []).length <= 1;
   const namesAPlace = label && names.some((n) => {
-    const p = String(n).toLowerCase(), l = label.toLowerCase();
-    return l.includes(p) || p.includes(l);
+    const a = String(n).toLowerCase(), l = label.toLowerCase();
+    return l.includes(a) || a.includes(l);
   });
   if (label && oneDay && !partOfDay.test(label) && namesAPlace) return label;
-  return names[0] ?? (label && !partOfDay.test(label) ? label : String(block?.base ?? 'Your day'));
+
+  // Brian, 29 Sep: "A day's title is never the first stop. Use the writer's
+  // anchor, or the LONGEST stop if there's none." The first stop is an
+  // accident of ordering — a coffee before the thing you came for — and it
+  // made the card read as though the day were about the coffee.
+  const longest = [...names].sort((a, b) => String(b).length - String(a).length)[0];
+  return longest ?? (label && !partOfDay.test(label) ? label : String(block?.base ?? 'Your day'));
 }
 
 /// §4. The strip: one card per day, titled by where it goes.
@@ -893,6 +901,10 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       card.type = 'button';
       card.append(el('span', 'eatname', String(dish.name)));
       if (dish.local_name) card.append(el('span', 'eatlocal', String(dish.local_name)));
+      // v2.6's `where`. Nothing at all when it is null or missing — an empty
+      // grey tag under a dish reads as a place we failed to name.
+      const whereText = String(dish.where ?? '').trim();
+      if (whereText) card.append(el('span', 'eatwhere', whereText));
       const what = dish.what ? el('span', 'eatwhat', String(dish.what)) : null;
       if (what) {
         what.hidden = true;

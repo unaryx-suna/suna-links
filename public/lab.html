@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v49';
+} from './lab/decisions.js?v=lab-v50';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v49';
+const BUILD = 'lab-v50';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2703,10 +2703,29 @@ let remainingPicks = [];   // picks not yet shown, reordered by the last reason
 /// It used to append its own `.sunaline` in a box of its own, so the
 /// mismatch line arrived in a different style from every other line and sat
 /// beside whatever she was already saying.
+/// The answer has landed: nothing that was asked on the way there is still
+/// on screen.
+///
+/// Brian, 29 Sep, on A-0288: the plan arrived under a waiting line, and the
+/// city-choice and mismatch buttons from earlier in the same ask were still
+/// sitting there, offering to change a search that had already finished.
+/// Tapping one would have re-run the whole thing.
+function clearPending() {
+  // Not hushSuna: `found` has just been promoted into her line and that is
+  // the line the answer arrives under. Only the QUEUE goes.
+  // Her waiting line, and anything still asking a question.
+  for (const sel of ['.dx.citychoice', '.dx.mismatch', '.chips.answerchips']) {
+    for (const n of $('#convo-col').querySelectorAll(sel)) n.remove();
+  }
+  // A question with tap buttons, unanswered. The answer replaced it.
+  lastQuestion = null;
+  $('#tail')?.replaceChildren?.();
+}
+
 function showMismatch(holder, d) {
   const line = (d.lines ?? [])[0];
   if (line && sunaNode) updateSuna(sunaNode, d.face ?? 'mismatch', line, false);
-  const box = el('div', 'dx');
+  const box = el('div', 'dx mismatch');
   if (line && !sunaNode) box.append(el('div', 'sunaline', line));
   const row = el('div', 'chips');
   for (const [label, which] of [[d.said, 'said'], [d.device, 'device']]) {
@@ -2932,6 +2951,7 @@ function renderDecisionCard(holder, d, picks, i = 0) {
   // could see her next to. So the view holds on HER until she has shrunk, and
   // then follows the card down.
   sunaFound(sunaNode);
+  clearPending();
   if (sunaNode) {
     holdScroll(2200);
     const c = $('#convo');
@@ -3735,7 +3755,7 @@ async function renderAnswer(holder, bubble, d) {
     // A-0228: she stayed full size with "Checking Mongolia…" above the
     // plan. An answer has landed, so she shrinks, the same as for a card.
     sunaFound(sunaNode);
-    hushSuna(sunaNode);
+    clearPending();
     const host = el('div');
     holder.append(host);
     renderPlanScreens(host, r, d);
