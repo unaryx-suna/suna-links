@@ -512,6 +512,8 @@
     <div class="sheetc">
       <button id="m-report">Report this chat</button>
       <div class="sep"></div>
+      <button id="m-signout">Sign out</button>
+      <div class="sep"></div>
       <button id="m-session"><span>Session <span id="m-session-code">S-…</span></span><span class="tick" id="m-session-tick"></span></button>
       <div class="sep"></div>
       <button id="m-fresh">Start fresh</button>
@@ -623,7 +625,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v44';
+} from './lab/decisions.js?v=lab-v45';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -636,7 +638,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v44';
+const BUILD = 'lab-v45';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -809,6 +811,67 @@ $('#more-btn').addEventListener('click', () => {
   ($('#menu').dataset.open === '1') ? closeMenu() : openMenu();
 });
 $('#menu-scrim').addEventListener('click', closeMenu);
+
+// Sign out. There was no way to, which meant a shared machine stayed signed
+// in as whoever used it last — and a tester who wanted to try a second
+// account had to clear site data by hand.
+//
+// Everything this page holds about the person goes: the auth session, the
+// module state, the saved location and topic in memory, and the writer key
+// an older build left in localStorage. The page then shows the gate again
+// without a reload, so a half-cleared screen can never be what they see.
+$('#m-signout').addEventListener('click', async () => {
+  closeMenu();
+  try { await db.auth.signOut(); } catch (e) { console.warn('[lab] signOut', e?.message ?? e); }
+  forgetEverything();
+});
+
+/// Every piece of this tester the page is holding. Called on sign-out.
+///
+/// The saved location lives in `lab_testers.last_location` as well, which is
+/// right — it belongs to the account, not the browser — so this clears the
+/// copy in memory and leaves the row alone.
+function forgetEverything() {
+  tester = null;
+  location_ = null;
+  weather_ = null;
+  currentTopic = null;
+  tripDetails = [];
+  lastParse = null;
+  lastQuestion = null;
+  lastAnswerRef = null;
+  sessionCode = null;
+  dailyState = null;
+  factsByName = new Map();
+  answersThisSession = 0;
+  readOnly = false;
+  busy = false;
+  askedLast = '';
+  lastAsk = '';
+  sunaNode = null;
+  askScreenNode = null;
+  sessionId = crypto.randomUUID();
+  // Anything an older build left behind, not just the key we know about:
+  // this is the one moment the page is allowed to be thorough.
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('lab.')) localStorage.removeItem(k);
+    }
+  } catch { /* private mode; nothing was stored anyway */ }
+
+  // Back to the sign-in screen, with nothing of theirs still on it.
+  $('#convo-col').replaceChildren();
+  document.body.classList.remove('askmode', 'dx-answered');
+  $('#box').value = '';
+  $('#panel').dataset.open = '0';
+  $('#app').hidden = true;
+  $('#gate').hidden = false;
+  $('#g-email').value = '';
+  $('#g-code').value = '';
+  $('#g-code').hidden = true;
+  $('#g-go').textContent = 'Send code';   // the gate's own first label
+  $('#g-err').textContent = '';
+}
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
 $('#m-report').addEventListener('click', () => {
