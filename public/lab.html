@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v50';
+} from './lab/decisions.js?v=lab-v51';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v50';
+const BUILD = 'lab-v51';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -780,6 +780,9 @@ let sessionCode = null;
 // enforces with — so the number on screen is never a guess.
 let dailyState = null;
 let clockTimer = null;
+/// The last stage event of the ask in flight, so the answer knows whether
+/// her line is a waiting line (clear it) or `found` (keep it).
+let lastStage = null;
 
 // ── sign in ────────────────────────────────────────────────────────────────
 async function boot() {
@@ -2711,8 +2714,10 @@ let remainingPicks = [];   // picks not yet shown, reordered by the last reason
 /// sitting there, offering to change a search that had already finished.
 /// Tapping one would have re-run the whole thing.
 function clearPending() {
-  // Not hushSuna: `found` has just been promoted into her line and that is
-  // the line the answer arrives under. Only the QUEUE goes.
+  // Her WAITING line goes: "Still going." under a finished plan is a lie
+  // about what is happening. `found` stays — that one is about the answer
+  // that just landed, and it is the line the card is meant to arrive under.
+  if (lastStage !== 'found' && sunaNode) hushSuna(sunaNode);
   // Her waiting line, and anything still asking a question.
   for (const sel of ['.dx.citychoice', '.dx.mismatch', '.chips.answerchips']) {
     for (const n of $('#convo-col').querySelectorAll(sel)) n.remove();
@@ -3161,6 +3166,7 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // UI-DECISIONS §8. Every measure is per send.
   sentAt = Date.now();
   msToFirstLine = adopted ? 0 : null; msToChips = null; msToCard = null;
+  lastStage = null;
   if (!adopted) sunaNode = null;
   lastParse = null;
   lastAsk = request || CHIP_TEXT[chip] || '';
@@ -3315,6 +3321,7 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           if (!DECISIONS_UI) showTopicDivider(d, holder);
         }
         if (event === 'stage') {
+          lastStage = d.event ?? d.stage ?? null;
           // UI-DECISIONS §1/§2. Every event carries Suna's line and her face,
           // chosen server-side so it is never a repeat. The old status line
           // is still set for Mode B, which keeps today's screens.
