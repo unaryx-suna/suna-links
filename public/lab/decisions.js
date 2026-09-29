@@ -877,8 +877,12 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       card.type = 'button';
       const words = el('div', 'daywords');
       words.append(el('div', 'eyebrow', day?.day ? String(day.day) : `Day ${n}`));
-      words.append(el('div', 'daytitle', dayHeading(block, day, nameOf)));
-      const stops = stopNames(day, nameOf);
+      // The heading already names one stop; listing it again underneath
+      // reads as two of the same place (A-0246:
+      // "Gandantegchinlen Monastery / Gandantegchinlen Monastery · …").
+      const heading = dayHeading(block, day, nameOf);
+      words.append(el('div', 'daytitle', heading));
+      const stops = stopNames(day, nameOf).filter((n) => String(n) !== heading);
       if (stops.length) words.append(el('div', 'daystops', stops.join(' · ')));
       card.append(words);
       card.append(el('span', 'chev', '›'));
