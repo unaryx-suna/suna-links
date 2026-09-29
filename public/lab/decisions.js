@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v42';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v43';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v42';
+  link.href = '/lab/decisions.css?v=lab-v43';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -767,6 +767,18 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
   const title = headline ?? String(parsed?.title ?? '').trim();
   if (title) root.append(el('h1', 'planhead', title));
 
+  // §4. What the plan is built on, in the model's own words. Not rendered
+  // before this version: A-0237 and A-0238 both wrote a `context` line and a
+  // `meta` count and both were dropped on the floor.
+  const context = String(parsed?.context ?? '').trim();
+  const meta = String(parsed?.meta ?? '').trim();
+  if (context || meta) {
+    const lead = el('div', 'planlead');
+    if (meta) lead.append(el('div', 'eyebrow', meta));
+    if (context) lead.append(el('p', 'planctx', context));
+    root.append(lead);
+  }
+
   // "Sort these first" survives from the old screens because it is the one
   // part a tester has to act on before the trip, not while reading it.
   const first = (parsed?.sort_first ?? []).filter((x) => x?.headline);
@@ -780,6 +792,76 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       words.append(el('span', 'sortline', f.headline));
       if (f.detail) words.append(el('span', 'src', f.detail));
       row.append(box, words);
+      sec.append(row);
+    }
+    root.append(sec);
+  }
+
+  // Where to stay, when the answer has a view on it. One area, the lines
+  // behind it, the tradeoff, and the alternative if there is one.
+  const stay = parsed?.stay;
+  if (stay?.area) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Where to stay'));
+    sec.append(el('div', 'boxhead', String(stay.area)));
+    for (const line of (stay.lines ?? [])) {
+      if (line) sec.append(el('p', 'boxline', String(line)));
+    }
+    if (stay.tradeoff) sec.append(el('p', 'src', String(stay.tradeoff)));
+    if (stay.alternative?.area) {
+      sec.append(el('p', 'src', `Or ${stay.alternative.area}.`));
+    }
+    root.append(sec);
+  }
+
+  // One thing worth knowing before the trip, with what it costs.
+  const wk = parsed?.worth_knowing;
+  if (wk?.line) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Worth knowing'));
+    sec.append(el('p', 'boxline', String(wk.line)));
+    if (wk.cost) sec.append(el('p', 'src', String(wk.cost)));
+    root.append(sec);
+  }
+
+  // Getting there: the one thing to do at each arrival point.
+  const arriving = (parsed?.getting_there ?? []).filter((x) => x?.thing);
+  if (arriving.length) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Getting there'));
+    for (const g of arriving) {
+      const row = el('div', 'boxrow');
+      const where = nameOf?.(g);
+      if (where) row.append(el('span', 'boxhead', where));
+      row.append(el('span', 'boxline', String(g.thing)));
+      sec.append(row);
+    }
+    root.append(sec);
+  }
+
+  // What to book or buy before leaving.
+  const setup = (parsed?.setup ?? []).filter((x) => x?.name);
+  if (setup.length) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Sort before you go'));
+    for (const x of setup) {
+      const row = el('div', 'boxrow');
+      row.append(el('span', 'boxhead', String(x.name)));
+      if (x.for) row.append(el('span', 'src', String(x.for)));
+      sec.append(row);
+    }
+    root.append(sec);
+  }
+
+  // What the plan leaves out, and what keeping it would have cost.
+  const dropped = (parsed?.drop ?? []).filter((x) => x?.save_id);
+  if (dropped.length) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Left out'));
+    for (const x of dropped) {
+      const row = el('div', 'boxrow');
+      row.append(el('span', 'boxhead', nameOf?.({ place_id: x.save_id }) ?? String(x.save_id)));
+      if (x.cost_of_keeping) row.append(el('span', 'src', String(x.cost_of_keeping)));
       sec.append(row);
     }
     root.append(sec);
@@ -806,6 +888,67 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
     }
   }
   root.append(strip);
+
+  // Brian, 29 Sep: A-0237 and A-0238 both returned seven dishes and the plan
+  // showed none of them. The name, the local name, and the one line on tap.
+  const eats = (parsed?.worth_eating ?? []).filter((x) => x?.name);
+  if (eats.length) {
+    const sec = el('section', 'eats');
+    sec.append(el('h2', null, 'Worth eating'));
+    const strip2 = el('div', 'eatstrip');
+    for (const dish of eats) {
+      const card = el('button', 'eatcard');
+      card.type = 'button';
+      card.append(el('span', 'eatname', String(dish.name)));
+      if (dish.local_name) card.append(el('span', 'eatlocal', String(dish.local_name)));
+      const what = dish.what ? el('span', 'eatwhat', String(dish.what)) : null;
+      if (what) {
+        what.hidden = true;
+        card.append(what);
+        card.setAttribute('aria-expanded', 'false');
+        card.onclick = () => {
+          const open = what.hidden;
+          what.hidden = !open;
+          card.classList.toggle('open', open);
+          card.setAttribute('aria-expanded', String(open));
+        };
+      } else {
+        card.disabled = true;
+      }
+      strip2.append(card);
+    }
+    sec.append(strip2);
+    root.append(sec);
+  }
+
+  // What Suna could not check. The schema has it, and hiding it is how a
+  // plan reads more certain than it is.
+  const unknowns = (parsed?.unknowns ?? []).filter(Boolean);
+  const conflicts = (parsed?.conflicts ?? []).filter((c) => c?.topic);
+  if (unknowns.length || conflicts.length) {
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, "What I couldn't check"));
+    for (const u of unknowns) sec.append(el('p', 'boxline', String(u)));
+    for (const c of conflicts) {
+      sec.append(el('p', 'boxline', `Sources disagree on ${c.topic}.`));
+    }
+    root.append(sec);
+  }
+
+  // A rough weekly spend, when the answer carries one.
+  const b = parsed?.budget;
+  if (Array.isArray(b?.per_week_local) && b.per_week_local.length === 2) {
+    const [lo, hi] = b.per_week_local;
+    const cur = b.currency_local ? ` ${b.currency_local}` : '';
+    const sec = el('section', 'planbox');
+    sec.append(el('h2', null, 'Rough budget'));
+    sec.append(el('div', 'boxhead', `${lo}–${hi}${cur} a week`));
+    if (b.excludes?.length) {
+      sec.append(el('p', 'src', `Not counting ${b.excludes.join(', ')}.`));
+    }
+    root.append(sec);
+  }
+
   return root;
 }
 
@@ -822,8 +965,17 @@ export function planDayScreen(block, day, {
   back.onclick = onBack;
   root.append(back);
 
-  root.append(el('div', 'eyebrow', String(day?.day ?? '')));
+  // `day.type` says what kind of day it is; a day that isn't `out` reads as
+  // a gap in the plan unless it's labelled. `unplanned_days` flags the gap,
+  // so the tester should see the same thing the flag sees.
+  const DAY_TYPE = { work: 'Working day', travel: 'Travel day', free: 'Free day' };
+  const kind = DAY_TYPE[String(day?.type ?? '')] ?? null;
+  const eyebrow = [String(day?.day ?? '').trim(), kind].filter(Boolean).join(' · ');
+  if (eyebrow) root.append(el('div', 'eyebrow', eyebrow));
   root.append(el('h1', 'planhead', dayHeading(block, day, nameOf)));
+  // Why these stops and this base. The model writes it per block and it was
+  // going unread.
+  if (block?.why) root.append(el('p', 'planctx', String(block.why)));
 
   const list = el('ol', 'stops');
   const items = day?.items ?? [];

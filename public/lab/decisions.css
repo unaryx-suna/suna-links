@@ -344,12 +344,54 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 }
 .dx.planday .planhead { font-size: 26px; font-weight: 700; }
 
-.dx .sortfirst { display: flex; flex-direction: column; gap: 10px; }
+/* Boxed, as Plan.dc.html has it — it is the one section a tester acts on. */
+.dx .sortfirst {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--dx-paper); border-radius: 18px; padding: 10px 14px 8px 16px;
+}
+.dx .sortfirst h2 { margin-bottom: 2px; }
+.dx .sortrow + .sortrow { border-top: 1px solid var(--dx-line); padding-top: 8px; }
 .dx .sortfirst h2, .dx .daysHead { margin: 0; font-size: 14px; font-weight: 600; color: var(--dx-muted); }
 .dx .sortrow { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; }
 .dx .sortrow input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--dx-sand); flex: none; }
 .dx .sortrow span { display: flex; flex-direction: column; gap: 2px; }
 .dx .sortline { font-size: 16px; }
+
+/* The lead: what the plan is built on, and its shape in one line. */
+.dx .planlead { display: flex; flex-direction: column; gap: 4px; }
+.dx .planctx { margin: 0; font-size: 15px; line-height: 1.45; color: #D9D4CC; }
+
+/* The boxed sections: stay, worth knowing, getting there, setup, left out,
+   what I couldn't check, budget. One card each, the "Sort these first"
+   shape from Plan.dc.html. */
+.dx .planbox {
+  background: var(--dx-paper); border-radius: 18px; padding: 12px 14px 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.dx .planbox h2 { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--dx-muted); }
+.dx .boxhead { font-size: 16px; font-weight: 600; }
+.dx .boxline { margin: 0; font-size: 15px; line-height: 1.45; color: #D9D4CC; }
+.dx .boxrow { display: flex; flex-direction: column; gap: 1px; padding: 5px 0; }
+.dx .boxrow + .boxrow { border-top: 1px solid var(--dx-line); }
+
+/* Worth eating: a scrolling strip of dishes. Tap one for the line. */
+.dx .eats { display: flex; flex-direction: column; gap: 8px; }
+.dx .eats h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--dx-muted); }
+.dx .eatstrip {
+  display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity;
+  margin: 0 -16px; padding: 2px 16px 4px; -webkit-overflow-scrolling: touch;
+}
+.dx .eatcard {
+  flex: none; scroll-snap-align: start; width: 156px; min-height: 52px;
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  background: var(--dx-paper); border: 0; border-radius: 16px;
+  padding: 12px 14px; font: inherit; color: var(--dx-ink); cursor: pointer;
+}
+.dx .eatcard[disabled] { cursor: default; }
+.dx .eatcard.open { width: 244px; }
+.dx .eatname { font-size: 16px; font-weight: 600; }
+.dx .eatlocal { font-size: 14px; color: var(--dx-muted); }
+.dx .eatwhat { font-size: 14px; line-height: 1.4; color: #D9D4CC; margin-top: 4px; }
 
 .dx .daystrip { display: flex; flex-direction: column; gap: 10px; }
 .dx .daycard {

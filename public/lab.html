@@ -547,13 +547,15 @@
   </div>
 </div>
 
-<!-- ── where are you (only after a permission denial) ──────────────────── -->
+<!-- ── where are you (a denial, a failed fix, or a stale saved one) ────── -->
 <div class="sheet" id="loc-sheet"><div class="inner">
-  <h2>Where are you?</h2>
-  <p class="sub">Your browser said no to location. Type a city and we'll remember it.</p>
+  <h2 id="loc-head">Where you at?</h2>
+  <p class="sub" id="loc-sub">Your browser said no to location. Type a city and we'll remember it.</p>
+  <button id="loc-now" class="primary" style="width:100%">Use my location</button>
+  <div style="height:12px"></div>
   <input id="loc-input" type="text" placeholder="Kuala Lumpur" autocomplete="address-level2">
   <div style="height:12px"></div>
-  <button id="loc-save" class="primary" style="width:100%">Save</button>
+  <button id="loc-save" style="width:100%">Save this place</button>
 </div></div>
 
 <!-- ── §4 Report this chat ─────────────────────────────────────────────── -->
@@ -621,7 +623,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v42';
+} from './lab/decisions.js?v=lab-v43';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -634,7 +636,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v42';
+const BUILD = 'lab-v43';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -649,6 +651,13 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 // Must match PREFERENCE_KEYS in supabase/functions/lab-answer/logic.ts. A key
 // outside this list is dropped by the edge function rather than passed through,
 // so offering one here would silently do nothing.
+/// Brian, 29 Sep. These describe a TRIP, not a person, so they are written
+/// against the topic and die with it. His profile held three answers to
+/// "how are you getting around" — the subway between Tongzhou and the
+/// centre, public transit tomorrow, regional buses — and all three were
+/// being read into plans for Mongolia.
+const TRIP_KEYS = ['transport', 'company', 'budget', 'time_of_day', 'accommodation'];
+
 const PREF_KEYS = ['transport', 'company', 'budget', 'pace', 'diet', 'interests',
                    'avoid', 'accessibility', 'accommodation', 'time_of_day', 'other',
                    // §1. The No chips write these. They were added server-side
@@ -1216,12 +1225,9 @@ function placeProvenance() {
   const src = location_?.source;
   const age = locationAgeS(location_);
   if (src === 'typed') return ['You set this · tap to update'];
-  if (src === 'saved') {
-    const when = location_?.at
-      ? ` ${new Date(location_.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
-      : '';
-    return [`Saved${when} · tap to update`];
-  }
+  // "Saved · 2 days ago · tap to update" (Brian, 29 Sep). A date made a
+  // 45-hour-old fix look deliberate; an age makes it look as old as it is.
+  if (src === 'saved') return [`Saved · ${agoText(age)} · tap to update`];
   if (age !== null && age > FRESH_FOR_S) return ['tap to update'];
   if (location_?.accuracy_m != null && location_.accuracy_m > 2000) return ['Your location, roughly'];
   if (location_?.lat != null) return ['Your location'];
@@ -1305,31 +1311,53 @@ async function ensureLocation() {
   // asked the browser again. A typed place still wins, but only once it
   // has coordinates.
   if (location_?.source === 'typed' && location_?.lat != null) return location_;
-  const age = locationAgeS(location_);
-  if (location_ && location_.lat != null && age !== null && age <= FRESH_FOR_S) return location_;
 
+  // Brian, 29 Sep: ask the phone on EVERY Send. The 30-minute short-circuit
+  // used to skip the call entirely, so a fix taken once could serve the rest
+  // of the day. `maximumAge: 5 min` already lets the browser answer from its
+  // own cache without waking the radio, so asking every time is close to
+  // free and the answer is never older than five minutes.
   const fresh = await refreshLocation();
   if (fresh) return fresh;
 
-  // Denied, timed out, or no geolocation. A saved fix is still better than
-  // nothing — but it is marked as saved, and the bar says so.
-  if (location_) {
+  // The phone would not give one. A saved fix under an hour old is still a
+  // reasonable answer; past that it is a guess, and a guess gets said out
+  // loud rather than used quietly.
+  if (location_ && !locationIsStale(location_)) {
     location_ = { ...location_, source: 'saved' };
     renderContext();
     return location_;
   }
+  return await askWhereYouAre(location_);
+}
+
+/// Suna's "where you at?", with Use my location and a text box. Shown on a
+/// permission denial, a failed fix, or a saved fix over an hour old — never
+/// silence, which is what A-0238 did.
+async function askWhereYouAre(stale, copy) {
+  const sheet = $('#loc-sheet');
+  const age = locationAgeS(stale);
+  $('#loc-head').textContent = copy?.head ?? 'Where you at?';
+  $('#loc-sub').textContent = copy?.sub ?? (stale?.name
+    ? `Last I knew, ${shortPlace(stale.name)} — ${agoText(age)}. Still there?`
+    : "Your browser said no to location. Type a place and I'll remember it.");
+  $('#loc-input').value = '';
+  sheet.dataset.open = '1';
   return await new Promise((resolve) => {
-    const sheet = $('#loc-sheet');
-    sheet.dataset.open = '1';
-    $('#loc-input').focus();
+    const done = (loc) => { sheet.dataset.open = '0'; renderContext(); resolve(loc); };
+    $('#loc-now').onclick = async () => {
+      $('#loc-sub').textContent = 'Asking your phone…';
+      const got = await refreshLocation();
+      if (got) return done(got);
+      $('#loc-sub').textContent = "Your phone still won't say. Type a place instead.";
+      $('#loc-input').focus();
+    };
     $('#loc-save').onclick = async () => {
       const name = $('#loc-input').value.trim();
       if (!name) return;
-      sheet.dataset.open = '0';
       location_ = await typedPlace(name);
       await saveTester({ last_location: location_ });
-      renderContext();
-      resolve(location_);
+      done(location_);
     };
   });
 }
@@ -1402,6 +1430,27 @@ function locationAgeS(loc) {
 }
 
 const FRESH_FOR_S = 30 * 60;   // §3: refresh before any answer older than 30 minutes
+// Brian, 29 Sep: never use a saved location older than an hour without
+// saying so. A-0238 answered from a fix 165,266 s old — 45 hours — and
+// nothing on screen admitted it.
+const STALE_AFTER_S = 60 * 60;
+
+/// "2 days ago", not "24 Sep". The header has to make the age obvious at a
+/// glance, and a date does not.
+function agoText(seconds) {
+  if (seconds == null || seconds >= Number.MAX_SAFE_INTEGER) return 'a while ago';
+  if (seconds < 90) return 'just now';
+  const m = Math.round(seconds / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(seconds / 3600);
+  if (h < 36) return h === 1 ? 'an hour ago' : `${h} hours ago`;
+  const d = Math.round(seconds / 86400);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
+}
+const locationIsStale = (loc) => {
+  const age = locationAgeS(loc);
+  return age !== null && age > STALE_AFTER_S;
+};
 
 /// Ask the phone. Returns null rather than throwing on denial or timeout.
 async function getFix() {
@@ -1449,7 +1498,12 @@ function prefs() { return Array.isArray(tester?.preferences) ? tester.preference
 
 async function setPrefs(next) { await saveTester({ preferences: next }); renderPanel(); }
 
+/// Trip detail, or lasting taste? The key decides, and a trip detail never
+/// reaches the profile.
 async function addPref(key, value, source, confirmed, note) {
+  if (TRIP_KEYS.includes(key) || aboutThisTrip(key, value)) {
+    return addTripDetail(TRIP_KEYS.includes(key) ? key : 'other', value, source, confirmed, note);
+  }
   if (!PREF_KEYS.includes(key)) return;
   const v = String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!v) return;
@@ -1469,6 +1523,35 @@ async function addPref(key, value, source, confirmed, note) {
   if (at >= 0) next[at] = entry; else next.push(entry);
   await setPrefs(next);
 }
+
+/// A row keyed `other` can still be about one outing: "taking public transit
+/// tomorrow" is not a taste. Brian found three of these in his profile, fed
+/// into a Mongolia plan. A day word or a way of getting around sends it to
+/// the topic.
+const TRIP_WORDS =
+  /\b(today|tonight|tomorrow|this (?:week|weekend|trip)|right now|transit|subway|metro|\bbus(?:es)?\b|train|taxi|driving|walking there)\b/i;
+function aboutThisTrip(key, value) {
+  return key === 'other' && TRIP_WORDS.test(String(value ?? ''));
+}
+
+/// A fact about this trip: how they are getting around, who is with them,
+/// the budget, the dates. Stored on the TOPIC, so the next trip starts
+/// clean and Mongolia is not planned around Tongzhou's subway.
+async function addTripDetail(key, value, source, confirmed, note) {
+  const v = String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!v || !currentTopic?.topic_id) return;
+  const entry = { key, value: v, source, confirmed: !!confirmed, created_at: nowIso(),
+                  ...(note ? { note: String(note).slice(0, 60) } : {}) };
+  tripDetails = tripDetails.filter((e) => !(e.key === key && e.value === v));
+  // One answer per question: a new transport replaces the old one rather
+  // than joining it. Three answers to one question is what went wrong.
+  tripDetails = tripDetails.filter((e) => e.key !== key || e.source !== source);
+  tripDetails.push(entry);
+  try {
+    await db.from('lab_topics').update({ details: tripDetails }).eq('id', currentTopic.topic_id);
+  } catch (e) { console.warn('[lab] trip detail', e?.message ?? e); }
+}
+let tripDetails = [];
 
 /// UI-DECISIONS §7. Every row in "What Suna knows" can be removed, and
 /// Reset clears the lot. Both write to the same profile the chips and the
@@ -1507,8 +1590,15 @@ function extractAssumptions(text) {
   ];
   for (const re of pats) {
     for (const m of String(text ?? '').matchAll(re)) {
-      const phrase = m[1].trim().replace(/\s+/g, ' ');
-      if (phrase) out.push({ key: keyForPhrase(phrase), value: phrase });
+      // The 70-char ceiling is a guard, not a sentence end. Brian's profile
+      // held "getting around on transit today — want me to dig into whether
+      // there's" — a stub cut mid-clause. Keep the first clause only, and
+      // drop anything the ceiling truncated.
+      let phrase = m[1].trim().replace(/\s+/g, ' ')
+        .split(/\s+[—–-]\s+|,\s+(?=and\b|but\b|so\b|want\b|which\b)/)[0].trim()
+        .replace(/\s+(and|but|so|or|with|for|to|the|a|an|that|whether)$/i, '').trim();
+      if (m[1].length >= 70 && phrase.length >= 70) continue;  // no clause end found
+      if (phrase.length >= 3) out.push({ key: keyForPhrase(phrase), value: phrase });
     }
   }
   return out;
@@ -1518,7 +1608,7 @@ function keyForPhrase(p) {
   const s = p.toLowerCase();
   // Stems, not whole words: the phrase is "taking a cab" / "driving" /
   // "cycling", and a \b...\b list never matches an inflected verb.
-  if (/(taxi|\bcab\b|grab|driv|\bcar\b|subway|metro|train|\bbus\b|walk|cycl|bike|rideshare|\bmrt\b|\blrt\b|uber|scooter|public transport)/.test(s)) return 'transport';
+  if (/(taxi|\bcab\b|grab|driv|\bcar\b|subway|metro|train|\bbus(es)?\b|walk|cycl|bike|rideshare|\bmrt\b|\blrt\b|uber|scooter|public transp|public transit|\btransit\b)/.test(s)) return 'transport';
   if (/(alone|solo|friend|family|kids|partner|couple|group)/.test(s)) return 'company';
   if (/(budget|cheap|splurge|spend|expensive)/.test(s)) return 'budget';
   if (/(veg|vegan|halal|kosher|allerg|gluten)/.test(s)) return 'diet';
@@ -1617,19 +1707,12 @@ $('#p-locnow').addEventListener('click', async () => {
 });
 $('#p-loctype').addEventListener('click', () => {
   $('#panel').dataset.open = '0';
-  // The existing typed-place sheet. A typed place wins until New chat.
-  const sheet = $('#loc-sheet');
-  sheet.dataset.open = '1';
-  $('#loc-input').value = '';
+  // The same sheet, opened on purpose rather than because a fix failed. It
+  // sets its own copy: the sheet is shared, and whatever the last failure
+  // wrote would otherwise still be on it.
+  askWhereYouAre(null, { head: 'Where are you?',
+    sub: "Type a place and I'll use it until you change it." });
   $('#loc-input').focus();
-  $('#loc-save').onclick = async () => {
-    const name = $('#loc-input').value.trim();
-    if (!name) return;
-    sheet.dataset.open = '0';
-    location_ = await typedPlace(name);
-    await saveTester({ last_location: location_ });
-    renderContext();
-  };
 });
 $('#dish-close').addEventListener('click', () => { $('#dish-sheet').dataset.open = '0'; });
 
@@ -2312,9 +2395,15 @@ async function learnFromNotThis(key, label, pick, ref) {
                 too_busy: 'avoid', been_there: 'visited', looks_shut: null };
   const vocab = map[key];
   if (vocab) {
+    // "closer than this" is a chip label, not a value: read back a week
+    // later it says nothing, because "this" is gone. The distance they
+    // actually rejected is a value.
     const value = key === 'been_there' ? pick.name
-      : key === 'too_far' ? 'closer than this'
-      : key === 'too_pricey' ? 'cheaper'
+      : key === 'too_far'
+        ? (pick.walk_minutes != null ? `under ${pick.walk_minutes} min walk`
+          : pick.km != null ? `under ${pick.km} km` : 'short walks only')
+      : key === 'too_pricey'
+        ? (pick.price_level ? `under ${'$'.repeat(Math.max(1, Number(pick.price_level)))}` : 'cheaper')
       : `${pick.kind ?? 'places like this'}`;
     try { await addPref(vocab, value, 'stated', true, `From Not this: ${label}`); } catch {}
   }
@@ -3024,9 +3113,10 @@ async function renderAnswer(holder, bubble, d) {
     const host = el('div');
     holder.append(host);
     renderPlanScreens(host, r, d);
-    renderContext();
-    scroll();
-    return;
+    // Falls through: a plan gets the assumption chips, the question chips and
+    // the feedback bar too. It used to return here, so `question` — which
+    // A-0237 and A-0238 both carried — was never shown on a plan, and there
+    // was no way to rate one.
   } else {
     bubble.remove();
     const host = el('div');
@@ -3145,7 +3235,11 @@ function dayTypeLabel(t) {
 
 /// §4. The strip, and a day when one is tapped. The names and every number
 /// come off the places code enriched, never out of the writer's prose.
-function renderPlanScreens(host, r, d) {
+function renderPlanScreens(outer, r, d) {
+  // The day screens swap this node's children. The feedback bar and the
+  // question chips live OUTSIDE it, or navigating to a day would wipe them.
+  const host = el('div');
+  outer.append(host);
   const byId = new Map((d.places ?? []).map((p) => [String(p.id ?? p.place_id), p]));
   const placeOf = (item) => byId.get(String(item?.place_id ?? '')) ?? null;
   const nameOf = (item) => placeOf(item)?.name ?? item?.name ?? null;
