@@ -337,6 +337,11 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .src, .dx.sheet .src { font-size: 12px; color: var(--dx-muted); }
 .dx .linkish2, .dx.sheet .linkish2 { background: none; border: none; font: inherit; color: var(--dx-muted); text-decoration: underline; cursor: pointer; padding: 0; }
 
+/* Line 46, beside the chip it explains. Quiet — it is a note, not a stage. */
+.dx.assumednote {
+  margin: 2px 16px 8px; font-size: 14px; line-height: 1.4; color: var(--dx-muted);
+}
+
 /* The plan limit screen: her, pouting, one line, one button. */
 .dx.limitscreen {
   display: flex; flex-direction: column; align-items: center; gap: 14px;

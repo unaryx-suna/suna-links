@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v53';
+} from './lab/decisions.js?v=lab-v54';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v53';
+const BUILD = 'lab-v54';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -3361,6 +3361,16 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           renderContext();
           lastParse = { ...(lastParse ?? {}), area: String(d.value) };
           renderChipsFor(holder, lastParse);
+          // Line 46, kept on screen beside the chip it explains. In the
+          // rotating stage line it lasted 200 ms before `slow` replaced it,
+          // and an assumption a tester cannot read is one they cannot
+          // correct.
+          if (d.line) {
+            $('#convo-col').querySelector('.assumednote')?.remove();
+            const note = el('div', 'dx assumednote', d.line);
+            const chips = $('#convo-col').querySelector('.chips.understood')?.closest('.dx');
+            if (chips) chips.after(note); else holder.prepend(note);
+          }
         }
         // Several ways in. Her question, three or four city chips, and
         // nothing searched until one is tapped.
