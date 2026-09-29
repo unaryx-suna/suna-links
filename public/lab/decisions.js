@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v47';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v48';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v47';
+  link.href = '/lab/decisions.css?v=lab-v48';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -85,9 +85,12 @@ export function sunaBlock(face = 'idle', text = '', opts = {}) {
   const wrap = el('div', `dx sunablock${opts.hello ? ' hello' : ''}${opts.small ? ' small' : ''}`);
   const fig = el('div', 'sunafig');
   setState(fig, stateFor(face));
+  // ONE line. Brian, 29 Sep: "Lines replace each other, one at a time, all
+  // in the same style." The board's faded queued second line meant two
+  // stages were on screen at once, in two different weights, and the
+  // mismatch line arrived in a third style in a box of its own.
   const lines = el('div', 'sunalines');
   lines.append(el('div', 'sunaline', text ?? ''));
-  lines.append(el('div', 'sunaline next'));
   wrap.append(fig, lines);
   return wrap;
 }
@@ -97,17 +100,11 @@ export function sunaBlock(face = 'idle', text = '', opts = {}) {
 /// ever a step that really ran.
 function sayLine(node, text) {
   if (!text) return;
-  const now = node.querySelector('.sunaline:not(.next)');
-  const next = node.querySelector('.sunaline.next');
-  if (!now || !next) return;
-  if (!now.textContent.trim()) { now.textContent = text; return; }
-  if (now.textContent === text || next.textContent === text) return;
-  // Loading.dc.html rests on TWO lines: the one she is on, and the one that
-  // has just queued behind it, faded. The queued one only ever exists
-  // because its stage really fired — there is no line for a step that did
-  // not run. When a third arrives the faded one is promoted.
-  if (next.textContent.trim()) now.textContent = next.textContent;
-  next.textContent = text;
+  const now = node.querySelector('.sunaline');
+  if (!now || now.textContent === text) return;
+  // She is on one stage at a time, so the line for the stage she is on is
+  // the only line. Swapped, not stacked.
+  now.textContent = text;
 }
 
 export function updateSuna(node, face, text, small) {
@@ -122,15 +119,6 @@ export function updateSuna(node, face, text, small) {
 /// 56 px seat beside it — the card board's entry, without its fixed frame.
 export function sunaFound(node) {
   if (!node) return;
-  // The found line was queued behind the one she was on, and going small
-  // hides the queued slot — so the card landed under "…so damn tough?".
-  // Finding it IS the current stage, so its line is promoted here.
-  const now = node.querySelector('.sunaline:not(.next)');
-  const next = node.querySelector('.sunaline.next');
-  if (now && next && next.textContent.trim()) {
-    now.textContent = next.textContent;
-    next.textContent = '';
-  }
   const fig = node.querySelector('.sunafig');
   if (!fig) return;
   clearTimeout(node._big); clearTimeout(node._settle);

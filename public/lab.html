@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v47';
+} from './lab/decisions.js?v=lab-v48';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v47';
+const BUILD = 'lab-v48';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1531,6 +1531,9 @@ function shortPlace(name) {
 /// happening instead: we are asking, or we could not, and tapping fixes it.
 function placeless() {
   if (locating) return 'Finding you…';
+  // Say WHICH failure, because "set your location" reads like a preference
+  // when the browser has actually blocked it.
+  if (lastGeoError?.code === 1) return 'Location blocked · tap';
   return 'Set your location';
 }
 
@@ -1622,42 +1625,34 @@ function placeProvenance() {
 
 function renderContext() {
   const n = rightNow();
-  // The header follows the topic. The tester's own location comes back the
-  // moment a topic has no subject of its own.
-  $('#ctx-place').textContent = shortPlace(topicSubject?.name ?? n.location) ?? placeless();
-  // The daily counter rides here, in the subtitle, rather than as a third
-  // thing in the bar: R5 §2 still requires a visible count, and the bar is
-  // allowed two buttons and no more.
+  // Two different facts, and the header used to blur them into one line.
+  //
+  // Brian, 29 Sep, on A-0288: the title is the SUBJECT — what the ask is
+  // about — and it never changes mid-ask. Where they are is a separate
+  // fact, said separately ("You're in Kuala Lumpur"), so the bar can never
+  // read as though their location moved to Mongolia.
+  //
+  // "From your message" is gone as a location label: it described where the
+  // SUBJECT came from and sat in the slot that answers "where are you".
+  const subject = shortPlace(topicSubject?.name);
+  const here = shortPlace(n.location);
+  $('#ctx-place').textContent = subject ?? here ?? placeless();
+
   const bits = [n.local_time];
-  // A-0227. The subtitle must be TRUE. It said "From your message" for a
-  // subject the server had marked `device` — a place Brian typed hours
-  // earlier — so the one line admitting where the place came from was
-  // saying the wrong thing. The source decides, not the presence of a name.
-  if (topicSubject?.name) {
-    const src = String(topicSubject.source ?? '');
-    if (src.startsWith('message')) bits.push('From your message');
-    // A country resolved to its arrival city is not "Your location", which
-    // is what A-0245 printed under a header reading Ulaanbaatar while the
-    // phone was in Beijing. Say where it came from.
-    else if (src === 'assumed') bits.push('Assuming you land here · tap to change');
-    else if (src === 'chip') bits.push('You picked this');
-    else bits.push(...placeProvenance());
-    if (dailyState && !dailyState.exempt) {
-      const q0 = Number(dailyState.quick_left ?? 0);
-      bits.push(q0 === 0 ? 'none left today' : `${q0} left`);
-    }
-    $('#ctx-sub').textContent = bits.join(' · ');
-    return;
+  if (subject) {
+    // The subject is the title, so this line says where THEY are.
+    if (here && here !== subject) bits.push(`You're in ${here}`);
+    else if (!here) bits.push(...placeProvenance());
+    // A country resolved to its arrival city is an assumption, and it says so.
+    if (String(topicSubject.source ?? '') === 'assumed') bits.push('assumed · tap to change');
+  } else {
+    bits.push(...placeProvenance());
   }
-  // §3: the subtitle says so when the place is not a fresh fix, because a
-  // wrong place produces a confidently wrong answer and nothing on screen
-  // would otherwise admit it.
-  bits.push(...placeProvenance());
   if (dailyState && !dailyState.exempt) {
     const q = Number(dailyState.quick_left ?? 0);
     bits.push(q === 0 ? 'none left today' : `${q} left`);
   }
-  $('#ctx-sub').textContent = bits.join(' · ');
+  $('#ctx-sub').textContent = bits.filter(Boolean).join(' · ');
 }
 
 // ── location: asked on first chip tap, never on page load ──────────────────
@@ -1729,7 +1724,10 @@ async function askWhereYouAre(stale, copy) {
   $('#loc-head').textContent = copy?.head ?? 'Where you at?';
   $('#loc-sub').textContent = copy?.sub ?? (stale?.name
     ? `Last I knew, ${shortPlace(stale.name)} — ${agoText(age)}. Still there?`
-    : "Your browser said no to location. Type a place and I'll remember it.");
+    // The browser told us which failure it was; say it, because "said no"
+    // sends someone to their settings when the prompt simply timed out.
+    : (lastGeoError?.why ?? "Your browser said no to location.")
+      + " Tap below, or type a place and I'll remember it.");
   $('#loc-input').value = '';
   sheet.dataset.open = '1';
   return await new Promise((resolve) => {
@@ -1842,19 +1840,52 @@ const locationIsStale = (loc) => {
 };
 
 /// Ask the phone. Returns null rather than throwing on denial or timeout.
+/// Ask the phone, and REMEMBER WHY when it says no.
+///
+/// A-0288 went out with no location at all and nothing on screen said so.
+/// The error callback was `() => resolve(null)` — the browser hands us a
+/// code saying exactly what went wrong (1 denied, 2 unavailable, 3 timed
+/// out) and we threw it away, so "denied" and "the prompt is still sitting
+/// there unanswered" looked identical to the page and to me.
+///
+/// On a desktop the prompt needs an answer; ignoring it resolves as a
+/// timeout, not a denial, and that difference is what decides whether we
+/// offer the button again or tell them to change a browser setting.
+let lastGeoError = null;   // {code, why} or null
+
 async function getFix() {
+  if (!navigator.geolocation) {
+    lastGeoError = { code: 0, why: 'This browser has no location.' };
+    return null;
+  }
+  const started = Date.now();
   return await new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({
-        lat: +p.coords.latitude.toFixed(4),
-        lng: +p.coords.longitude.toFixed(4),
-        name: null,
-        accuracy_m: p.coords.accuracy != null ? Math.round(p.coords.accuracy) : null,
-        at: new Date().toISOString(),
-        source: 'device',
-      }),
-      () => resolve(null),
+      (p) => {
+        lastGeoError = null;
+        resolve({
+          lat: +p.coords.latitude.toFixed(4),
+          lng: +p.coords.longitude.toFixed(4),
+          name: null,
+          accuracy_m: p.coords.accuracy != null ? Math.round(p.coords.accuracy) : null,
+          at: new Date().toISOString(),
+          source: 'device',
+        });
+      },
+      (err) => {
+        const code = err?.code ?? 0;
+        lastGeoError = {
+          code,
+          why: code === 1 ? 'Location is blocked for this site.'
+             : code === 2 ? "Your device couldn't get a fix."
+             : code === 3 ? 'The location request timed out.'
+             : 'Location failed.',
+          ms: Date.now() - started,
+        };
+        console.warn(`[lab] location failed (${code}) after ${Date.now() - started}ms: `
+          + `${err?.message ?? 'no message'}`);
+        resolve(null);
+      },
       { timeout: 8000, maximumAge: 300000 },
     );
   });
@@ -2651,9 +2682,17 @@ let chipEdits = 0, chipRemovals = 0;
 let remainingPicks = [];   // picks not yet shown, reordered by the last reason
 
 /// §1. "You said X, your phone says Y." Two lines, two tap buttons.
+/// One line, in her own voice, in the one place her lines live — then the
+/// two places to choose between.
+///
+/// It used to append its own `.sunaline` in a box of its own, so the
+/// mismatch line arrived in a different style from every other line and sat
+/// beside whatever she was already saying.
 function showMismatch(holder, d) {
+  const line = (d.lines ?? [])[0];
+  if (line && sunaNode) updateSuna(sunaNode, d.face ?? 'mismatch', line, false);
   const box = el('div', 'dx');
-  for (const line of d.lines) box.append(el('div', 'sunaline', line));
+  if (line && !sunaNode) box.append(el('div', 'sunaline', line));
   const row = el('div', 'chips');
   for (const [label, which] of [[d.said, 'said'], [d.device, 'device']]) {
     if (!label) continue;

@@ -64,9 +64,7 @@
 }
 /* The incoming line, faded under the one on screen. It is never a step that
  * did not run: she says she is going wider only when the search went wider. */
-.sunaline.next {
-  font-size: 20px; line-height: 1.3; font-weight: 500; opacity: .3;
-}
+/* `.sunaline.next` was the faded queued line. One line now, one style. */
 .sunaline:empty { display: none; }
 /* On the ask screen she is 64x77, beside her greeting (the Main board). */
 .sunablock.hello {
