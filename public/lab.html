@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v48';
+} from './lab/decisions.js?v=lab-v49';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v48';
+const BUILD = 'lab-v49';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2116,7 +2116,22 @@ $('#ctx-place')?.addEventListener('click', () => {
   });
 });
 
-$('#ctx-btn').addEventListener('click', async () => { await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1'; });
+$('#ctx-btn').addEventListener('click', async () => {
+  // With no location, the header IS the "Use my location" button. It read
+  // "Set your location" and opened the profile panel, where the fix was two
+  // taps further in — so A-0288 went out with no location at all and the
+  // way to fix it was never in front of anyone.
+  if (!location_?.lat) {
+    askWhereYouAre(null, {
+      head: 'Where you at?',
+      sub: lastGeoError?.why
+        ? `${lastGeoError.why} Tap below, or type a place.`
+        : "Tap below, or type a place and I'll remember it.",
+    });
+    return;
+  }
+  await refreshWeather(); await renderPanel(); $('#panel').dataset.open = '1';
+});
 $('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; });
 
 // §3. Not here? Change it.
