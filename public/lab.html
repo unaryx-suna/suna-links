@@ -860,17 +860,25 @@ function forgetEverything() {
   } catch { /* private mode; nothing was stored anyway */ }
 
   // Back to the sign-in screen, with nothing of theirs still on it.
-  $('#convo-col').replaceChildren();
+  //
+  // The composer FIRST. In decisions mode #box, #send and #attach live
+  // inside the Ask screen, which is a child of #convo-col — so clearing the
+  // thread destroyed them, and the next line threw on a null #box. Every
+  // write below is null-safe for the same reason: this is teardown, and one
+  // missing node must never be able to leave someone half signed out.
+  stowComposer();
+  $('#convo-col')?.replaceChildren();
   document.body.classList.remove('askmode', 'dx-answered');
-  $('#box').value = '';
-  $('#panel').dataset.open = '0';
-  $('#app').hidden = true;
-  $('#gate').hidden = false;
-  $('#g-email').value = '';
-  $('#g-code').value = '';
-  $('#g-code').hidden = true;
-  $('#g-go').textContent = 'Send code';   // the gate's own first label
-  $('#g-err').textContent = '';
+  const set = (sel, fn) => { const n = $(sel); if (n) fn(n); };
+  set('#box', (n) => { n.value = ''; n.style.height = 'auto'; });
+  set('#panel', (n) => { n.dataset.open = '0'; });
+  set('#menu', (n) => { n.dataset.open = '0'; });
+  set('#app', (n) => { n.hidden = true; });
+  set('#gate', (n) => { n.hidden = false; });
+  set('#g-email', (n) => { n.value = ''; });
+  set('#g-code', (n) => { n.value = ''; n.hidden = true; });
+  set('#g-go', (n) => { n.textContent = 'Send code'; });   // the gate's own first label
+  set('#g-err', (n) => { n.textContent = ''; });
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
