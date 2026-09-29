@@ -337,6 +337,13 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .src, .dx.sheet .src { font-size: 12px; color: var(--dx-muted); }
 .dx .linkish2, .dx.sheet .linkish2 { background: none; border: none; font: inherit; color: var(--dx-muted); text-decoration: underline; cursor: pointer; padding: 0; }
 
+/* v2.8 `late_only`: the alternative, marked as one. */
+.dx .stop.lateonly { border: 1px solid var(--dx-line); background: transparent; }
+.dx .lateonlyhead {
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--dx-muted); margin-bottom: 2px;
+}
+
 /* Line 46, beside the chip it explains. Quiet — it is a note, not a stage. */
 .dx.assumednote {
   margin: 2px 16px 8px; font-size: 14px; line-height: 1.4; color: var(--dx-muted);

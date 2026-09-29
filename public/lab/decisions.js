@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v54';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v55';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v54';
+  link.href = '/lab/decisions.css?v=lab-v55';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -988,7 +988,11 @@ export function planDayScreen(block, day, {
     const name = nameOf(item);
     const li = el('li', 'stop');
     if (item?.duration) li.append(el('div', 'eyebrow', String(item.duration)));
-    li.append(el('h2', 'stopname', name ?? 'Somewhere'));
+    // Brian, 29 Sep: "A stop always shows its place name. Never show a
+    // placeholder." The server drops an unresolvable stop; if one still
+    // reaches here it is skipped rather than titled "Somewhere".
+    if (!name) return;
+    li.append(el('h2', 'stopname', name));
     if (item?.line) li.append(el('p', 'stopline', String(item.line)));
 
     const facts = el('div', 'facts');
@@ -1007,6 +1011,13 @@ export function planDayScreen(block, day, {
     acts.append(go, not, save);
     li.append(acts);
     list.append(li);
+
+    // v2.8's `late_only`: an alternative for a late landing, not the next
+    // stop in the day. It reads as one more thing to do unless it says so.
+    if (item?.late_only) {
+      li.classList.add('lateonly');
+      li.prepend(el('div', 'lateonlyhead', 'If you land late, just this:'));
+    }
 
     // The walk to the next stop, when code measured one.
     const leg = i < items.length - 1 ? legBetween?.(item, items[i + 1]) : null;
