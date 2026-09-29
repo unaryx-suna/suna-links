@@ -710,12 +710,12 @@
 <script type="module">
 // UI-DECISIONS. The quick-answer UI. Plans keep today's screens.
 import {
-  installDecisionsUI, sunaBlock, updateSuna, sunaFound, hushSuna, reactionLine,
+  installDecisionsUI, sunaBlock, updateSuna, sunaFound, hushSuna, reactionLine, pickIsShowable,
   askScreen, chipsBlock, chipSheet, textSheet, confirmSheet, decisionCard,
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v55';
+} from './lab/decisions.js?v=lab-v56';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v55';
+const BUILD = 'lab-v56';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2951,7 +2951,15 @@ function picksFrom(r, d) {
 
 /// §5. The decision card, with Not this, Details and the nudges.
 function renderDecisionCard(holder, d, picks, i = 0) {
-  const pick = picks[i];
+  // A pick whose place never resolved is not a recommendation. QA S3 showed
+  // a card titled "Somewhere" — skip to the next pick rather than name one
+  // nothing, and only say we are out when we really are.
+  let pick = picks[i];
+  while (pick && !pickIsShowable(pick)) {
+    console.warn('[lab] unresolved pick skipped', pick?.place_id ?? '(no id)');
+    i += 1;
+    pick = picks[i];
+  }
   if (!pick) {
     holder.append(el('div', 'dx sunaline', "That's everything I had. Want me to look wider?"));
     return;

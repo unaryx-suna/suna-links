@@ -9,7 +9,7 @@
 // real stage event), the picks come from the writer, and every number on the
 // card face — walk, open till, price — is computed by code, never written.
 
-import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v55';
+import { SUNA_DEFS, SUNA_CSS, SUNA_STATES, SUNA_FACE_STATE, sunaSvg } from './suna-faces.js?v=lab-v56';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -24,7 +24,7 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v55';
+  link.href = '/lab/decisions.css?v=lab-v56';
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
@@ -412,6 +412,12 @@ export function lastCloseOf(hours) {
   return times.length >= 2 ? times[times.length - 1] : null;
 }
 
+/// A pick with no name. Never rendered — the card is a recommendation, and
+/// "Somewhere" recommends nothing.
+export function pickIsShowable(pick) {
+  return !!(pick && typeof pick.name === 'string' && pick.name.trim());
+}
+
 export function decisionCard(pick, {
   onGo, onNotThis, onSave, onDetails, onNudge, onWouldGo, onAfterGo, after, nudges,
 }) {
@@ -425,7 +431,11 @@ export function decisionCard(pick, {
   top.append(details);
   card.append(top);
 
-  card.append(el('div', 'placename', pick.name ?? 'Somewhere'));
+  // The Mode A twin of the plan-stop fix. QA S3 still showed a card titled
+  // "Somewhere" after that one shipped, because a decision card is a
+  // different screen with its own placeholder. A pick with no name is not a
+  // recommendation, so the caller drops it rather than naming it nothing.
+  card.append(el('div', 'placename', pick.name));
   if (pick.why) card.append(el('div', 'why', pick.why));
 
   const facts = el('div', 'facts');
