@@ -453,6 +453,50 @@
   .gate { max-width: 420px; margin: 12vh auto; padding: 0 20px; }
   .gate h1 { font-size: 22px; margin: 0 0 6px; }
   .gate p { color: var(--dim); font-size: 14px; margin: 0 0 18px; }
+  .gate .gaterow { display: flex; justify-content: space-between; gap: 12px; }
+  .gate .linkish {
+    background: none; border: 0; padding: 6px 0; font: inherit; font-size: 14px;
+    color: var(--sand); cursor: pointer; min-height: 32px;
+  }
+  .gate .linkish[disabled] { color: var(--dim); cursor: default; }
+  .caprow { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            font-size: 15px; color: var(--dim); }
+  /* A number input keeps the browser's own white box unless it is told
+     otherwise, and the page's input rule does not reach it. */
+  .caprow input {
+    width: 92px; margin: 0; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font: inherit; font-size: 15px; text-align: right;
+  }
+  .tlist { margin-top: 18px; display: flex; flex-direction: column; }
+  .trow { display: flex; align-items: center; gap: 10px; padding: 10px 0;
+          border-top: 1px solid var(--line); }
+  .trow:first-child { border-top: 0; }
+  .twords { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .tname { font-size: 15px; font-weight: 600; }
+  /* Wraps rather than truncating: "active never · test account" told you
+     nothing at all when it rendered as "active never · te…". */
+  .tmeta { font-size: 13px; color: var(--dim); line-height: 1.35; }
+  .trow .rm { background: none; border: 0; font: inherit; font-size: 14px;
+              color: var(--dim); cursor: pointer; padding: 6px 2px; }
+  .note {
+    margin-top: 14px; font-size: 14px; color: var(--text);
+    background: rgba(246,203,148,.10); border-radius: 12px; padding: 10px 12px;
+  }
+  .gate .note {
+    margin-top: 14px; font-size: 14px; color: var(--text);
+    background: rgba(246,203,148,.10); border-radius: 12px; padding: 10px 12px;
+  }
+  /* The spinner exists so the button cannot look untouched. */
+  .gate .primary[disabled] { opacity: .72; cursor: default; }
+  .gate .spin {
+    display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+    vertical-align: -2px; border: 2px solid rgba(0,0,0,.25);
+    border-top-color: rgba(0,0,0,.75); border-radius: 50%;
+    animation: gspin .7s linear infinite;
+  }
+  @keyframes gspin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .gate .spin { animation: none; } }
   .err { color: var(--danger); font-size: 13px; margin-top: 10px; }
   .stamp { font-size: 11px; color: rgba(255,255,255,.25); margin-top: 16px; }
   /* `#app` carries an inline `display: contents` so its children are direct
@@ -464,14 +508,34 @@
 <body>
 
 <!-- ── sign in ─────────────────────────────────────────────────────────── -->
+<!-- Two steps, not one screen that changes meaning under you. "Send code"
+     looked unchanged after a tap, so Brian tapped it again — and each tap
+     sent a new code that cancelled the last one, so none of the emails he
+     had worked. -->
 <div id="gate" class="gate" hidden>
-  <h1>Suna Lab</h1>
-  <p>Sign in with your email. We'll send you a code.</p>
-  <input id="g-email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email">
-  <div style="height:10px"></div>
-  <input id="g-code" type="text" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" hidden>
-  <div style="height:10px"></div>
-  <button id="g-go" class="primary" style="width:100%">Send code</button>
+  <div id="g-step-email">
+    <h1>Suna Lab</h1>
+    <p>Sign in with your email. We'll send you a code.</p>
+    <input id="g-email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email">
+    <div style="height:10px"></div>
+    <button id="g-go" class="primary" style="width:100%">Send code</button>
+  </div>
+
+  <div id="g-step-code" hidden>
+    <h1 id="g-sent-to">Code sent</h1>
+    <p>Check your inbox. Only the newest code works.</p>
+    <input id="g-code" type="text" placeholder="6-digit code" inputmode="numeric"
+           autocomplete="one-time-code" maxlength="6" pattern="[0-9]*">
+    <div style="height:10px"></div>
+    <button id="g-verify" class="primary" style="width:100%">Verify</button>
+    <div style="height:14px"></div>
+    <div class="gaterow">
+      <button id="g-resend" class="linkish" disabled>Resend in 0:59</button>
+      <button id="g-other" class="linkish">Use a different email</button>
+    </div>
+  </div>
+
+  <div id="g-note" class="note" hidden></div>
   <div id="g-err" class="err"></div>
 </div>
 
@@ -514,6 +578,11 @@
       <div class="sep"></div>
       <button id="m-signout">Sign out</button>
       <div class="sep"></div>
+      <!-- §3. Shown only to lab_admin. The edge function checks the caller's
+           own token on every action, so the hidden item is a convenience and
+           the server is the gate. -->
+      <button id="m-testers" hidden>Testers</button>
+      <div class="sep" id="m-testers-sep" hidden></div>
       <button id="m-session"><span>Session <span id="m-session-code">S-…</span></span><span class="tick" id="m-session-tick"></span></button>
       <div class="sep"></div>
       <button id="m-fresh">Start fresh</button>
@@ -571,6 +640,27 @@
   <button id="report-close" class="ghost" style="width:100%">Cancel</button>
 </div></div>
 
+<!-- ── §3 Testers. lab_admin only, and the edge function says so too. ─── -->
+<div class="sheet" id="testers-sheet"><div class="inner">
+  <h2>Testers</h2>
+  <p class="sub">Adding someone makes their account and their lab row in one step. It
+     doesn't email them — they ask for their own code.</p>
+  <input id="t-email" type="email" placeholder="them@example.com" autocomplete="off" inputmode="email">
+  <div style="height:8px"></div>
+  <input id="t-name" type="text" placeholder="Name, for the reports" autocomplete="off">
+  <div style="height:8px"></div>
+  <label class="caprow">Daily cap
+    <input id="t-cap" type="number" min="0.5" max="10" step="0.5" value="3">
+  </label>
+  <div style="height:12px"></div>
+  <button id="t-add" class="primary" style="width:100%">Add</button>
+  <div id="t-note" class="note" hidden></div>
+  <div id="t-err" class="err"></div>
+  <div id="t-list" class="tlist"></div>
+  <div style="height:10px"></div>
+  <button id="t-close" class="ghost" style="width:100%">Close</button>
+</div></div>
+
 <!-- ── GAPS §7 the dish sheet: what it is and its local name. No places. ── -->
 <div class="sheet" id="dish-sheet"><div class="inner">
   <h2 id="dish-name"></h2>
@@ -625,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v45';
+} from './lab/decisions.js?v=lab-v46';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -638,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v45';
+const BUILD = 'lab-v46';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -692,25 +782,198 @@ async function boot() {
   const { data: { session } } = await db.auth.getSession();
   if (session) return openApp();
   $('#gate').hidden = false;
+  // A refresh used to drop you back on the email step with a live Send
+  // button and a perfectly good code already in your inbox — so you sent
+  // another one, and killed the one you had.
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(GATE_KEY) ?? 'null');
+    if (saved?.email && Date.now() - Number(saved.sentAt) < CODE_GOOD_FOR_MS) {
+      showCodeStep(saved.email, Number(saved.sentAt));
+      return;
+    }
+    sessionStorage.removeItem(GATE_KEY);
+  } catch { /* private mode, or nothing saved */ }
+  $('#g-email').focus();
 }
 
-$('#g-go').addEventListener('click', async () => {
-  const email = $('#g-email').value.trim();
-  const code = $('#g-code').value.trim();
-  const err = $('#g-err'); err.textContent = '';
-  if (!email) { err.textContent = 'Email first.'; return; }
-  if ($('#g-code').hidden) {
-    // shouldCreateUser:false is half the allow-list; the other half is having a
-    // lab_testers row, which only we can create.
+// ── the gate ──────────────────────────────────────────────────────────────
+//
+// It took four rounds to get a reviewer into the lab, and this screen was the
+// first reason. "Send code" looked exactly the same after it was tapped, so
+// it got tapped again — and every tap sends a NEW code that invalidates the
+// last one, which is why none of the emails in the inbox worked.
+//
+// So: the button is disabled on the click, not on the response; the screen
+// changes to a code step you cannot mistake for the email step; and the state
+// survives a refresh, because a refresh used to drop you back onto a live
+// Send button with a valid code already in your inbox.
+
+const CODE_GOOD_FOR_MS = 10 * 60 * 1000;   // how long we reopen the code step
+const RESEND_AFTER_S = 60;
+const GATE_KEY = 'lab.gate';
+
+let resendTimer = null;
+let gateEmail = '';
+
+/// "brianhj+ether@unaryx.com" -> "b•••••@unaryx.com". Enough to recognise
+/// your own address; not enough to read someone else's off a screenshot.
+function maskEmail(email) {
+  const at = String(email ?? '').indexOf('@');
+  if (at < 1) return '•••';
+  const head = email.slice(0, at);
+  return `${head[0]}${'•'.repeat(Math.max(3, Math.min(5, head.length - 1)))}${email.slice(at)}`;
+}
+
+function gateNote(text, ms = 5000) {
+  const n = $('#g-note');
+  if (!n) return;
+  n.textContent = text ?? '';
+  n.hidden = !text;
+  if (text && ms) setTimeout(() => { if (n.textContent === text) n.hidden = true; }, ms);
+}
+const gateErr = (text) => { $('#g-err').textContent = text ?? ''; };
+
+function sending(on) {
+  const b = $('#g-go');
+  b.disabled = on;
+  b.innerHTML = on ? '<span class="spin"></span>Sending…' : 'Send code';
+}
+
+/// Supabase's own wording is for us, not for a tester. Every case they can
+/// actually hit gets a sentence that says what to DO.
+function readableAuthError(message) {
+  const m = String(message ?? '');
+  if (/signups? not allowed/i.test(m)) {
+    return { text: "This email isn't on the lab yet. Ask Brian to add you.", retry: false };
+  }
+  const rate = /after (\d+) seconds?/i.exec(m);
+  if (rate || /rate limit|too many requests/i.test(m)) {
+    return { text: 'We already sent a code. Check your inbox.', retry: false,
+             codeStep: true, waitS: rate ? Number(rate[1]) : RESEND_AFTER_S };
+  }
+  if (/token has expired|invalid|otp_expired/i.test(m)) {
+    return { text: "That code's expired or isn't the newest one. Use the latest email, or resend.",
+             retry: true };
+  }
+  if (/failed to fetch|network|load failed/i.test(m)) {
+    return { text: 'Couldn\'t reach the lab. Check your connection and try again.', retry: true };
+  }
+  return { text: m || 'That didn\'t work. Try again.', retry: true };
+}
+
+function startResendCountdown(seconds) {
+  clearInterval(resendTimer);
+  const b = $('#g-resend');
+  let left = Math.max(0, Math.round(seconds));
+  const tick = () => {
+    if (left <= 0) {
+      clearInterval(resendTimer);
+      b.disabled = false;
+      b.textContent = 'Resend code';
+      return;
+    }
+    b.disabled = true;
+    b.textContent = `Resend in 0:${String(left).padStart(2, '0')}`;
+    left -= 1;
+  };
+  tick();
+  resendTimer = setInterval(tick, 1000);
+}
+
+function showCodeStep(email, sentAt, waitS = RESEND_AFTER_S) {
+  gateEmail = email;
+  $('#g-step-email').hidden = true;
+  $('#g-step-code').hidden = false;
+  $('#g-sent-to').textContent = `Code sent to ${maskEmail(email)}`;
+  $('#g-code').value = '';
+  $('#g-code').focus();
+  // A refresh inside the window reopens this step with the countdown it
+  // should have, rather than with a fresh minute it has not waited.
+  const elapsed = Math.max(0, Math.round((Date.now() - sentAt) / 1000));
+  startResendCountdown(Math.max(0, waitS - elapsed));
+  try { sessionStorage.setItem(GATE_KEY, JSON.stringify({ email, sentAt })); } catch {}
+}
+
+function showEmailStep() {
+  clearInterval(resendTimer);
+  gateEmail = '';
+  $('#g-step-code').hidden = true;
+  $('#g-step-email').hidden = false;
+  sending(false);
+  gateErr(''); gateNote('');
+  try { sessionStorage.removeItem(GATE_KEY); } catch {}
+  $('#g-email').focus();
+}
+
+/// Ask for a code. `resend` only changes what we say afterwards.
+async function requestCode(email, { resend = false } = {}) {
+  gateErr('');
+  if (!resend) sending(true);
+  try {
+    // shouldCreateUser:false is half the allow-list; the other half is having
+    // a lab_testers row, which only the Testers panel creates.
     const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-    if (error) { err.textContent = error.message; return; }
-    $('#g-code').hidden = false; $('#g-go').textContent = 'Sign in';
-    err.textContent = 'Check your email.';
+    if (error) {
+      const e = readableAuthError(error.message);
+      gateErr(e.text);
+      if (e.codeStep) showCodeStep(email, Date.now(), e.waitS ?? RESEND_AFTER_S);
+      else if (e.retry) sending(false);
+      else sending(false), $('#g-go').disabled = true;
+      return false;
+    }
+  } catch (err) {
+    gateErr(readableAuthError(err?.message).text);
+    sending(false);
+    return false;
+  }
+  sending(false);
+  showCodeStep(email, Date.now());
+  if (resend) gateNote('New code sent. Use this one, not the earlier email.');
+  return true;
+}
+
+async function verifyCode(code) {
+  gateErr('');
+  const b = $('#g-verify');
+  b.disabled = true; b.innerHTML = '<span class="spin"></span>Checking…';
+  const { error } = await db.auth.verifyOtp({ email: gateEmail, token: code, type: 'email' });
+  b.disabled = false; b.textContent = 'Verify';
+  if (error) {
+    gateErr(readableAuthError(error.message).text);
+    $('#g-code').value = '';
+    $('#g-code').focus();
     return;
   }
-  const { error } = await db.auth.verifyOtp({ email, token: code, type: 'email' });
-  if (error) { err.textContent = error.message; return; }
+  try { sessionStorage.removeItem(GATE_KEY); } catch {}
+  clearInterval(resendTimer);
   openApp();
+}
+
+$('#g-go').addEventListener('click', () => {
+  const email = $('#g-email').value.trim();
+  if (!email) { gateErr('Email first.'); return; }
+  // Disabled on the CLICK, so a double-tap is one request and one code.
+  requestCode(email);
+});
+$('#g-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#g-go').click(); });
+
+$('#g-resend').addEventListener('click', () => {
+  if ($('#g-resend').disabled || !gateEmail) return;
+  $('#g-code').value = '';
+  requestCode(gateEmail, { resend: true });
+});
+$('#g-other').addEventListener('click', showEmailStep);
+$('#g-verify').addEventListener('click', () => {
+  const code = $('#g-code').value.replace(/\D/g, '');
+  if (code.length !== 6) { gateErr('Six digits.'); return; }
+  verifyCode(code);
+});
+// The sixth digit submits. Typed or pasted — a tester who has just pasted a
+// code should not have to find a button.
+$('#g-code').addEventListener('input', (e) => {
+  const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+  if (e.target.value !== digits) e.target.value = digits;
+  if (digits.length === 6) verifyCode(digits);
 });
 
 async function openApp() {
@@ -722,12 +985,26 @@ async function openApp() {
   const { data, error } = await db.from('lab_testers')
     .select('id, name, home_city, last_location, preferences, daily_cap_usd, lab_admin, daily_limit_exempt').maybeSingle();
   if (error || !data) {
+    // Two lists: an account can sign in and still not be a tester. §1 —
+    // give them a way out, or the only exit is clearing site data.
     $('#convo-col').append(sunaTurn("You're signed in, but you're not on the lab list yet. Tell Brian and he'll add you."));
+    const out = el('button', 'btn', 'Sign out');
+    out.style.cssText = 'margin: 16px auto; display: block;';
+    out.onclick = async () => {
+      try { await db.auth.signOut(); } catch {}
+      forgetEverything();
+    };
+    $('#convo-col').append(out);
     $('#dock').style.display = 'none';
     return;
   }
   tester = data;
   if (!Array.isArray(tester.preferences)) tester.preferences = [];
+  // §3. Only an admin is shown Testers. `lab-admin` checks the caller's own
+  // token on every action, so this is what the menu looks like, not who can
+  // do it.
+  $('#m-testers').hidden = tester.lab_admin !== true;
+  $('#m-testers-sep').hidden = tester.lab_admin !== true;
   // A stored fix is a FALLBACK, not where they are. It is marked `saved` until
   // the phone confirms otherwise, and the bar shows that.
   if (tester.last_location) location_ = { ...tester.last_location, source: 'saved' };
@@ -822,6 +1099,8 @@ $('#menu-scrim').addEventListener('click', closeMenu);
 // without a reload, so a half-cleared screen can never be what they see.
 $('#m-signout').addEventListener('click', async () => {
   closeMenu();
+  // §2: if the network is down, clear locally anyway. A sign-out that fails
+  // silently and leaves you signed in is worse than no button.
   try { await db.auth.signOut(); } catch (e) { console.warn('[lab] signOut', e?.message ?? e); }
   forgetEverything();
 });
@@ -858,6 +1137,10 @@ function forgetEverything() {
       if (k.startsWith('lab.')) localStorage.removeItem(k);
     }
   } catch { /* private mode; nothing was stored anyway */ }
+  // The half-finished sign-in goes too, or signing out would drop you on a
+  // code step for the account you just left.
+  try { sessionStorage.removeItem(GATE_KEY); } catch {}
+  clearInterval(resendTimer);
 
   // Back to the sign-in screen, with nothing of theirs still on it.
   //
@@ -876,9 +1159,16 @@ function forgetEverything() {
   set('#app', (n) => { n.hidden = true; });
   set('#gate', (n) => { n.hidden = false; });
   set('#g-email', (n) => { n.value = ''; });
-  set('#g-code', (n) => { n.value = ''; n.hidden = true; });
-  set('#g-go', (n) => { n.textContent = 'Send code'; });   // the gate's own first label
+  set('#g-code', (n) => { n.value = ''; });
+  set('#g-step-code', (n) => { n.hidden = true; });
+  set('#g-step-email', (n) => { n.hidden = false; });
+  set('#g-go', (n) => { n.disabled = false; n.textContent = 'Send code'; });
+  set('#g-note', (n) => { n.hidden = true; n.textContent = ''; });
+  set('#testers-sheet', (n) => { n.dataset.open = '0'; });
+  set('#m-testers', (n) => { n.hidden = true; });
+  set('#m-testers-sep', (n) => { n.hidden = true; });
   set('#g-err', (n) => { n.textContent = ''; });
+  gateEmail = '';
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
@@ -1791,6 +2081,113 @@ $('#p-loctype').addEventListener('click', () => {
   $('#loc-input').focus();
 });
 $('#dish-close').addEventListener('click', () => { $('#dish-sheet').dataset.open = '0'; });
+
+// ── §3 Testers ────────────────────────────────────────────────────────────
+//
+// It took four rounds to get a reviewer into the lab, and the second reason
+// was that there are TWO lists: an auth account and a `lab_testers` row.
+// Nothing added both. This does, in one tap.
+//
+// Everything goes through `lab-admin`, which checks the caller's own token
+// against `lab_admin` on every action. Hiding the menu item is a courtesy,
+// not the gate — a non-admin who finds this sheet gets a 403.
+async function labAdmin(body) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return { error: 'Signed out.' };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/lab-admin`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`,
+                 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: out.error ?? `That didn't work (${r.status}).` };
+    return out;
+  } catch (e) {
+    return { error: "Couldn't reach the lab. Check your connection." };
+  }
+}
+
+const sinceText = (iso) => {
+  if (!iso) return 'never';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
+
+async function renderTesters() {
+  const list = $('#t-list');
+  list.replaceChildren(el('div', 'tmeta', 'Loading…'));
+  const out = await labAdmin({ action: 'list_testers' });
+  if (out.error) { list.replaceChildren(el('div', 'tmeta', out.error)); return; }
+  list.replaceChildren();
+  for (const t of out.testers ?? []) {
+    const row = el('div', 'trow');
+    const words = el('div', 'twords');
+    words.append(el('div', 'tname', t.name ?? '—'));
+    const bits = [t.email_masked, `$${t.daily_cap_usd}/day`, `active ${sinceText(t.last_active)}`];
+    if (t.lab_admin) bits.push('admin');
+    if (t.test_account) bits.push('test account');
+    words.append(el('div', 'tmeta', bits.join(' · ')));
+    row.append(words);
+    const rm = el('button', 'rm', 'Remove');
+    rm.type = 'button';
+    rm.onclick = () => confirmSheet(`Remove ${t.name}?`, {
+      // Said out loud, because "Remove" next to an email reads like it
+      // deletes the account. It does not.
+      hint: 'Takes them off the lab list. Their account stays — they just '
+          + "can't use the lab until they're added again.",
+      danger: 'Remove',
+      onYes: async () => {
+        const r = await labAdmin({ action: 'remove_tester', tester_id: t.id });
+        if (r.error) { $('#t-err').textContent = r.error; return; }
+        renderTesters();
+      },
+    });
+    row.append(rm);
+    list.append(row);
+  }
+}
+
+$('#m-testers').addEventListener('click', async () => {
+  closeMenu();
+  $('#t-err').textContent = '';
+  $('#t-note').hidden = true;
+  $('#testers-sheet').dataset.open = '1';
+  renderTesters();
+});
+$('#t-close').addEventListener('click', () => { $('#testers-sheet').dataset.open = '0'; });
+
+$('#t-add').addEventListener('click', async () => {
+  const email = $('#t-email').value.trim().toLowerCase();
+  const name = $('#t-name').value.trim();
+  const cap = Number($('#t-cap').value);
+  const err = $('#t-err'), note = $('#t-note');
+  err.textContent = ''; note.hidden = true;
+  if (!email || !name) { err.textContent = 'An email and a name.'; return; }
+  // The standing-rules ceiling, said here as well as enforced server-side,
+  // so the number cannot be typed and then silently refused.
+  if (!(cap > 0 && cap <= 10)) { err.textContent = 'The cap has to be between $0 and $10.'; return; }
+
+  const btn = $('#t-add');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Adding…';
+  const out = await labAdmin({ action: 'add_tester', email, name, daily_cap_usd: cap });
+  btn.disabled = false; btn.textContent = 'Add';
+
+  if (out.error) { err.textContent = out.error; return; }
+  if (out.result === 'already') {
+    note.textContent = `Already a tester — ${out.name}.`;
+    note.hidden = false;
+    return;
+  }
+  note.textContent = 'Added. Tell them to open app.unaryx.com/lab and sign in with this email.';
+  note.hidden = false;
+  $('#t-email').value = ''; $('#t-name').value = ''; $('#t-cap').value = '3';
+  renderTesters();
+});
 
 async function renderPanel() {
   const n = rightNow();
