@@ -2146,6 +2146,31 @@ function showMismatch(holder, d) {
   holder.append(box);
 }
 
+/// A country with several ways in. Her question, the three or four cities,
+/// and nothing searched until one is tapped — Brian, 29 Sep: "never search
+/// from a country's centroid again".
+function showCityChoice(holder, d) {
+  const box = el('div', 'dx citychoice');
+  if (d.message) box.append(el('div', 'sunaline', d.message));
+  const row = el('div', 'chips');
+  for (const city of d.cities.slice(0, 4)) {
+    const b = el('button', 'reason', String(city));
+    b.onclick = () => {
+      box.remove();
+      topicSubject = { name: String(city), source: 'chip' };
+      renderContext();
+      ask({ chip: null, request: lastAsk, subjectOverride: String(city), subjectSource: 'chip' });
+    };
+    row.append(b);
+  }
+  box.append(row);
+  holder.append(box);
+  // She is waiting on them, not on us: the waiting scene stops.
+  if (sunaNode) updateSuna(sunaNode, d.face ?? 'mismatch', d.message ?? '', false);
+  setBusy(false);
+  scroll();
+}
+
 /// §4. Tap a chip to fix it, × to drop it. Either cancels the running
 /// search and re-runs with the change, and every edit is saved as `stated`
 /// with source `chip`.
@@ -2696,7 +2721,11 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           // UI-DECISIONS §1/§2. Every event carries Suna's line and her face,
           // chosen server-side so it is never a repeat. The old status line
           // is still set for Mode B, which keeps today's screens.
-          if (d.text && modeKnown !== 'B') {
+          // Mode B used to fall to the old status bar here, so the plan's
+          // stage events — newly emitted on 29 Sep — showed as "Checking
+          // what's open…" instead of her line. In decisions mode there is
+          // no status bar at all, in either mode.
+          if (d.text && (DECISIONS_UI || modeKnown !== 'B')) {
             if (msToFirstLine === null) msToFirstLine = Date.now() - sentAt;
             if (!sunaNode) { sunaNode = sunaBlock(d.face ?? 'searching', d.text); holder.prepend(sunaNode); }
             else updateSuna(sunaNode, d.face, d.text, false);
@@ -2709,6 +2738,21 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           if (d.event === 'location_mismatch' && Array.isArray(d.lines)) {
             showMismatch(holder, d);
           }
+        }
+        // A country with one obvious way in. The server resolved it and said
+        // so; the header and the chips have to agree with her, or she says
+        // "Assuming you land in Ulaanbaatar" over a header reading Mongolia
+        // — which is what A-0245 did.
+        if (event === 'assumed' && d.value) {
+          topicSubject = { name: String(d.value), source: 'assumed' };
+          renderContext();
+          lastParse = { ...(lastParse ?? {}), area: String(d.value) };
+          renderChipsFor(holder, lastParse);
+        }
+        // Several ways in. Her question, three or four city chips, and
+        // nothing searched until one is tapped.
+        if (event === 'need_city' && Array.isArray(d.cities)) {
+          showCityChoice(holder, d);
         }
         // §4. The chips arrive on their own event, whenever the parse lands.
         if (event === 'chips') {

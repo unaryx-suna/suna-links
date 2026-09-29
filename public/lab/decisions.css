@@ -317,6 +317,10 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dxscrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 39; }
 .dx .reasons, .dx.sheet .reasons { display: flex; flex-wrap: wrap; gap: 8px; }
 /* NotThis.dc.html and the time sheet: filled, radius 16, 52 px, no border. */
+/* Her question and the city chips under it. */
+.dx.citychoice { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px; }
+.dx.citychoice .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
 .dx .reason, .dx.sheet .reason {
   border: 0; background: #2a2a2e; border-radius: 16px;
   min-height: 52px; padding: 0 16px;
