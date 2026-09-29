@@ -715,7 +715,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v52';
+} from './lab/decisions.js?v=lab-v53';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +728,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v52';
+const BUILD = 'lab-v53';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1651,9 +1651,12 @@ function renderContext() {
   } else {
     bits.push(...placeProvenance());
   }
+  // Both counts. "4 left" never said WHAT was left, so a tester who had
+  // used their plan read it as four plans (Brian, 29 Sep).
   if (dailyState && !dailyState.exempt) {
     const q = Number(dailyState.quick_left ?? 0);
-    bits.push(q === 0 ? 'none left today' : `${q} left`);
+    const pl = Number(dailyState.plan_left ?? 0);
+    bits.push(`${q} quick · ${pl === 0 ? '0 plans' : `${pl} plan${pl === 1 ? '' : 's'}`} left`);
   }
   $('#ctx-sub').textContent = bits.filter(Boolean).join(' · ');
 }
@@ -3396,6 +3399,22 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         }
         if (event === 'refusal_id') { lastRefusalId = d.id; }
         // LAB-R5 §2. Out of answers for today, with a way to earn three more.
+        // The same plan they already have. Not a refusal and not a second
+        // plan: the one from earlier, said so.
+        if (event === 'again') {
+          document.body.classList.add('dx-answered');
+          collapseChips();
+          bubble.remove();
+          clearPending();
+          const host = el('div');
+          holder.append(host);
+          const tag = el('div', 'fromearlier', d.label ?? 'From earlier today');
+          host.append(tag);
+          renderPlanScreens(host, d.response ?? {}, { ...d, places: d.places ?? [] });
+          answered = true;
+          renderContext();
+          scroll();
+        }
         if (event === 'limit') {
           holder.replaceChildren(limitCard(d));
           clearTimeout(slowTimer); setStatus('');
@@ -4554,12 +4573,30 @@ function noFactsCard(d, request) {
 /// Built on `.refused`, the same card shape as a refusal: this is not an
 /// answer and must never be styled like one.
 function limitCard(d) {
+  // Plans: her, pouting, with ONE line, the clock time plans come back, and
+  // one thing to do. Brian, 29 Sep — the old screen explained the billing
+  // ("plans are the expensive ones") and then said the same thing twice.
+  if (d.mode === 'B') {
+    const card = el('div', 'dx limitscreen');
+    card.append(sunaBlock('pout', d.message));
+    if (d.back_at) card.append(el('div', 'backat', `Plans back at ${d.back_at}`));
+    const go = el('button', 'primary', 'Ask a quick one');
+    go.type = 'button';
+    go.onclick = () => {
+      // Straight to a clean ask screen with the composer in it — the point
+      // of the button is that the next thing is one tap away.
+      card.closest('.turn')?.remove();
+      renderAskScreen();
+      $('#box')?.focus();
+    };
+    card.append(go);
+    return card;
+  }
+
   const card = el('div', 'refused');
   card.append(el('p', null, d.message));
   if (!d.can_earn_more) {
-    card.append(el('p', null, d.mode === 'B'
-      ? 'Quick questions are still open.'
-      : "That's it for today — it resets in the morning."));
+    card.append(el('p', null, "That's it for today — it resets in the morning."));
     return card;
   }
 
