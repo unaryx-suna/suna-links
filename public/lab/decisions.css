@@ -262,6 +262,12 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 /* Back to a card they have already seen. */
 .dx .earlierpicks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   font-size: 13px; color: var(--dx-muted); padding: 2px 0 6px; }
+/* B1/B2: the late-landing alternative on the strip, and a dish's line as a
+   LINE rather than something you have to tap to read. */
+.dx .lateonlystrip { display: block; margin-top: 6px; font-size: 13px; color: var(--dx-muted); }
+.dx .lateonlystrip .lateonlyhead { color: var(--dx-sand); margin-right: 6px; }
+.dx .eatcard .eatwhat { display: block; margin-top: 4px; font-size: 13px;
+  color: var(--dx-muted); line-height: 1.35; white-space: normal; }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
 .dx .actions .go { flex: 1.5; }

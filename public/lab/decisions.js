@@ -676,15 +676,21 @@ export function detailsSheet(pick, { onWrong }) {
     if (pick.unknowns?.length) {
       section("What we couldn't check", pick.unknowns.join(' '));
     }
+    // B4. Nothing on screen names or links a source. The claims themselves are
+    // facts and stay; the `source_name` beside them does not — A-0408's held a
+    // raw URL (date.nager.at) and this sheet printed it. The section was called
+    // "Sources", which is the decision's own name for what must not be here.
+    //
+    // The ids and the names are still on the row behind the scenes, which is
+    // how a Wrong report gets checked.
     if (pick.claims?.length) {
       const list = el('div');
       for (const c of pick.claims) {
         const r = el('div', 'rowline');
         r.append(el('span', null, c.text ?? String(c)));
-        if (c.source_name) r.append(el('span', 'src', c.source_name));
         list.append(r);
       }
-      section('Sources', list);
+      section('What this is based on', list);
     }
     const wrong = el('button', 'linkish2', 'Something wrong?');
     wrong.type = 'button';
@@ -929,6 +935,17 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       words.append(el('div', 'daytitle', heading));
       const stops = stopNames(day, nameOf).filter((n) => String(n) !== heading);
       if (stops.length) words.append(el('div', 'daystops', stops.join(' · ')));
+      // B1. v2.8's `late_only` is an ALTERNATIVE for a late landing, not one
+      // more stop. It was rendered — on the day screen, which you reach by
+      // tapping in — so Ether read the strip and never saw it. It belongs
+      // where the day is, which is here.
+      const late = (day?.items ?? []).find((it) => it?.late_only);
+      if (late) {
+        const alt = el('div', 'lateonlystrip');
+        alt.append(el('span', 'lateonlyhead', 'If you land late, just this:'));
+        alt.append(el('span', null, nameOf?.(late) ?? String(late?.name ?? '')));
+        words.append(alt);
+      }
       card.append(words);
       card.append(el('span', 'chev', '›'));
       const d = day, b = block;
@@ -943,35 +960,25 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
   root.append(strip);
 
   // Brian, 29 Sep: A-0237 and A-0238 both returned seven dishes and the plan
-  // showed none of them. The name, the local name, and the one line on tap.
+  // showed none of them. The name, the local name, and the line about it.
   const eats = (parsed?.worth_eating ?? []).filter((x) => x?.name);
   if (eats.length) {
     const sec = el('section', 'eats');
     sec.append(el('h2', null, 'Worth eating'));
     const strip2 = el('div', 'eatstrip');
     for (const dish of eats) {
-      const card = el('button', 'eatcard');
-      card.type = 'button';
+      // B2, and Brian on 24 Sep: "dish tiles show the `what` line". It was
+      // built as a disclosure — the line was there, hidden until the tile was
+      // tapped — and a line nobody taps is a line nobody reads. Ether looked
+      // at A-0408 and saw names only. It is a line now.
+      const card = el('div', 'eatcard');
       card.append(el('span', 'eatname', String(dish.name)));
       if (dish.local_name) card.append(el('span', 'eatlocal', String(dish.local_name)));
+      if (dish.what) card.append(el('span', 'eatwhat', String(dish.what)));
       // v2.6's `where`. Nothing at all when it is null or missing — an empty
       // grey tag under a dish reads as a place we failed to name.
       const whereText = String(dish.where ?? '').trim();
       if (whereText) card.append(el('span', 'eatwhere', whereText));
-      const what = dish.what ? el('span', 'eatwhat', String(dish.what)) : null;
-      if (what) {
-        what.hidden = true;
-        card.append(what);
-        card.setAttribute('aria-expanded', 'false');
-        card.onclick = () => {
-          const open = what.hidden;
-          what.hidden = !open;
-          card.classList.toggle('open', open);
-          card.setAttribute('aria-expanded', String(open));
-        };
-      } else {
-        card.disabled = true;
-      }
       strip2.append(card);
     }
     sec.append(strip2);
