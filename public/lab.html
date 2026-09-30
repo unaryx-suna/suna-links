@@ -482,6 +482,14 @@
   /* A two-way choice, not a checkbox: both answers are named, so neither is
      the one you get by not reading. */
   .choice { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* "Somewhere else": the box opens under the chips, not over them. */
+  .cityother { display: flex; gap: 8px; margin-top: 10px; }
+  .cityinput {
+    flex: 1; min-width: 0; margin: 0; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font: inherit; font-size: 15px;
+  }
+  .cityinput:focus { outline: none; border-color: var(--sand); }
   .choicewhy { font-size: 13px; color: var(--dim); margin-top: 6px; line-height: 1.35; }
   .tlist { margin-top: 18px; display: flex; flex-direction: column; }
   .trow { display: flex; align-items: center; gap: 10px; padding: 10px 0;
@@ -745,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v59';
+} from './lab/decisions.js?v=lab-v60';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -758,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v59';
+const BUILD = 'lab-v60';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2891,20 +2899,69 @@ function showMismatch(holder, d) {
 /// A country with several ways in. Her question, the three or four cities,
 /// and nothing searched until one is tapped — Brian, 29 Sep: "never search
 /// from a country's centroid again".
+/// COUNTRIES §1. Which city, before anything is searched.
+///
+/// Up to six, the capital first, then by population — the server picks them
+/// from our own `cities` and `home_cities` rows, so this screen costs nothing
+/// and arrives in about a second. It used to show four from a hand-written
+/// table, after a paid geocode had already told us the subject was a country.
+///
+/// The coordinates ride along with each chip, so the answer after the tap
+/// needs no lookup either.
 function showCityChoice(holder, d) {
   const box = el('div', 'dx citychoice');
   if (d.message) box.append(el('div', 'sunaline', d.message));
+  const points = new Map((d.city_points ?? [])
+    .filter((p) => p && p.name).map((p) => [String(p.name), p]));
   const row = el('div', 'chips');
-  for (const city of d.cities.slice(0, 4)) {
+
+  const go = (city) => {
+    box.remove();
+    topicSubject = { name: String(city), source: 'chip' };
+    renderContext();
+    const at = points.get(String(city)) ?? null;
+    ask({
+      chip: null, request: lastAsk,
+      subjectOverride: String(city), subjectSource: 'chip',
+      // Answering her question: it never costs one of the day's asks.
+      answeringQuestion: true,
+      subjectPoint: at ? { lat: at.lat, lng: at.lng } : null,
+    });
+  };
+
+  for (const city of d.cities.slice(0, 6)) {
     const b = el('button', 'reason', String(city));
-    b.onclick = () => {
-      box.remove();
-      topicSubject = { name: String(city), source: 'chip' };
-      renderContext();
-      ask({ chip: null, request: lastAsk, subjectOverride: String(city), subjectSource: 'chip' });
-    };
+    b.onclick = () => go(city);
     row.append(b);
   }
+
+  // Brian: a "Somewhere else" chip that opens a text box. Six cities is not
+  // every city, and a country with six chips and no way to say "Hakodate" is
+  // a question that cannot be answered truthfully.
+  if (d.allow_other !== false) {
+    const other = el('button', 'reason', 'Somewhere else');
+    other.onclick = () => {
+      other.remove();
+      const form = el('div', 'cityother');
+      const input = el('input', 'cityinput');
+      input.type = 'text';
+      input.placeholder = d.country ? `Where in ${d.country}?` : 'Which city?';
+      input.autocomplete = 'off';
+      const send = el('button', 'reason', 'Go');
+      const submit = () => {
+        const typed = input.value.trim();
+        if (typed) go(typed);
+      };
+      send.onclick = submit;
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      form.append(input, send);
+      box.append(form);
+      input.focus();
+      scroll();
+    };
+    row.append(other);
+  }
+
   box.append(row);
   holder.append(box);
   // She is waiting on them, not on us: the waiting scene stops.
@@ -3310,7 +3367,11 @@ function beginWaiting(text) {
 }
 
 async function ask({ chip, request, scopeOverride, widenFacts, askSource,
-                    subjectOverride, notThis, alreadySuggested }) {
+                    subjectOverride, notThis, alreadySuggested,
+                    // COUNTRIES §1: answering her city question. It carries the
+                    // city's own coordinates, so nothing has to be looked up
+                    // again, and it never costs one of the day's asks.
+                    answeringQuestion, subjectPoint }) {
   if (readOnly) return;
   const adopted = waitingPainted ? $('#convo-col').querySelector('.turn.suna') : null;
   waitingPainted = false;
@@ -3415,6 +3476,8 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         // UI-DECISIONS §3/§6
         ask_source: askSource ?? null,
         subject_override: subjectOverride ?? null,
+        answering_question: answeringQuestion === true,
+        subject_point: subjectPoint ?? null,
         not_this: notThis ?? null,
         already_suggested_names: alreadySuggested ?? null,
         session_id: sessionId,
