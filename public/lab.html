@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v60';
+} from './lab/decisions.js?v=lab-v61';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v60';
+const BUILD = 'lab-v61';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2909,6 +2909,10 @@ function showMismatch(holder, d) {
 /// The coordinates ride along with each chip, so the answer after the tap
 /// needs no lookup either.
 function showCityChoice(holder, d) {
+  // Her question REPLACES the waiting line. QA found two of her lines on
+  // screen at once — "Checking Japan…" above "Where in Japan are you landing?"
+  // — and one line at a time is the rule everywhere else.
+  if (sunaNode) hushSuna(sunaNode);
   const box = el('div', 'dx citychoice');
   if (d.message) box.append(el('div', 'sunaline', d.message));
   const points = new Map((d.city_points ?? [])
