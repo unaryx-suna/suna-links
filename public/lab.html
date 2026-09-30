@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v61';
+} from './lab/decisions.js?v=lab-v62';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v61';
+const BUILD = 'lab-v62';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2969,7 +2969,12 @@ function showCityChoice(holder, d) {
   box.append(row);
   holder.append(box);
   // She is waiting on them, not on us: the waiting scene stops.
-  if (sunaNode) updateSuna(sunaNode, d.face ?? 'mismatch', d.message ?? '', false);
+  //
+  // The FACE changes; the words do not go here. Her question is already in the
+  // box, beside the chips it is about, and putting it in the stage line as
+  // well is what QA saw as two of her lines on screen — the hush above and
+  // this call were undoing each other.
+  if (sunaNode) updateSuna(sunaNode, d.face ?? 'mismatch', '', false);
   setBusy(false);
   scroll();
 }
