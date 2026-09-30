@@ -382,7 +382,7 @@
   }
   .chip::after { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
   .chip[disabled] { opacity: .4; }
-  .chip.answer { background: var(--sand); color: #000; font-weight: 600; }
+  .chip.answer, .chip.on { background: var(--sand); color: #000; font-weight: 600; }
   /* One rounded field with the attach icon INSIDE it, and a circular send
      button beside it — the "Go" text button is gone. */
   .row { display: flex; gap: 8px; align-items: flex-end; }
@@ -468,6 +468,10 @@
     border: 1px solid var(--line); background: var(--card); color: var(--text);
     font: inherit; font-size: 15px; text-align: right;
   }
+  /* A two-way choice, not a checkbox: both answers are named, so neither is
+     the one you get by not reading. */
+  .choice { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choicewhy { font-size: 13px; color: var(--dim); margin-top: 6px; line-height: 1.35; }
   .tlist { margin-top: 18px; display: flex; flex-direction: column; }
   .trow { display: flex; align-items: center; gap: 10px; padding: 10px 0;
           border-top: 1px solid var(--line); }
@@ -652,6 +656,16 @@
   <label class="caprow">Daily cap
     <input id="t-cap" type="number" min="0.5" max="10" step="0.5" value="3">
   </label>
+  <div style="height:14px"></div>
+  <!-- Brian, 30 Sep: the panel used to put EVERY tester it added on the
+       test-account list, so a real tester was left out of every number the
+       lab exists to produce. Asked now, and the default is the real one. -->
+  <div class="seclbl">Their answers</div>
+  <div class="choice" id="t-kind">
+    <button type="button" class="chip on" data-test="0" aria-pressed="true">Real tester</button>
+    <button type="button" class="chip" data-test="1" aria-pressed="false">Team / test account</button>
+  </div>
+  <div class="choicewhy" id="t-kindwhy">Counts in the numbers.</div>
   <div style="height:12px"></div>
   <button id="t-add" class="primary" style="width:100%">Add</button>
   <div id="t-note" class="note" hidden></div>
@@ -715,7 +729,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v57';
+} from './lab/decisions.js?v=lab-v58';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -728,7 +742,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v57';
+const BUILD = 'lab-v58';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2208,7 +2222,15 @@ async function renderTesters() {
     words.append(el('div', 'tname', t.name ?? '—'));
     const bits = [t.email_masked, `$${t.daily_cap_usd}/day`, `active ${sinceText(t.last_active)}`];
     if (t.lab_admin) bits.push('admin');
-    if (t.test_account) bits.push('test account');
+    // Which of the two, always — "nothing here" used to mean "real tester",
+    // and a blank is not an answer you can check.
+    bits.push(t.test_account ? 'team / test account · left out of the numbers'
+                             : 'real tester · in the numbers');
+    // A wildcard row catches everyone on a domain, and then choosing "Real
+    // tester" for one person cannot take. Name the rule that decided.
+    if (t.test_account && String(t.excluded_by ?? '').includes('%')) {
+      bits.push(`by ${t.excluded_by}`);
+    }
     words.append(el('div', 'tmeta', bits.join(' · ')));
     row.append(words);
     const rm = el('button', 'rm', 'Remove');
@@ -2239,6 +2261,28 @@ $('#m-testers').addEventListener('click', async () => {
 });
 $('#t-close').addEventListener('click', () => { $('#testers-sheet').dataset.open = '0'; });
 
+/// The two-way choice. Its state lives on the button, not in a variable, so
+/// what is on screen and what gets sent cannot drift apart.
+const WHY = {
+  0: 'Counts in the numbers.',
+  1: "One of ours. Left out of the numbers, so it can't flatter them.",
+};
+function testerKind() {
+  return $('#t-kind .chip.on')?.dataset.test === '1';
+}
+function setTesterKind(isTest) {
+  for (const b of $('#t-kind').querySelectorAll('.chip')) {
+    const on = (b.dataset.test === '1') === isTest;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  $('#t-kindwhy').textContent = WHY[isTest ? 1 : 0];
+}
+$('#t-kind').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip');
+  if (b) setTesterKind(b.dataset.test === '1');
+});
+
 $('#t-add').addEventListener('click', async () => {
   const email = $('#t-email').value.trim().toLowerCase();
   const name = $('#t-name').value.trim();
@@ -2252,7 +2296,13 @@ $('#t-add').addEventListener('click', async () => {
 
   const btn = $('#t-add');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Adding…';
-  const out = await labAdmin({ action: 'add_tester', email, name, daily_cap_usd: cap });
+  const asTest = testerKind();
+  const out = await labAdmin({
+    action: 'add_tester', email, name, daily_cap_usd: cap,
+    // Sent every time, both ways. The server used to treat a missing field as
+    // "one of ours", which is how real testers ended up left out.
+    test_account: asTest,
+  });
   btn.disabled = false; btn.textContent = 'Add';
 
   if (out.error) { err.textContent = out.error; return; }
@@ -2261,9 +2311,17 @@ $('#t-add').addEventListener('click', async () => {
     note.hidden = false;
     return;
   }
-  note.textContent = 'Added. Tell them to open app.unaryx.com/lab and sign in with this email.';
+  note.textContent = 'Added as ' + (out.test_account ? 'a team / test account — left out of '
+    + 'the numbers. ' : 'a real tester — their answers count. ')
+    + 'Tell them to open app.unaryx.com/lab and sign in with this email.';
+  // The one case the choice cannot be honoured: a wildcard row already catches
+  // the address. Better said than quietly overridden.
+  if (out.excluded_by) {
+    note.textContent += ` Note: ${out.excluded_by} still leaves them out of the numbers.`;
+  }
   note.hidden = false;
   $('#t-email').value = ''; $('#t-name').value = ''; $('#t-cap').value = '3';
+  setTesterKind(false);
   renderTesters();
 });
 
