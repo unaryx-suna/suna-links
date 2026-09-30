@@ -24,7 +24,13 @@ export function installDecisionsUI() {
   cssInjected = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/lab/decisions.css?v=lab-v56';
+  // The cache-buster follows THIS module's own, which lab.html sets to the
+  // build. It was pinned at lab-v56 by hand, so every stylesheet change since —
+  // the dish line, the working line, the follow-up field, the late-landing
+  // strip, the dish's `what` line — was invisible to anyone whose browser had
+  // cached v56's CSS. QA runs in a fresh browser and could never have seen it.
+  const cssV = new URL(import.meta.url).searchParams.get('v') ?? 'lab';
+  link.href = `/lab/decisions.css?v=${cssV}`;
   document.head.append(link);
   const st = document.createElement('style');
   st.textContent = SUNA_CSS;
