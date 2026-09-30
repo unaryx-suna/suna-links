@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v66';
+} from './lab/decisions.js?v=lab-v67';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v66';
+const BUILD = 'lab-v67';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -788,12 +788,15 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 /// being read into plans for Mongolia.
 const TRIP_KEYS = ['transport', 'company', 'budget', 'time_of_day', 'accommodation'];
 
+// B16: `passport` joins the vocabulary. It is added server-side and here in
+// the same step — the No chips were added on one side only and every tap was
+// silently dropped by addPref's check.
 const PREF_KEYS = ['transport', 'company', 'budget', 'pace', 'diet', 'interests',
                    'avoid', 'accessibility', 'accommodation', 'time_of_day', 'other',
                    // §1. The No chips write these. They were added server-side
                    // first and missing here, so every "Been there" tap was
                    // silently dropped by addPref's vocabulary check.
-                   'visited', 'max_travel', 'answer_length'];
+                   'visited', 'max_travel', 'answer_length', 'passport'];
 
 let tester = null;
 let location_ = null;
@@ -1565,11 +1568,24 @@ function rightNow() {
 /// SHORT place names only. "Tongzhou District" wrapped onto two lines and
 /// pushed the bar's buttons off the edge, so the trailing administrative word
 /// is dropped — the district or neighbourhood is what a person would say.
+/// A4. The LEADING wrapper as well as the trailing word.
+///
+/// This stripped only the tail, so "Federal Territory of Kuala Lumpur" reached
+/// the header intact — Brian's, 30 Sep. The server's `shortPlaceName` has
+/// handled the wrapper for days; there were two implementations and this was
+/// the one behind. Kept deliberately identical to it.
+const ADMIN_WRAPPER =
+  /^(?:federal territory of|special (?:administrative )?region of|state of|province of|prefecture of|city of|municipality of|greater|metropolitan)\s+/i;
+const ADMIN_TAIL =
+  /\s+(district|province|prefecture|county|municipality|region|territory|city|metropolitan area|special administrative region)$/i;
+
 function shortPlace(name) {
   if (!name) return null;
-  let t = String(name).split(',')[0].trim();
-  t = t.replace(/\s+(District|Province|Prefecture|County|Municipality|Region|Territory|City)$/i, '');
-  return t || null;
+  const raw = String(name).split(',')[0].trim();
+  let t = raw.replace(ADMIN_WRAPPER, '').trim();
+  t = t.replace(ADMIN_TAIL, '').trim();
+  // Never return nothing: an empty header reads worse than a long one.
+  return t || raw || null;
 }
 
 /// What the header says when there is no place yet.
@@ -1822,12 +1838,17 @@ async function reverseName(lat, lng, accuracyM) {
       { headers: { 'Accept-Language': 'en' } });
     if (!r.ok) return null;
     const a = (await r.json()).address ?? {};
-    const coarse = a.city || a.town || a.county || a.state || a.country || null;
+    // A4. The locality, not the admin area. Nominatim gives Kuala Lumpur a
+    // `state` of "Federal Territory of Kuala Lumpur", and reaching for `state`
+    // before `municipality` or `city_district` is how that became the header.
+    const coarse = a.city || a.town || a.municipality || a.city_district
+      || a.village || a.county || a.state || a.country || null;
     // A fix this loose cannot honestly claim a neighbourhood.
     if (accuracyM != null && accuracyM > 2000) return coarse;
     const fine = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.village || null;
-    if (fine && coarse && fine !== coarse) return `${fine}, ${coarse}`;
-    return fine || coarse;
+    const tidy = (x) => (x ? String(x).replace(ADMIN_WRAPPER, '').trim() : x);
+    if (fine && coarse && fine !== coarse) return `${tidy(fine)}, ${tidy(coarse)}`;
+    return tidy(fine || coarse);
   } catch { return null; }
 }
 
