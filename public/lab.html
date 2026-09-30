@@ -125,7 +125,18 @@
     font-size: 17px; color: var(--text); text-align: left; background: none;
   }
   #menu button:active { background: rgba(255,255,255,.08); }
+  /* `display: flex` above beats the UA stylesheet's `[hidden] { display: none }`,
+     so `hidden` did nothing to a menu button. Testers was on the menu for every
+     non-admin since the panel shipped — the divider vanished and the item did
+     not, which is exactly how it looked. Found by QA, 30 Sep. */
+  #menu button[hidden], #menu .mitem[hidden] { display: none; }
   #menu .sep { height: 0.5px; background: var(--line); }
+  /* Who you are, at the top. Not a control: quieter than the items under it,
+     and it does not take a tap. */
+  #menu .mwho {
+    display: block; padding: 9px 16px 8px; font-size: 13px; color: var(--dim);
+    line-height: 1.35; min-height: 0;
+  }
   #menu .tick { color: var(--sand); }
 
   /* ── band 2: the conversation, scrolls ────────────────────────────────── */
@@ -578,6 +589,11 @@
   <div id="menu" data-open="0" role="dialog" aria-label="More">
     <div class="scrim" id="menu-scrim"></div>
     <div class="sheetc">
+      <!-- Brian, 30 Sep: which account is signed in, at the top. Two accounts
+           in one browser is the normal case here, and "Testers is missing"
+           and "I'm signed in as the other one" look identical without it. -->
+      <div class="mwho" id="m-who">Signed in</div>
+      <div class="sep"></div>
       <button id="m-report">Report this chat</button>
       <div class="sep"></div>
       <button id="m-signout">Sign out</button>
@@ -729,7 +745,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v58';
+} from './lab/decisions.js?v=lab-v59';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -742,7 +758,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v58';
+const BUILD = 'lab-v59';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1003,6 +1019,10 @@ async function openApp() {
   $('#stamp').textContent = 'Build ' + BUILD;
   for (const k of PREF_KEYS) $('#p-key').append(new Option(k.replace(/_/g, ' '), k));
 
+  // Who this is, before anything else can fail. The tester row may not exist;
+  // the signed-in address always does.
+  await showSignedIn();
+
   const { data, error } = await db.from('lab_testers')
     .select('id, name, home_city, last_location, preferences, daily_cap_usd, lab_admin, daily_limit_exempt').maybeSingle();
   if (error || !data) {
@@ -1024,8 +1044,10 @@ async function openApp() {
   // §3. Only an admin is shown Testers. `lab-admin` checks the caller's own
   // token on every action, so this is what the menu looks like, not who can
   // do it.
-  $('#m-testers').hidden = tester.lab_admin !== true;
-  $('#m-testers-sep').hidden = tester.lab_admin !== true;
+  // §3. Only an admin sees Testers. The edge function checks the caller's own
+  // token on every action, so this is the convenience and the server is the
+  // gate — but a control nobody can use should not be on the screen either.
+  setTestersVisible(tester.lab_admin === true);
   // A stored fix is a FALLBACK, not where they are. It is marked `saved` until
   // the phone confirms otherwise, and the bar shows that.
   if (tester.last_location) location_ = { ...tester.last_location, source: 'saved' };
@@ -1199,6 +1221,7 @@ function forgetEverything() {
   set('#testers-sheet', (n) => { n.dataset.open = '0'; });
   set('#m-testers', (n) => { n.hidden = true; });
   set('#m-testers-sep', (n) => { n.hidden = true; });
+  set('#m-who', (n) => { n.textContent = 'Signed in'; });
   set('#g-err', (n) => { n.textContent = ''; });
   gateEmail = '';
 }
@@ -2183,6 +2206,49 @@ $('#dish-close').addEventListener('click', () => { $('#dish-sheet').dataset.open
 // Everything goes through `lab-admin`, which checks the caller's own token
 // against `lab_admin` on every action. Hiding the menu item is a courtesy,
 // not the gate — a non-admin who finds this sheet gets a 403.
+/// The signed-in address, masked, at the top of the ⋯ menu.
+///
+/// Brian, 30 Sep: two accounts in one browser is the normal case here, and
+/// "Testers is missing" and "I'm signed in as the other one" look identical
+/// until the menu says which.
+let signedInEmail = '';
+async function showSignedIn() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    signedInEmail = session?.user?.email ?? '';
+  } catch { signedInEmail = ''; }
+  const n = $('#m-who');
+  if (n) n.textContent = signedInEmail ? `Signed in as ${maskEmail(signedInEmail)}` : 'Signed in';
+}
+
+/// Testers in the menu, on or off. One function, so the item and its divider
+/// cannot disagree — and so a 403 can take it away again.
+function setTestersVisible(on) {
+  $('#m-testers').hidden = !on;
+  $('#m-testers-sep').hidden = !on;
+}
+
+/// The one sentence for a 403, wherever it comes from.
+///
+/// It used to read "lab_admin only" — the server's words, in two places at
+/// once: the list area and the error line. One line, in English, naming the
+/// account, because the fix is almost always to sign in as the other one.
+function notAdminLine() {
+  return 'Only an admin account can add testers.'
+    + (signedInEmail ? ` You're signed in as ${maskEmail(signedInEmail)}.` : '');
+}
+
+/// True when this response was a refusal, and the panel has been told so.
+function handledNotAdmin(out) {
+  if (out?.status !== 403) return false;
+  // They are not an admin, so the control goes away as well as saying no.
+  setTestersVisible(false);
+  $('#t-list').replaceChildren();
+  $('#t-note').hidden = true;
+  $('#t-err').textContent = notAdminLine();
+  return true;
+}
+
 async function labAdmin(body) {
   const { data: { session } } = await db.auth.getSession();
   if (!session) return { error: 'Signed out.' };
@@ -2194,7 +2260,9 @@ async function labAdmin(body) {
       body: JSON.stringify(body),
     });
     const out = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: out.error ?? `That didn't work (${r.status}).` };
+    // The STATUS travels with the error. A 403 is not "that didn't work" — it
+    // is "this account cannot", which is a different sentence.
+    if (!r.ok) return { error: out.error ?? `That didn't work (${r.status}).`, status: r.status };
     return out;
   } catch (e) {
     return { error: "Couldn't reach the lab. Check your connection." };
@@ -2214,6 +2282,10 @@ async function renderTesters() {
   const list = $('#t-list');
   list.replaceChildren(el('div', 'tmeta', 'Loading…'));
   const out = await labAdmin({ action: 'list_testers' });
+  // A 403 says one thing, in one place. It used to print the server's own
+  // "lab_admin only" into the list AND leave whatever was in the error line
+  // above it.
+  if (handledNotAdmin(out)) return;
   if (out.error) { list.replaceChildren(el('div', 'tmeta', out.error)); return; }
   list.replaceChildren();
   for (const t of out.testers ?? []) {
@@ -2243,6 +2315,7 @@ async function renderTesters() {
       danger: 'Remove',
       onYes: async () => {
         const r = await labAdmin({ action: 'remove_tester', tester_id: t.id });
+        if (handledNotAdmin(r)) return;
         if (r.error) { $('#t-err').textContent = r.error; return; }
         renderTesters();
       },
@@ -2305,6 +2378,7 @@ $('#t-add').addEventListener('click', async () => {
   });
   btn.disabled = false; btn.textContent = 'Add';
 
+  if (handledNotAdmin(out)) return;
   if (out.error) { err.textContent = out.error; return; }
   if (out.result === 'already') {
     note.textContent = `Already a tester — ${out.name}.`;
