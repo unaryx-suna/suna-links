@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v63';
+} from './lab/decisions.js?v=lab-v64';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v63';
+const BUILD = 'lab-v64';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2933,12 +2933,17 @@ function takePlanPart(holder, d) {
   if (d.kind === 'key' && d.key) {
     streamPlan[d.key] = d.value;
   } else if (d.kind === 'day' && d.value) {
-    const b = Number(d.block ?? 0), i = Number(d.index ?? 0);
+    const b = Number(d.block ?? 0);
     streamPlan.plan ??= [];
     streamPlan.plan[b] ??= { days: [] };
     streamPlan.plan[b].days ??= [];
-    streamPlan.plan[b].days[i] = d.value;
-    streamDays = Number(d.n ?? streamDays + 1);
+    // `n` is the running total across a resume; `index` restarts at 0 in the
+    // continuation's own stream. Placing by `index` put the continuation's
+    // first day ON TOP of Day 1.
+    const at = Number.isFinite(Number(d.n)) && Number(d.n) > 0
+      ? Number(d.n) - 1 : Number(d.index ?? 0);
+    streamPlan.plan[b].days[at] = d.value;
+    streamDays = Math.max(streamDays, at + 1);
   } else {
     return;
   }
@@ -3560,7 +3565,12 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // GO-LIVE §3.1. "The design has no thread: each ask is its own screen."
   // Mode B keeps today's screens, but it is not known to be B yet — and a
   // plan replaces the column anyway, so clearing here is safe for both.
-  if (DECISIONS_UI && !adopted) {
+  //
+  // EXCEPT a resume. "Keep everything already on screen and add one line with
+  // a button" — and this line wiped the part-written plan the moment the
+  // button was tapped, so "Finish it" threw away the two days it was finishing.
+  // The mocked proof caught it; nothing about it is visible in the code.
+  if (DECISIONS_UI && !adopted && !resumeFrom) {
     // Leaving the Ask screen: the composer goes back to the dock, where
     // Cancel and the status line live, so it can be hidden as one thing.
     stowComposer();
@@ -3580,7 +3590,8 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
   // Ask-chip.dc.html keeps the message as a bubble above the chips: it is
   // what she is answering, and without it the chips are the only record of
   // a question the tester may have typed thirty words of.
-  if (!adopted) $('#convo-col').append(meTurn(shown));
+  // A resume is not a new question: they tapped a button, so no new bubble.
+  if (!adopted && !resumeFrom) $('#convo-col').append(meTurn(shown));
   $('#box').value = ''; $('#box').style.height = 'auto';
   scroll();
 
@@ -3770,9 +3781,12 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         // line offers to carry on from where it stopped.
         if (event === 'partial') {
           answered = true;
+          // The id arrives WITH the offer, not after it: a tester who taps
+          // "Finish it" the moment it appears would otherwise send no
+          // `resume_from` and the writer would start again from Day 1.
+          partialAnswerId = d.answer_id ?? partialAnswerId;
           showPartialPlan(holder, d);
         }
-        if (event === 'partial_id') { partialAnswerId = d.answer_id ?? null; }
         // §4. The chips arrive on their own event, whenever the parse lands.
         if (event === 'chips') {
           if (msToChips === null) msToChips = Date.now() - sentAt;
