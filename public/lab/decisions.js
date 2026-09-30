@@ -420,11 +420,16 @@ export function pickIsShowable(pick) {
 
 export function decisionCard(pick, {
   onGo, onNotThis, onSave, onDetails, onNudge, onWouldGo, onAfterGo, after, nudges,
+  label, dish,
 }) {
   const card = el('div', 'card');
 
   const top = el('div', 'cardtop');
-  top.append(el('div', 'eyebrow', 'Your pick for tonight'));
+  // v2.9 §1.1. The label was hard-coded "tonight". At 16:16 in Ulaanbaatar
+  // Brian still had the afternoon, and the card told him the day was over.
+  // The server reads the SUBJECT's clock; "tonight" stays the fallback for an
+  // older answer replayed from the ledger.
+  top.append(el('div', 'eyebrow', `Your pick for ${label || 'tonight'}`));
   const details = withIcon('button', 'linkish2 withicon', 'info', 'Details');
   details.type = 'button';
   details.onclick = onDetails;
@@ -437,6 +442,10 @@ export function decisionCard(pick, {
   // recommendation, so the caller drops it rather than naming it nothing.
   card.append(el('div', 'placename', pick.name));
   if (pick.why) card.append(el('div', 'why', pick.why));
+  // v2.9 §2. Code owns this line, so `pick.dish` from the writer is ignored:
+  // one dish for the whole answer, under the why, the same on every card —
+  // which is why Not this swaps the place and leaves the dish alone.
+  if (dish) card.append(el('div', 'dishline', dish));
 
   const facts = el('div', 'facts');
   for (const f of factsLine(pick)) facts.append(f);

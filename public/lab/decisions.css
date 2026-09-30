@@ -233,6 +233,9 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .eyebrow, .dx.sheet .eyebrow { font-size: 14px; color: var(--dx-muted); font-weight: 500; }
 .dx .placename { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
 .dx .why { font-size: 17px; line-height: 1.4; }
+/* v2.9 §2. Suna's dish line, under the why. Her voice, so it is not grey
+   like a fact — it sits a step quieter than the why and no quieter. */
+.dx .dishline { font-size: 15px; line-height: 1.4; color: var(--dx-sand); }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
 .dx .actions .go { flex: 1.5; }
