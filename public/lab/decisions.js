@@ -420,7 +420,7 @@ export function pickIsShowable(pick) {
 
 export function decisionCard(pick, {
   onGo, onNotThis, onSave, onDetails, onNudge, onWouldGo, onAfterGo, after, nudges,
-  label, dish,
+  label, dish, onFollowUp,
 }) {
   const card = el('div', 'card');
 
@@ -506,6 +506,36 @@ export function decisionCard(pick, {
     wy.append(b);
   }
   blocks.push(wy);
+
+  // ── Ask a follow-up (Brian, 30 Sep) ─────────────────────────────────────
+  //
+  // "Put a small 'Ask a follow-up' field under the quick-answer card (below
+  // the nudges and 'Would you go?')."
+  //
+  // QA S2 is what made this necessary: after a card landed the composer was
+  // hidden and New ask started a fresh session, so there was no way to ask
+  // "What about tomorrow night?" about the same place at all. The nudges are
+  // five fixed phrasings; this is the box for everything else.
+  if (onFollowUp) {
+    const fu = el('form', 'followup');
+    const input = el('input', 'fuinput');
+    input.type = 'text';
+    input.placeholder = 'Ask a follow-up';
+    input.autocomplete = 'off';
+    const send = withIcon('button', 'fusend', 'go', '');
+    send.type = 'submit';
+    send.setAttribute('aria-label', 'Send follow-up');
+    fu.append(input, send);
+    fu.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      input.blur();
+      onFollowUp(text);
+    });
+    blocks.push(fu);
+  }
 
   // One element back to the caller, holding the card and everything the
   // board places under it.
@@ -902,7 +932,11 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       card.append(words);
       card.append(el('span', 'chev', '›'));
       const d = day, b = block;
-      card.onclick = () => onDay(b, d);
+      // A plan being written has no day screens yet — the strip is what there
+      // is — so `onDay` may be absent. Without the guard, tapping a day
+      // mid-stream threw and the whole answer went red.
+      if (onDay) card.onclick = () => onDay(b, d);
+      else { card.classList.add('nochev'); card.querySelector('.chev')?.remove(); }
       strip.append(card);
     }
   }

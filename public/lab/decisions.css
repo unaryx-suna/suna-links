@@ -236,6 +236,32 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 /* v2.9 §2. Suna's dish line, under the why. Her voice, so it is not grey
    like a fact — it sits a step quieter than the why and no quieter. */
 .dx .dishline { font-size: 15px; line-height: 1.4; color: var(--dx-sand); }
+/* A plan being written: her working line under the last finished day, and a
+   day card that is not tappable yet reads as a card, not a dead link. */
+.dx.planworking { display: flex; align-items: center; gap: 10px;
+  font-size: 15px; color: var(--dx-muted); padding: 4px 0 2px; }
+.dx .daycard.nochev { opacity: .92; }
+.dx.partialplan { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+/* "Ask a follow-up", under the nudges and Would you go. Quieter than the
+   composer it replaces — this is a PS, not the main way in. */
+.dx .followup { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.dx .fuinput {
+  flex: 1; min-width: 0; margin: 0; padding: 11px 14px; border-radius: 999px;
+  border: 1px solid var(--dx-line); background: var(--dx-paper); color: var(--dx-ink);
+  font: inherit; font-size: 15px;
+}
+.dx .fuinput::placeholder { color: var(--dx-muted); }
+.dx .fuinput:focus { outline: none; border-color: var(--dx-sand); }
+/* 44pt of target on a 36pt circle, the same trick as the chips. */
+.dx .fusend {
+  flex: 0 0 auto; width: 36px; height: 36px; padding: 0; border: 0;
+  border-radius: 999px; background: var(--dx-sand); color: #1b1510;
+  display: inline-flex; align-items: center; justify-content: center; position: relative;
+}
+.dx .fusend::after { content: ''; position: absolute; inset: -4px; }
+/* Back to a card they have already seen. */
+.dx .earlierpicks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  font-size: 13px; color: var(--dx-muted); padding: 2px 0 6px; }
 .dx .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--dx-muted); font-weight: 600; }
 .dx .actions { display: flex; gap: 10px; }
 .dx .actions .go { flex: 1.5; }

@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v62';
+} from './lab/decisions.js?v=lab-v63';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v62';
+const BUILD = 'lab-v63';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2507,6 +2507,10 @@ $('#p-reset').addEventListener('click', async () => {
 $('#new-chat').addEventListener('click', () => {
   $('#convo-col').innerHTML = '';
   lastQuestion = null;
+  // A fresh ask is a fresh topic: the earlier picks go with it, and so does
+  // anything a plan had part-written. A follow-up keeps both.
+  earlierPicks = [];
+  resetPlanStream();
   sessionId = crypto.randomUUID();
   readOnly = false;
   $('#dock').style.display = '';
@@ -2899,6 +2903,116 @@ function showMismatch(holder, d) {
 /// A country with several ways in. Her question, the three or four cities,
 /// and nothing searched until one is tapped — Brian, 29 Sep: "never search
 /// from a country's centroid again".
+// ── A plan, in stages ─────────────────────────────────────────────────────
+//
+// Brian, 30 Sep: "Render the header (context, meta, sort-these-first) and Day 1
+// the moment each object closes, and let the later days and 'Worth eating' fill
+// in behind. While the rest is being written, show Suna's working line under
+// the last finished day."
+//
+// Before this, a plan appeared all at once when the last brace arrived — 60 to
+// 90 s of spinner with Day 1 finished and sitting in a buffer.
+/// Cards this topic has already shown, so a follow-up can go back to one and
+/// so `already_suggested` is the whole topic rather than the last answer.
+/// Cleared by a fresh ask, never by a follow-up.
+let earlierPicks = [];
+let streamPlaces = [];
+let streamPlan = null;      // the object as it fills
+let streamPlanNode = null;  // where it is drawn
+let streamDays = 0;
+let partialAnswerId = null;
+
+function resetPlanStream() {
+  streamPlaces = []; streamPlan = null; streamPlanNode = null;
+  streamDays = 0; partialAnswerId = null;
+}
+
+/// One finished piece of the plan.
+function takePlanPart(holder, d) {
+  streamPlan ??= {};
+  if (d.kind === 'key' && d.key) {
+    streamPlan[d.key] = d.value;
+  } else if (d.kind === 'day' && d.value) {
+    const b = Number(d.block ?? 0), i = Number(d.index ?? 0);
+    streamPlan.plan ??= [];
+    streamPlan.plan[b] ??= { days: [] };
+    streamPlan.plan[b].days ??= [];
+    streamPlan.plan[b].days[i] = d.value;
+    streamDays = Number(d.n ?? streamDays + 1);
+  } else {
+    return;
+  }
+  drawPlanSoFar(holder);
+}
+
+/// Draw what there is, and say she is still working under it.
+///
+/// A whole re-render per part, which is five to ten of them: `planScreen`
+/// builds from an object and rebuilding it is simpler — and safer — than
+/// teaching it to patch itself. Ticked boxes are carried across, because a
+/// tester who ticks "Sort these first" while Day 3 is being written must not
+/// have it undone.
+function drawPlanSoFar(holder) {
+  if (!streamPlan) return;
+  const ticked = streamPlanNode
+    ? [...streamPlanNode.querySelectorAll('.sortrow input')].map((b) => b.checked)
+    : [];
+  const fresh = renderPlanProgress(streamPlan, streamPlaces);
+  if (streamPlanNode) streamPlanNode.replaceWith(fresh);
+  else holder.append(fresh);
+  streamPlanNode = fresh;
+  const boxes = fresh.querySelectorAll('.sortrow input');
+  ticked.forEach((on, i) => { if (boxes[i]) boxes[i].checked = on; });
+  scroll();
+}
+
+function renderPlanProgress(parsed, places) {
+  const wrap = el('div', 'planstream');
+  const byId = new Map((places ?? []).map((p) => [String(p.id ?? p.place_id), p]));
+  const nameOf = (item) => byId.get(String(item?.place_id ?? ''))?.name ?? item?.name ?? null;
+  wrap.append(planScreen(parsed, {
+    nameOf,
+    headline: String(parsed?.title ?? '').trim() || null,
+    // Tapping into a day is for the finished plan. While it is still being
+    // written, the strip is what there is.
+    onDay: null,
+  }));
+  // Her working line goes UNDER the last finished day, which is where a
+  // reader's eye already is.
+  const line = el('div', 'dx planworking');
+  line.append(el('span', 'spin'));
+  line.append(el('span', null, streamDays
+    ? `Writing day ${streamDays + 1}…`
+    : 'Putting the days together…'));
+  wrap.append(line);
+  return wrap;
+}
+
+/// The hang guard fired part-way. Keep everything, offer to finish.
+function showPartialPlan(holder, d) {
+  streamPlanNode?.querySelector('.planworking')?.remove();
+  const box = el('div', 'dx partialplan');
+  box.append(el('div', 'sunaline', String(d.message ?? 'Ran out of time on the rest. Finish it?')));
+  const go = el('button', 'reason', String(d.button ?? 'Finish it'));
+  go.type = 'button';
+  go.onclick = () => {
+    box.remove();
+    // Carries on from where it stopped: the same topic, the days already on
+    // screen named so they are not written twice.
+    ask({
+      chip: null, request: lastAsk,
+      resumeFrom: partialAnswerId,
+      daysDone: Number(d.days_done ?? streamDays) || 0,
+      keysDone: Array.isArray(d.keys_done) ? d.keys_done : Object.keys(streamPlan ?? {}),
+      answeringQuestion: true,
+    });
+  };
+  box.append(go);
+  (streamPlanNode ?? holder).append(box);
+  setBusy(false);
+  scroll();
+}
+
 /// COUNTRIES §1. Which city, before anything is searched.
 ///
 /// Up to six, the capital first, then by population — the server picks them
@@ -3180,6 +3294,26 @@ function renderDecisionCard(holder, d, picks, i = 0) {
   }
 
   const host = el('div', 'dx');
+
+  // "The new card replaces the old one, with an 'Earlier picks' row to go
+  // back." A follow-up is not a new conversation, so the places it has
+  // already offered stay reachable.
+  if (earlierPicks.length) {
+    const row = el('div', 'earlierpicks');
+    row.append(el('span', null, 'Earlier picks'));
+    for (const old of earlierPicks.slice(-4)) {
+      if (!old?.name) continue;
+      const b = el('button', 'plain', String(old.name));
+      b.type = 'button';
+      b.onclick = () => {
+        host.remove();
+        renderDecisionCard(holder, d, [old, ...picks.filter((p) => p !== old)], 0);
+      };
+      row.append(b);
+    }
+    host.append(row);
+  }
+
   const card = decisionCard(pick, {
     onGo: () => {
       recordTap('go', pick.name, d.ref);
@@ -3199,6 +3333,25 @@ function renderDecisionCard(holder, d, picks, i = 0) {
     // to the pick — they do not change when a tester taps Not this.
     label: d.card_label ?? null,
     dish: d.dish_line ?? null,
+    // ── Ask a follow-up (Brian, 30 Sep) ─────────────────────────────────
+    //
+    // "A follow-up stays in the same topic: same subject, likes and dislikes,
+    // and the earlier picks go in as already_suggested. The usual mode rule
+    // applies, so 'What about tomorrow night?' is Mode A for tomorrow at
+    // 19:00." The pencil still starts a fresh ask.
+    onFollowUp: (text) => {
+      // Everything already offered in this topic, so she does not repeat
+      // herself — the same list Not this sends after the third tap.
+      const seen = [...new Set([...(earlierPicks.map((p) => p.name)), ...picks.map((p) => p.name)])]
+        .filter(Boolean);
+      earlierPicks = [...earlierPicks, ...picks];
+      ask({
+        chip: null, request: text, askSource: 'followup',
+        alreadySuggested: seen,
+        // The topic carries the subject; nothing is re-asked about where.
+        subjectOverride: topicSubject?.name ?? null,
+      });
+    },
     onAfterGo: (a) => {
       recordTap('go_after', a.name, d.ref);
       if (a.maps_uri) window.open(a.maps_uri, '_blank', 'noopener');
@@ -3380,12 +3533,18 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
                     // COUNTRIES §1: answering her city question. It carries the
                     // city's own coordinates, so nothing has to be looked up
                     // again, and it never costs one of the day's asks.
-                    answeringQuestion, subjectPoint }) {
+                    answeringQuestion, subjectPoint,
+                    // Plans in stages: "Finish it?" says what is already on
+                    // screen so none of it is written twice.
+                    resumeFrom, daysDone, keysDone }) {
   if (readOnly) return;
   const adopted = waitingPainted ? $('#convo-col').querySelector('.turn.suna') : null;
   waitingPainted = false;
   busy = true; setBusy(true);
   if (!widenFacts) askedLast = request || CHIP_TEXT[chip] || '';
+  // A plan in stages keeps state between events; a new ask must not inherit
+  // the last one's days. A RESUME keeps them, because they are on screen.
+  if (!resumeFrom) resetPlanStream();
   // UI-DECISIONS §8. Every measure is per send.
   sentAt = Date.now();
   msToFirstLine = adopted ? 0 : null; msToChips = null; msToCard = null;
@@ -3487,6 +3646,9 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         subject_override: subjectOverride ?? null,
         answering_question: answeringQuestion === true,
         subject_point: subjectPoint ?? null,
+        resume_from: resumeFrom ?? null,
+        days_done: daysDone ?? 0,
+        keys_done: keysDone ?? null,
         not_this: notThis ?? null,
         already_suggested_names: alreadySuggested ?? null,
         session_id: sessionId,
@@ -3593,6 +3755,24 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         if (event === 'need_city' && Array.isArray(d.cities)) {
           showCityChoice(holder, d);
         }
+        // ── A plan, in stages (Brian, 30 Sep) ─────────────────────────────
+        //
+        // The places arrive before the writer starts, so a Day 1 drawn while
+        // the rest is still being written already has the real names and the
+        // real numbers on it.
+        if (event === 'places' && Array.isArray(d.places)) {
+          streamPlaces = d.places;
+        }
+        if (event === 'part') {
+          takePlanPart(holder, d);
+        }
+        // The hang guard fired with days on screen. Everything stays, and one
+        // line offers to carry on from where it stopped.
+        if (event === 'partial') {
+          answered = true;
+          showPartialPlan(holder, d);
+        }
+        if (event === 'partial_id') { partialAnswerId = d.answer_id ?? null; }
         // §4. The chips arrive on their own event, whenever the parse lands.
         if (event === 'chips') {
           if (msToChips === null) msToChips = Date.now() - sentAt;
@@ -3676,6 +3856,11 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         }
         if (event === 'done') {
           answered = true;
+          // The finished plan replaces the one that was being written, rather
+          // than landing under it. Its names and numbers come from the places
+          // as enriched, and its day cards are tappable.
+          streamPlanNode?.remove();
+          streamPlanNode = null;
           // v2: nothing was found. Replace the whole turn with the offer —
           // drawing an empty plan around it would look like a broken answer
           // rather than an honest one.
