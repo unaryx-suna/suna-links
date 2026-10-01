@@ -787,7 +787,12 @@ export function reorderByReason(picks, reason, rejected) {
 
 /// The stops of a day, in the order they are done, for the strip's summary.
 function stopNames(day, nameOf) {
-  return ((day?.items ?? []).map((it) => nameOf(it)).filter(Boolean));
+  // U16. A `late_only` item is the ALTERNATIVE for a late landing, not a stop
+  // on the day — so it never belongs in the day's list of stops. Left in, the
+  // same place appeared twice: once as somewhere they are going, and again as
+  // the thing to do instead of going.
+  return ((day?.items ?? []).filter((it) => !it?.late_only)
+    .map((it) => nameOf(it)).filter(Boolean));
 }
 
 /// A day's heading is its anchor place. The writer's own label is used when
@@ -842,7 +847,18 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
 
   // "Sort these first" survives from the old screens because it is the one
   // part a tester has to act on before the trip, not while reading it.
-  const first = (parsed?.sort_first ?? []).filter((x) => x?.headline);
+  //
+  // U14. ONE prep section. `setup` ("Sort before you go") was a second list of
+  // the same kind of thing, further down, so the same trip had two places to
+  // look for what to do before leaving — and a tester who ticked one still had
+  // the other waiting. The setup rows join this list, with their own `for` as
+  // the detail, and they get checkboxes like every other row here.
+  const first = [
+    ...(parsed?.sort_first ?? []).filter((x) => x?.headline)
+      .map((x) => ({ headline: x.headline, detail: x.detail })),
+    ...(parsed?.setup ?? []).filter((x) => x?.name)
+      .map((x) => ({ headline: String(x.name), detail: x.for ? String(x.for) : null })),
+  ];
   if (first.length) {
     const sec = el('section', 'sortfirst');
     sec.append(el('h2', null, 'Sort these first'));
@@ -900,19 +916,8 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
     root.append(sec);
   }
 
-  // What to book or buy before leaving.
-  const setup = (parsed?.setup ?? []).filter((x) => x?.name);
-  if (setup.length) {
-    const sec = el('section', 'planbox');
-    sec.append(el('h2', null, 'Sort before you go'));
-    for (const x of setup) {
-      const row = el('div', 'boxrow');
-      row.append(el('span', 'boxhead', String(x.name)));
-      if (x.for) row.append(el('span', 'src', String(x.for)));
-      sec.append(row);
-    }
-    root.append(sec);
-  }
+  // U14. "Sort before you go" is gone as a section of its own: its rows are in
+  // "Sort these first" above, which is the one list a tester works through.
 
   // What the plan leaves out, and what keeping it would have cost.
   const dropped = (parsed?.drop ?? []).filter((x) => x?.save_id);
