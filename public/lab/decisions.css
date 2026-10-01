@@ -238,7 +238,15 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .why { font-size: 17px; line-height: 1.4; }
 /* v2.9 §2. Suna's dish line, under the why. Her voice, so it is not grey
    like a fact — it sits a step quieter than the why and no quieter. */
+/* U15. Outside the card, not inside it: it is about the city, not about the
+   place on the card. Her voice, so it reads as an aside rather than a fact
+   about the pick. `.dishline` stays for an older answer replayed from the
+   ledger, where it is still rendered inside. */
 .dx .dishline { font-size: 15px; line-height: 1.4; color: var(--dx-sand); }
+.dx .dishnudge {
+  font-size: 15px; line-height: 1.45; color: var(--dx-sand);
+  padding: 2px 16px 0; font-style: italic;
+}
 /* A plan being written: her working line under the last finished day, and a
    day card that is not tappable yet reads as a card, not a dead link. */
 .dx.planworking { display: flex; align-items: center; gap: 10px;

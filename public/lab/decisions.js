@@ -448,10 +448,6 @@ export function decisionCard(pick, {
   // recommendation, so the caller drops it rather than naming it nothing.
   card.append(el('div', 'placename', pick.name));
   if (pick.why) card.append(el('div', 'why', pick.why));
-  // v2.9 §2. Code owns this line, so `pick.dish` from the writer is ignored:
-  // one dish for the whole answer, under the why, the same on every card —
-  // which is why Not this swaps the place and leaves the dish alone.
-  if (dish) card.append(el('div', 'dishline', dish));
 
   const facts = el('div', 'facts');
   for (const f of factsLine(pick)) facts.append(f);
@@ -468,6 +464,14 @@ export function decisionCard(pick, {
   card.append(actions);
 
   const blocks = [card];
+
+  // U15. The dish nudge goes OUTSIDE the place card.
+  //
+  // "Chicken rice… That's it. That's the note." sat inside the Mee Tarik card,
+  // under its why, so it read as "order this here" — at a noodle place. It is
+  // about the city, not about this pick, which is also why Not this swaps the
+  // place and leaves the dish alone. Its own row, below the card, in her voice.
+  if (dish) blocks.push(el('div', 'dishnudge', dish));
 
   // §5 / GO-LIVE §3.5. "After that" is its own small card with its own Go —
   // and on Card.dc.html it sits BELOW the pick's card, not inside its
