@@ -826,7 +826,7 @@ export function dayHeading(block, day, nameOf) {
 }
 
 /// §4. The strip: one card per day, titled by where it goes.
-export function planScreen(parsed, { nameOf, onDay, headline }) {
+export function planScreen(parsed, { nameOf, onDay, headline, layoverLabel = null }) {
   installDecisionsUI();
   const root = el('div', 'dx plan');
 
@@ -942,7 +942,12 @@ export function planScreen(parsed, { nameOf, onDay, headline }) {
       const card = el('button', 'daycard');
       card.type = 'button';
       const words = el('div', 'daywords');
-      words.append(el('div', 'eyebrow', day?.day ? String(day.day) : `Day ${n}`));
+      // B32. A layover is not a day. A-0449 was headed "Day 1 · Souq Waqif" for
+      // a few hours between flights; the airline chose the end of it, and
+      // calling it Day 1 says the opposite. The server sends the label with the
+      // answer, so an older answer replayed from the ledger still says "Day 1".
+      const dayLabel = layoverLabel ?? (day?.day ? String(day.day) : `Day ${n}`);
+      words.append(el('div', 'eyebrow', dayLabel));
       // The heading already names one stop; listing it again underneath
       // reads as two of the same place (A-0246:
       // "Gandantegchinlen Monastery / Gandantegchinlen Monastery · …").
