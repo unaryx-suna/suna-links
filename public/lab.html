@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v68';
+} from './lab/decisions.js?v=lab-v69';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v68';
+const BUILD = 'lab-v69';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1063,7 +1063,7 @@ async function openApp() {
   // the phone confirms otherwise, and the bar shows that.
   if (tester.last_location) location_ = { ...tester.last_location, source: 'saved' };
   // Ask on load, without blocking the first paint.
-  refreshLocation();
+  refreshLocation('load');
 
   await refreshDailyState();
 
@@ -1805,7 +1805,7 @@ async function askWhereYouAre(stale, copy) {
     const done = (loc) => { sheet.dataset.open = '0'; renderContext(); resolve(loc); };
     $('#loc-now').onclick = async () => {
       $('#loc-sub').textContent = 'Asking your phone…';
-      const got = await refreshLocation();
+      const got = await refreshLocation('tap');
       if (got) return done(got);
       $('#loc-sub').textContent = "Your phone still won't say. Type a place instead.";
       $('#loc-input').focus();
@@ -1928,28 +1928,107 @@ const locationIsStale = (loc) => {
 /// timeout, not a denial, and that difference is what decides whether we
 /// offer the button again or tell them to change a browser setting.
 let lastGeoError = null;   // {code, why} or null
+/// L1/L5. The last attempt, whatever happened: it rides with the next ask so
+/// the reason is in the row rather than in a console nobody is watching.
+let lastGeoAttempt = null;
 
-async function getFix() {
+/// Which browser family, for the fix line. The family only — never the whole
+/// user-agent string (PROMPT-LAB-LOCATION-BROWSER §2).
+function browserFamily() {
+  const ua = navigator.userAgent ?? '';
+  const ios = /iPhone|iPad|iPod/.test(ua);
+  if (ios) return /CriOS/.test(ua) ? 'ios-chrome' : /Safari/.test(ua) ? 'ios-safari' : 'other';
+  if (/Android/.test(ua)) return /Chrome/.test(ua) ? 'android-chrome' : 'other';
+  if (/Macintosh/.test(ua)) {
+    if (/Chrome/.test(ua)) return 'mac-chrome';
+    if (/Safari/.test(ua)) return 'mac-safari';
+  }
+  return 'other';
+}
+
+/// WebKit throws on this on some versions, so it is wrapped and optional.
+async function permissionState() {
+  try {
+    const q = await navigator.permissions?.query?.({ name: 'geolocation' });
+    return q?.state ?? null;
+  } catch { return null; }
+}
+
+/// L5. Nothing waits more than this on the browser.
+///
+/// On Brian's Mac Chrome `getCurrentPosition` NEVER calls back — no fix, no
+/// error — while the permission state reads `denied`. The browser's own
+/// `timeout: 8000` only starts once the prompt is answered, so an unanswered
+/// or broken prompt never times out at all. `ensureLocation()` awaited it on
+/// every Send, so the ask was never sent: the page sat on "Checking Chengdu…"
+/// for over four minutes with no request to `lab-answer` and no error.
+const GEO_WAIT_MS = 3000;
+/// A TAP is different: they pressed a button and are watching it, so the wait
+/// is theirs to spend. Nothing is held up behind it either way.
+const GEO_WAIT_TAP_MS = 10000;
+
+async function getFix(trigger = 'send') {
+  const started = Date.now();
+  const waitMs = trigger === 'tap' ? GEO_WAIT_TAP_MS : GEO_WAIT_MS;
+  const record = (result, code, accuracy_m, state) => {
+    lastGeoAttempt = {
+      trigger, result, code: code ?? null, ms: Date.now() - started,
+      permission_state: state ?? null, browser: browserFamily(),
+      accuracy_m: accuracy_m ?? null, build: BUILD,
+    };
+    return lastGeoAttempt;
+  };
   if (!navigator.geolocation) {
     lastGeoError = { code: 0, why: 'This browser has no location.' };
+    record('unsupported', 0, null, null);
     return null;
   }
-  const started = Date.now();
-  return await new Promise((resolve) => {
+  const state = await permissionState();
+  // The browser's answer, and a 3 s timer, racing. Whichever lands first wins
+  // and the other is ignored — a late fix still updates the saved place
+  // through `onLate` below, it just no longer holds the ask up.
+  let settled = false;
+  const fix = await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      lastGeoError = {
+        code: 3,
+        why: 'Your browser is taking too long with location.',
+        ms: Date.now() - started,
+      };
+      record('no_callback', null, null, state);
+      console.warn(`[lab] location: no callback in ${waitMs}ms `
+        + `(permission ${state ?? 'unknown'}, ${browserFamily()}) — carrying on without it`);
+      resolve(null);
+    }, waitMs);
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        lastGeoError = null;
-        resolve({
+        const got = {
           lat: +p.coords.latitude.toFixed(4),
           lng: +p.coords.longitude.toFixed(4),
           name: null,
           accuracy_m: p.coords.accuracy != null ? Math.round(p.coords.accuracy) : null,
           at: new Date().toISOString(),
           source: 'device',
-        });
+        };
+        if (settled) {
+          // It came back after we gave up. Keep it for the NEXT ask rather
+          // than throwing it away: it is a real fix, just a late one.
+          lateFix(got);
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        lastGeoError = null;
+        record('ok', null, got.accuracy_m, state);
+        resolve(got);
       },
       (err) => {
         const code = err?.code ?? 0;
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         lastGeoError = {
           code,
           why: code === 1 ? 'Location is blocked for this site.'
@@ -1958,6 +2037,8 @@ async function getFix() {
              : 'Location failed.',
           ms: Date.now() - started,
         };
+        record(code === 1 ? 'denied' : code === 2 ? 'unavailable' : code === 3 ? 'timeout' : 'failed',
+               code, null, state);
         console.warn(`[lab] location failed (${code}) after ${Date.now() - started}ms: `
           + `${err?.message ?? 'no message'}`);
         resolve(null);
@@ -1965,13 +2046,27 @@ async function getFix() {
       { timeout: 8000, maximumAge: 300000 },
     );
   });
+  return fix;
+}
+
+/// A fix that arrived after the 3 s race was lost. It is saved quietly, so the
+/// next ask has it, and the header catches up — but no ask is ever held for it.
+async function lateFix(got) {
+  try {
+    console.warn(`[lab] a late fix arrived; keeping it for the next ask`);
+    got.name = await reverseName(got.lat, got.lng, got.accuracy_m);
+    location_ = got;
+    lastGeoError = null;
+    await saveTester({ last_location: location_ });
+    renderContext();
+  } catch { /* a late fix is a bonus, never a failure */ }
 }
 
 /// A fresh fix, saved and rendered. Null if the phone would not give one.
-async function refreshLocation() {
+async function refreshLocation(trigger = 'send') {
   locating = true;
   renderContext();
-  const got = await getFix();
+  const got = await getFix(trigger);
   locating = false;
   if (!got) { renderContext(); return null; }
   got.name = await reverseName(got.lat, got.lng, got.accuracy_m);
@@ -2213,7 +2308,7 @@ $('#p-close').addEventListener('click', () => { $('#panel').dataset.open = '0'; 
 // §3. Not here? Change it.
 $('#p-locnow').addEventListener('click', async () => {
   $('#p-locwhere').textContent = 'Asking your phone…';
-  const got = await refreshLocation();
+  const got = await refreshLocation('tap');
   $('#p-locwhere').textContent = got
     ? `Now: ${got.name ?? 'found'}`
     : 'Your phone would not give a fix — type a place instead.';
@@ -2545,7 +2640,7 @@ $('#new-chat').addEventListener('click', () => {
   if (DECISIONS_UI) renderAskScreen();
   // New chat means a new situation: drop a typed place and ask the phone again.
   if (location_?.source === 'typed') location_ = { ...location_, source: 'saved' };
-  refreshLocation();
+  refreshLocation('load');
   renderChips();
 });
 
@@ -3680,6 +3775,10 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
         // UI-DECISIONS §3/§6
         ask_source: askSource ?? null,
         subject_override: subjectOverride ?? null,
+        // L1/L5. What the browser did on the last attempt, so the reason is in
+        // the row. It used to live in a console.warn and nowhere else, which is
+        // why "it hasn't worked once" could not be diagnosed at all.
+        geo_attempt: lastGeoAttempt ?? null,
         answering_question: answeringQuestion === true,
         subject_point: subjectPoint ?? null,
         resume_from: resumeFrom ?? null,
@@ -4963,7 +5062,7 @@ function needLocationCard(d, request) {
   use.type = 'button';
   use.onclick = async () => {
     use.disabled = true;
-    const fresh = await refreshLocation();
+    const fresh = await refreshLocation('tap');
     if (!fresh?.lat) { use.disabled = false; $('#loc-sheet').dataset.open = '1'; $('#loc-input').focus(); return; }
     ask({ chip: null, request });
   };
