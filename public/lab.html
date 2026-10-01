@@ -759,7 +759,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v78';
+} from './lab/decisions.js?v=lab-v79';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -772,7 +772,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v78';
+const BUILD = 'lab-v79';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -2812,6 +2812,9 @@ function ensureTail() {
   }
   // Moves it to the end if it is already somewhere else in the column.
   $('#convo-col').append(tailEl);
+  // U11 hides it behind the city question. Anything that rebuilds the tail —
+  // an answer landing, New ask — is the moment it is wanted again.
+  tailEl.hidden = false;
   // "Empty" means no conversation yet — counted in TURNS, not children. The
   // check-in card and the topic divider are not messages, and counting bare
   // children left the column stuck in its empty state once anything else was
@@ -3310,6 +3313,12 @@ function showCityChoice(holder, d) {
   // screen at once — "Checking Japan…" above "Where in Japan are you landing?"
   // — and one line at a time is the rule everywhere else.
   if (sunaNode) hushSuna(sunaNode);
+  // U11. ONLY the city chips. The starter chips ("I've got a few hours",
+  // "This weekend", "Plan a trip") sat directly underneath the question, so six
+  // cities and three unrelated openers were on screen as one row of choices —
+  // and tapping an opener threw the question away. They come back with the
+  // answer, or with New ask.
+  if (tailEl) tailEl.hidden = true;
   const box = el('div', 'dx citychoice');
   if (d.message) box.append(el('div', 'sunaline', d.message));
   const points = new Map((d.city_points ?? [])
@@ -3446,9 +3455,13 @@ function renderChipsFor(holder, parse) {
 /// with a pencil, in place of the chip row, once the card is up. Tapping it
 /// brings the chips back — nothing is hidden, only folded.
 function collapseChips() {
-  // Card.dc.html shows the ask as ONE summary row and no message bubble:
-  // the pick is the screen now. The bubble comes back with New ask.
-  $('#convo-col').querySelector('.turn.me')?.remove();
+  // U7. Their own message STAYS.
+  //
+  // Card.dc.html showed the ask as one summary row and no message bubble, and
+  // this removed the bubble to match. Dex's U7 overrules it: what someone typed
+  // is the one thing on the screen that is theirs, and replacing it with a grey
+  // row of our paraphrase is us telling them what they said. The summary row
+  // below still collapses the understood CHIPS, which is what it was for.
   const chips = $('#convo-col').querySelector('.chips.understood');
   if (!chips || !lastParse) return;
   const p = lastParse;
