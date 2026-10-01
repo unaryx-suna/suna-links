@@ -753,7 +753,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v67';
+} from './lab/decisions.js?v=lab-v68';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +766,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v67';
+const BUILD = 'lab-v68';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1751,6 +1751,10 @@ async function typedPlace(name) {
     if (typeof g?.lat === 'number' && typeof g?.lng === 'number') {
       return { ...base, name: g.name || name, lat: g.lat, lng: g.lng };
     }
+    // B29. Nothing could place it, but it is still their place: kept with the
+    // name in title case, and the header says "You set this" rather than
+    // claiming a fix we do not have.
+    if (g?.name) return { ...base, name: g.name };
   } catch { /* a name with no fix is still better than refusing to save it */ }
   return base;
 }
@@ -3879,6 +3883,16 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           holder.replaceChildren(needLocationCard(d, request || CHIP_TEXT[chip] || ''));
           scroll();
         }
+        // B28. The message named a place and nothing was searched: either we
+        // could not put it on a map, or the point we would have searched was
+        // not that place. A-0440 built a plan for Kuala Lumpur out of the word
+        // "hohhot" instead of asking.
+        if (event === 'need_place') {
+          answered = true;
+          showWaiting(false);
+          holder.replaceChildren(needPlaceCard(d, request || CHIP_TEXT[chip] || ''));
+          scroll();
+        }
         if (event === 'error') {
           answered = true;
           if (DECISIONS_UI) {
@@ -4958,6 +4972,39 @@ function needLocationCard(d, request) {
   type.onclick = () => { $('#loc-sheet').dataset.open = '1'; $('#loc-input').focus(); };
   row.append(use, type);
   host.append(row);
+  return host;
+}
+
+// B28 point 4: "ask, with the tester's own words in a box to fix." Their word
+// for the place is in the field, so a typo is one correction rather than the
+// whole sentence retyped — and the answer that follows carries it as the
+// subject, which the server has read since the city chips shipped.
+function needPlaceCard(d, request) {
+  const host = el('div', 'dx');
+  host.append(sunaBlock(d?.face ?? 'sheepish', d?.message || "I can't find that one. Spell it for me?", { small: true }));
+  const field = el('div', 'followup');
+  const box = el('input', 'fuinput');
+  box.type = 'text';
+  box.placeholder = 'Which place?';
+  box.value = d?.place ?? '';
+  box.setAttribute('aria-label', 'Which place?');
+  const go = el('button', 'go', "That's it");
+  go.type = 'button';
+  const send = () => {
+    const place = box.value.trim();
+    if (!place) { box.focus(); return; }
+    go.disabled = true;
+    // The same ask, with the place settled. `subject_override` is the field the
+    // city chips use, so one path on the server handles both.
+    ask({ chip: null, request, subjectOverride: place, askSource: 'need_place' });
+  };
+  go.onclick = send;
+  box.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
+  field.append(box, go);
+  host.append(field);
+  // Line 102 is a placeholder until Ether writes this one; the record is kept
+  // like every other line she says.
+  if (d?.line_id != null) recordLineShown(d.line_id, 'need_place');
   return host;
 }
 
