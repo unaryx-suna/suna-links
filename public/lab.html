@@ -759,7 +759,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v77';
+} from './lab/decisions.js?v=lab-v78';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -772,7 +772,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v77';
+const BUILD = 'lab-v78';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -3273,12 +3273,21 @@ function showPartialPlan(holder, d) {
     box.remove();
     // Carries on from where it stopped: the same topic, the days already on
     // screen named so they are not written twice.
+    //
+    // U12. It used to send the original sentence and nothing else, so a plan
+    // for Kyoto — chosen from the chips — was re-read as "I'm traveling to
+    // Japan next week" and she asked "Japan's big. Where are you landing?"
+    // again, after two of its days were already on screen. The topic's subject
+    // goes with the resume, with the chip's own coordinates when it has them.
     ask({
       chip: null, request: lastAsk,
       resumeFrom: partialAnswerId,
       daysDone: Number(d.days_done ?? streamDays) || 0,
       keysDone: Array.isArray(d.keys_done) ? d.keys_done : Object.keys(streamPlan ?? {}),
       answeringQuestion: true,
+      subjectOverride: topicSubject?.name ?? null,
+      subjectPoint: (topicSubject?.lat != null && topicSubject?.lng != null)
+        ? { lat: topicSubject.lat, lng: topicSubject.lng } : null,
     });
   };
   box.append(go);
@@ -3309,9 +3318,13 @@ function showCityChoice(holder, d) {
 
   const go = (city) => {
     box.remove();
-    topicSubject = { name: String(city), source: 'chip' };
-    renderContext();
     const at = points.get(String(city)) ?? null;
+    // U12. The point comes with the chip and is kept with the subject, so
+    // anything that re-asks inside this topic — "Finish it", a follow-up — can
+    // say WHERE without asking again and without paying for a lookup.
+    topicSubject = { name: String(city), source: 'chip',
+                     lat: at?.lat ?? null, lng: at?.lng ?? null };
+    renderContext();
     ask({
       chip: null, request: lastAsk,
       subjectOverride: String(city), subjectSource: 'chip',
