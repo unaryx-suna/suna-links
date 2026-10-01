@@ -759,7 +759,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v74';
+} from './lab/decisions.js?v=lab-v75';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -772,7 +772,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v74';
+const BUILD = 'lab-v75';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -4005,7 +4005,15 @@ async function ask({ chip, request, scopeOverride, widenFacts, askSource,
           // stage events — newly emitted on 29 Sep — showed as "Checking
           // what's open…" instead of her line. In decisions mode there is
           // no status bar at all, in either mode.
-          if (d.text && (DECISIONS_UI || modeKnown !== 'B')) {
+          // U13. Once the answer is on screen, a waiting line is never right —
+          // whatever order the events arrive in. "Checking Mongolia…" and
+          // "Checking Tbilisi…" both ended up under finished plans, and
+          // clearing her line at `done` could not fix it: a stage event landing
+          // AFTER the plan would create a new block and prepend it, below
+          // everything that had already been cleaned up.
+          if (answered) {
+            setStatus('', false);
+          } else if (d.text && (DECISIONS_UI || modeKnown !== 'B')) {
             if (msToFirstLine === null) msToFirstLine = Date.now() - sentAt;
             if (!sunaNode) { sunaNode = sunaBlock(d.face ?? 'searching', d.text); holder.prepend(sunaNode); }
             else updateSuna(sunaNode, d.face, d.text, false);
