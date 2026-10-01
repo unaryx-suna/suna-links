@@ -652,7 +652,10 @@
   <p class="sub" id="loc-sub">Your browser said no to location. Type a city and we'll remember it.</p>
   <button id="loc-now" class="primary" style="width:100%">Use my location</button>
   <div style="height:12px"></div>
-  <input id="loc-input" type="text" placeholder="Kuala Lumpur" autocomplete="address-level2">
+  <!-- U10: a real place name as the placeholder read as a filled-in field, so Save
+       looked broken. The prompt says what to type instead. -->
+  <input id="loc-input" type="text" placeholder="Type a city or district"
+         autocomplete="address-level2">
   <div style="height:12px"></div>
   <button id="loc-save" style="width:100%">Save this place</button>
 </div></div>
@@ -753,7 +756,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v70';
+} from './lab/decisions.js?v=lab-v71';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -766,7 +769,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v70';
+const BUILD = 'lab-v71';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -1687,6 +1690,23 @@ function placeProvenance() {
   return [];
 }
 
+/// L3. Where they are, said in a way that can never overstate what we know.
+///
+/// "You're in {place}" is ONLY a device fix under 30 minutes old. A-0408 put
+/// "You're in Lahore" on screen from a fix 52 minutes old, and with a subject
+/// set the header dropped the provenance line entirely — so a stored place and
+/// a live one read identically. Three states, one function, used with a subject
+/// and without one.
+function hereLine(here) {
+  if (!here) return null;
+  const src = location_?.source;
+  const age = locationAgeS(location_);
+  if (src === 'typed') return `You set ${here} · tap to update`;
+  if (src === 'device' && (age === null || age <= FRESH_FOR_S)) return `You're in ${here}`;
+  // A device fix that has gone stale is a last known place, not where they are.
+  return `Last known: ${here} · ${agoText(age)} · tap to update`;
+}
+
 function renderContext() {
   const n = rightNow();
   // Two different facts, and the header used to blur them into one line.
@@ -1704,8 +1724,10 @@ function renderContext() {
 
   const bits = [n.local_time];
   if (subject) {
-    // The subject is the title, so this line says where THEY are.
-    if (here && here !== subject) bits.push(`You're in ${here}`);
+    // The subject is the title, so this line says where THEY are — and says it
+    // the same way whether or not there is a subject (L3). The old branch wrote
+    // "You're in Lahore" from a 52-minute-old saved fix.
+    if (here && here !== subject) bits.push(hereLine(here));
     else if (!here) bits.push(...placeProvenance());
     // A country resolved to its arrival city is an assumption, and it says so.
     if (String(topicSubject.source ?? '') === 'assumed') bits.push('assumed · tap to change');
@@ -1783,7 +1805,20 @@ async function ensureLocation() {
     renderContext();
     return location_;
   }
-  return await askWhereYouAre(location_);
+  // U10. It used to ASK here, and await the answer, which held every ask behind
+  // a question about where THEY are — including "Got 3 hours in KL tonight",
+  // which names its own place and needs no fix at all.
+  //
+  // Nothing blocks any more. The ask goes out with whatever we have, and the
+  // server asks only when it actually needs to: `need_location` when nowhere
+  // was named and there is nowhere to look, `need_place` when a place was named
+  // and could not be placed. Both arrive as a card with the same two ways out,
+  // and neither guesses that the question needs a location before reading it.
+  if (location_) {
+    location_ = { ...location_, source: 'saved' };
+    renderContext();
+  }
+  return location_ ?? null;
 }
 
 /// Suna's "where you at?", with Use my location and a text box. Shown on a
@@ -1797,9 +1832,11 @@ async function askWhereYouAre(stale, copy) {
     ? `Last I knew, ${shortPlace(stale.name)} — ${agoText(age)}. Still there?`
     // The browser told us which failure it was; say it, because "said no"
     // sends someone to their settings when the prompt simply timed out.
-    : (lastGeoError?.why ?? "Your browser said no to location.")
-      + " Tap below, or type a place and I'll remember it.");
-  $('#loc-input').value = '';
+    : `${geoFixLine()} Tap below, or type a place and I'll remember it.`);
+  // U10. The last place as a REAL value, not a placeholder that looks filled.
+  // An empty box under "Last I knew, Kuala Lumpur" reads as filled in on a
+  // phone, so Save did nothing and there was no way to tell why.
+  $('#loc-input').value = stale?.name ? shortPlace(stale.name) : '';
   sheet.dataset.open = '1';
   return await new Promise((resolve) => {
     const done = (loc) => { sheet.dataset.open = '0'; renderContext(); resolve(loc); };
@@ -1807,12 +1844,17 @@ async function askWhereYouAre(stale, copy) {
       $('#loc-sub').textContent = 'Asking your phone…';
       const got = await refreshLocation('tap');
       if (got) return done(got);
-      $('#loc-sub').textContent = "Your phone still won't say. Type a place instead.";
+      $('#loc-sub').textContent = `Your phone still won't say. ${geoFixLine()}`;
       $('#loc-input').focus();
     };
     $('#loc-save').onclick = async () => {
       const name = $('#loc-input').value.trim();
-      if (!name) return;
+      // U10. It silently did nothing. Saying why is one line.
+      if (!name) {
+        $('#loc-sub').textContent = 'Type a place first — a city or a district is enough.';
+        $('#loc-input').focus();
+        return;
+      }
       location_ = await typedPlace(name);
       await saveTester({ last_location: location_ });
       done(location_);
@@ -1931,6 +1973,34 @@ let lastGeoError = null;   // {code, why} or null
 /// L1/L5. The last attempt, whatever happened: it rides with the next ask so
 /// the reason is in the row rather than in a console nobody is watching.
 let lastGeoAttempt = null;
+/// L1's rate limit: at most one `geo` row per tester per minute. The
+/// ResizeObserver flood put 538,000 rows in this table on 26 Sep, and a logger
+/// that can do that again is not a logger.
+let lastGeoLoggedAt = 0;
+
+/// L1. Every FAILED attempt, in the table, with codes and timings only —
+/// never coordinates (PROMPT-LAB-LOCATION-BROWSER §6).
+async function recordGeoFailure(attempt) {
+  try {
+    if (!attempt || attempt.result === 'ok') return;
+    if (Date.now() - lastGeoLoggedAt < 60_000) return;
+    lastGeoLoggedAt = Date.now();
+    if (!tester?.id) return;
+    await db.from('lab_client_errors').insert({
+      tester_id: tester.id,
+      session_id: sessionId ?? null,
+      where_: 'geo',
+      message: `${attempt.result}`
+        + ` code=${attempt.code ?? '—'} ms=${attempt.ms}`
+        + ` permission=${attempt.permission_state ?? 'unknown'}`
+        + ` browser=${attempt.browser} trigger=${attempt.trigger}`,
+      build: BUILD,
+      user_agent: navigator.userAgent.slice(0, 300),
+    });
+  } catch (e) {
+    console.warn('[lab] could not record the location failure', e);
+  }
+}
 
 /// Which browser family, for the fix line. The family only — never the whole
 /// user-agent string (PROMPT-LAB-LOCATION-BROWSER §2).
@@ -1944,6 +2014,39 @@ function browserFamily() {
     if (/Safari/.test(ua)) return 'mac-safari';
   }
   return 'other';
+}
+
+/// L2. What's wrong, and how to fix it ON THAT BROWSER. One short line, never a
+/// manual — PROMPT-LAB-LOCATION-BROWSER §3's table, word for word.
+///
+/// Brian is on iPhone Chrome, which runs on WebKit and needs its OWN iOS
+/// location permission as well as the site's. "Location is blocked for this
+/// site" sends someone there to look for a setting that isn't the one.
+function geoFixLine(err = lastGeoError, attempt = lastGeoAttempt) {
+  const code = err?.code ?? attempt?.code ?? null;
+  const fam = attempt?.browser ?? browserFamily();
+  const state = attempt?.permission_state ?? null;
+  // Code 2 and 3, and the no-callback case, are all "we didn't get a fix".
+  if (code !== 1) {
+    if (fam === 'mac-chrome' && state === 'granted') {
+      return 'Turn on Location Services for Chrome in System Settings → Privacy & Security.';
+    }
+    return "Couldn't get a fix. Tap to try again.";
+  }
+  if (fam === 'ios-chrome') {
+    return 'Chrome can\u2019t see your location. iPhone Settings → Chrome → Location → '
+      + 'While Using the App, and turn on Precise Location.';
+  }
+  if (fam === 'ios-safari') {
+    return 'Settings → Privacy & Security → Location Services → Safari Websites → While Using.';
+  }
+  if (fam === 'mac-chrome') {
+    return 'Location is blocked for this site. Click the icon left of the address and allow Location.';
+  }
+  if (fam === 'mac-safari') {
+    return 'Location is blocked for this site. Safari → Settings → Websites → Location → Allow.';
+  }
+  return "Location is blocked for this site in your browser's settings.";
 }
 
 /// WebKit throws on this on some versions, so it is wrapped and optional.
@@ -1976,6 +2079,8 @@ async function getFix(trigger = 'send') {
       permission_state: state ?? null, browser: browserFamily(),
       accuracy_m: accuracy_m ?? null, build: BUILD,
     };
+    // Fire and forget: the ask must not wait on the logger either.
+    if (result !== 'ok') recordGeoFailure(lastGeoAttempt);
     return lastGeoAttempt;
   };
   if (!navigator.geolocation) {
@@ -2039,6 +2144,9 @@ async function getFix(trigger = 'send') {
         };
         record(code === 1 ? 'denied' : code === 2 ? 'unavailable' : code === 3 ? 'timeout' : 'failed',
                code, null, state);
+        // L2: a code 2 or 3 is "no fix YET". One quiet retry with a long
+        // timeout, beside the ask rather than in front of it.
+        if (code === 2 || code === 3) retryFixQuietly();
         console.warn(`[lab] location failed (${code}) after ${Date.now() - started}ms: `
           + `${err?.message ?? 'no message'}`);
         resolve(null);
@@ -2047,6 +2155,36 @@ async function getFix(trigger = 'send') {
     );
   });
   return fix;
+}
+
+/// L2. One retry for a code 2 or 3, with the long timeout the brief asks for —
+/// and NOT in front of the tester. L5's rule is that nothing waits on the
+/// browser, so the retry runs beside the ask and lands as a late fix if it
+/// lands at all. Once per failure, never a loop.
+let retrying = false;
+function retryFixQuietly() {
+  if (retrying || !navigator.geolocation) return;
+  retrying = true;
+  const started = Date.now();
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      retrying = false;
+      console.warn(`[lab] the retry got a fix after ${Date.now() - started}ms`);
+      lateFix({
+        lat: +p.coords.latitude.toFixed(4),
+        lng: +p.coords.longitude.toFixed(4),
+        name: null,
+        accuracy_m: p.coords.accuracy != null ? Math.round(p.coords.accuracy) : null,
+        at: new Date().toISOString(),
+        source: 'device',
+      });
+    },
+    (err) => {
+      retrying = false;
+      console.warn(`[lab] the retry failed too (${err?.code ?? 0}) after ${Date.now() - started}ms`);
+    },
+    { timeout: 15000, maximumAge: 0 },
+  );
 }
 
 /// A fix that arrived after the 3 s race was lost. It is saved quietly, so the
@@ -2295,8 +2433,9 @@ $('#ctx-btn').addEventListener('click', async () => {
   if (!location_?.lat) {
     askWhereYouAre(null, {
       head: 'Where you at?',
-      sub: lastGeoError?.why
-        ? `${lastGeoError.why} Tap below, or type a place.`
+      // L2. The fix for THIS browser, not a generic "your browser said no".
+      sub: lastGeoError
+        ? `${geoFixLine()} Tap below, or type a place.`
         : "Tap below, or type a place and I'll remember it.",
     });
     return;
