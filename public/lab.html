@@ -759,7 +759,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v73';
+} from './lab/decisions.js?v=lab-v74';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -772,7 +772,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v73';
+const BUILD = 'lab-v74';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -3129,7 +3129,14 @@ function clearPending() {
   // Her WAITING line goes: "Still going." under a finished plan is a lie
   // about what is happening. `found` stays — that one is about the answer
   // that just landed, and it is the line the card is meant to arrive under.
-  if (lastStage !== 'found' && sunaNode) hushSuna(sunaNode);
+  //
+  // U13. `lastStage` alone was not enough: "Checking Tbilisi…" and "Checking
+  // Mongolia…" both survived under finished plans. Whatever the stage says it
+  // is, a line ENDING IN AN ELLIPSIS is a line about something still happening
+  // — that is what every waiting line and every plain fallback for one looks
+  // like — and nothing still happening belongs under a finished answer.
+  const onScreen = sunaNode?.querySelector('.sunaline')?.textContent?.trim() ?? '';
+  if (sunaNode && (lastStage !== 'found' || /[…]\s*$/.test(onScreen))) hushSuna(sunaNode);
   // Her waiting line, and anything still asking a question.
   for (const sel of ['.dx.citychoice', '.dx.mismatch', '.chips.answerchips']) {
     for (const n of $('#convo-col').querySelectorAll(sel)) n.remove();
