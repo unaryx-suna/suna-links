@@ -756,7 +756,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v71';
+} from './lab/decisions.js?v=lab-v72';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -769,7 +769,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v71';
+const BUILD = 'lab-v72';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
@@ -5201,6 +5201,13 @@ async function renderTracker() {
 function needLocationCard(d, request) {
   const host = el('div', 'dx');
   host.append(sunaBlock(d?.face ?? 'mismatch', d?.message || 'Where you at?', { small: true }));
+  // L2. The card has replaced the sheet on this path (U10), so the fix for THIS
+  // browser belongs here: her line says what she needs, this says how to give
+  // it to her on the browser in front of them.
+  if (lastGeoError) {
+    const why = el('div', 'dxnote', geoFixLine());
+    host.append(why);
+  }
   const row = el('div', 'actions');
   const use = el('button', 'go', 'Use my location');
   use.type = 'button';

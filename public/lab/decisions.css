@@ -198,6 +198,9 @@ textarea.askbox:focus { outline: none; border-color: var(--dx-sand); }
 .dx .chips, .dx.sheet .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .dx .chips.understood { padding: 0 16px 2px; }
 .dx .chiphint { font-size: 14px; font-weight: 600; color: var(--dx-muted); padding: 0 16px; }
+/* L2. How to fix location in THIS browser, under her line on the ask-where
+   card. Quieter than she is: she says what she needs, this says how. */
+.dx .dxnote { font-size: 14px; line-height: 1.45; color: var(--dx-muted); padding: 0 16px 2px; }
 .dx .chip2, .dx.sheet .chip2 {
   display: inline-flex; align-items: center; box-sizing: border-box;
   height: 44px; border-radius: 22px;
