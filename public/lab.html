@@ -649,7 +649,10 @@
 <!-- ── where are you (a denial, a failed fix, or a stale saved one) ────── -->
 <div class="sheet" id="loc-sheet"><div class="inner">
   <h2 id="loc-head">Where you at?</h2>
-  <p class="sub" id="loc-sub">Your browser said no to location. Type a city and we'll remember it.</p>
+  <!-- L2: the JS writes the line for THIS browser and THIS failure before the
+       sheet ever opens. The old default claimed the browser "said no", which
+       on Brian's Mac Chrome it does not: it says nothing at all. -->
+  <p class="sub" id="loc-sub">Where are you right now?</p>
   <button id="loc-now" class="primary" style="width:100%">Use my location</button>
   <div style="height:12px"></div>
   <!-- U10: a real place name as the placeholder read as a filled-in field, so Save
@@ -756,7 +759,7 @@ import {
   detailsSheet, notThisSheet, knowsPanel,
   reorderByReason, planScreen, planDayScreen, NUDGES,
 // ?v= so a phone that has the page cached still gets the new module.
-} from './lab/decisions.js?v=lab-v72';
+} from './lab/decisions.js?v=lab-v73';
 installDecisionsUI();
 /**
  * Suna Lab — one static file, same pattern as field.html. No package.json, no
@@ -769,7 +772,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v72';
+const BUILD = 'lab-v73';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';
