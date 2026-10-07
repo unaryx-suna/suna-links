@@ -38,6 +38,10 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
+    },
+    {
+      "source": "/city/:path*",
+      "destination": "/city.html"
     }
   ]
 }

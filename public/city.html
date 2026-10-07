@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Same as place.html. A link tapped in Safari never shows an App Clip card
+       on its own; this meta tag is what surfaces it. -->
+  <meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com.unaryx.TravelMug.Clip">
+  <title>Suna — Things to do this week</title>
+  <meta name="description" content="Things to do this week, on Suna.">
+  <!-- Palette is place.html's, not the app's new green. These three landing
+       pages are seen one after another from the same campaign, and two of them
+       would be inconsistent the moment this one changed alone. -->
+  <style>
+    body {
+      margin: 0; background: #111; color: white;
+      font-family: -apple-system, sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 100vh;
+      text-align: center; padding: 24px; box-sizing: border-box;
+    }
+    h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; max-width: 18em; }
+    p  { color: #aaa; margin: 0 0 32px; }
+    a  {
+      background: #FFD76A; color: black; padding: 14px 32px;
+      border-radius: 50px; text-decoration: none;
+      font-weight: 700; font-size: 16px; display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="headline">Things to do this week, on Suna</h1>
+  <p>Get the free app to see what's on near you</p>
+  <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Suna — Free</a>
+
+  <script>
+    // Cities Suna has real coverage in, by landmark count on 7 Oct 2026.
+    // A list, not a title-cased slug: "Things to do in Atlantis this week"
+    // over an empty city is a claim we can't keep, and C1 says an unknown
+    // slug just reads "on Suna". Adding a city here is a one-line edit —
+    // no API and no database read, per C1.
+    var CITIES = {
+      'melbourne': 'Melbourne', 'sydney': 'Sydney', 'brisbane': 'Brisbane',
+      'perth': 'Perth', 'adelaide': 'Adelaide',
+      'seoul': 'Seoul', 'bangkok': 'Bangkok', 'kuala-lumpur': 'Kuala Lumpur',
+      'hanoi': 'Hanoi', 'ho-chi-minh-city': 'Ho Chi Minh City',
+      'jakarta': 'Jakarta', 'ubud': 'Ubud', 'singapore': 'Singapore',
+      'chiang-mai': 'Chiang Mai', 'hong-kong': 'Hong Kong', 'kyoto': 'Kyoto',
+      'tokyo': 'Tokyo', 'taipei': 'Taipei', 'almaty': 'Almaty',
+      'tbilisi': 'Tbilisi', 'cape-town': 'Cape Town', 'berlin': 'Berlin',
+      'madrid': 'Madrid', 'milan': 'Milan', 'miami': 'Miami',
+      'moscow': 'Moscow', 'saint-petersburg': 'Saint Petersburg',
+      'ulaanbaatar': 'Ulaanbaatar'
+    };
+
+    var parts = window.location.pathname.split('/').filter(Boolean);
+    var slug = (parts[1] || '').toLowerCase();
+    var city = CITIES[slug] || null;
+    var src = new URLSearchParams(window.location.search).get('src') || '';
+
+    if (city) {
+      document.getElementById('headline').textContent =
+        'Things to do in ' + city + ' this week, on Suna';
+      document.title = 'Suna — Things to do in ' + city;
+    }
+
+    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    var btn = document.getElementById('cta');
+
+    if (isIOS && slug) {
+      // CUSTOM SCHEME, not the universal link — the same trap place.html
+      // documents: iOS refuses to route a universal link to the app when the
+      // tap starts on that same domain, and this page IS app.unaryx.com/city/
+      // <slug>, so a universal-link href would just reload this page.
+      var deep = 'suna://city?slug=' + encodeURIComponent(slug);
+      if (src) deep += '&src=' + encodeURIComponent(src);
+      btn.href = deep;
+      btn.textContent = 'Open in Suna';
+
+      // No app installed means the scheme goes nowhere — fall back to the App
+      // Store, but only if this page is still in front.
+      btn.addEventListener('click', function () {
+        var start = Date.now();
+        setTimeout(function () {
+          if (document.hidden || Date.now() - start > 1600) return;
+          window.location.href = 'https://apps.apple.com/app/id6759053765';
+        }, 1200);
+      });
+    }
+  </script>
+</body>
+</html>
