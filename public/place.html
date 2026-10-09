@@ -22,18 +22,48 @@
         border-radius: 50px; text-decoration: none;                             
         font-weight: 700; font-size: 16px; display: inline-block;               
       }                                       
+      #offer {
+        margin: 0 0 18px; padding: 10px 14px; border-radius: 10px;
+        background: rgba(246, 203, 148, .12); color: #f6cb94;
+        font-size: 15px; line-height: 1.4; max-width: 34em;
+      }
     </style>                                                                    
   </head>                                                   
   <body>                                                                        
     <h1>✨ Discover this place on Suna</h1>
     <p>Get the free app to see the full experience</p>                          
+    <p id="offer" hidden></p>
     <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Suna —
   Free</a>                                
     <script>
       var parts = window.location.pathname.split('/').filter(Boolean);          
       var placeID = parts[1] || '';           
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);                 
-      var btn = document.getElementById('cta');             
+      var btn = document.getElementById('cta');
+
+      // The offer and the campaign token, both decided on the SERVER and put
+      // in meta tags by api/place.js. Read from there rather than from the
+      // query string: `?src=partner-x` is a claim by whoever shared the link,
+      // and only the database can say whether that slug belongs to this
+      // place. Trusting the URL here would let anyone mint a campaign token.
+      var meta = function (n) {
+        var el = document.querySelector('meta[name="' + n + '"]');
+        return el ? el.getAttribute('content') : null;
+      };
+
+      var offerText = meta('suna:offer');
+      if (offerText) {
+        var o = document.getElementById('offer');
+        // textContent, never innerHTML: this sentence is written by a
+        // business, and it is the only text on this page that is.
+        o.textContent = offerText;
+        o.hidden = false;
+      }
+
+      var campaign = meta('suna:campaign');
+      var APPSTORE = 'https://apps.apple.com/app/id6759053765'
+        + '?pt=128539200&ct=' + encodeURIComponent(campaign || 'place-link') + '&mt=8';
+      btn.href = APPSTORE;             
                                                                                 
       if (isIOS && placeID) {
         // CUSTOM SCHEME, not the universal link. iOS refuses to route a
@@ -50,7 +80,7 @@
           var start = Date.now();
           setTimeout(function () {
             if (document.hidden || Date.now() - start > 1600) return;
-            window.location.href = 'https://apps.apple.com/app/id6759053765';
+            window.location.href = APPSTORE;
           }, 1200);
         });
       }

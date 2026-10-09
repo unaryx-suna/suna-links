@@ -61,6 +61,57 @@ async function imageResolves(url) {
   }
 }
 
+/**
+ * The listing on this place, if there is one with a live offer.
+ *
+ * `public.listing_public(uuid)` is the ONLY public read of `local_listings`,
+ * and it returns exactly three fields: slug, offer_text, offer_until. The
+ * table itself holds the business's WhatsApp number and is unreadable with
+ * this key — verified 9 Oct, every PostgREST route including the embedded
+ * join returns 401. That is why this is an RPC and not a select.
+ */
+async function listingFor(id) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/listing_public`, {
+      method: 'POST',
+      headers: {
+        apikey: PUBLISHABLE_KEY,
+        Authorization: `Bearer ${PUBLISHABLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_landmark: id }),
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch {
+    // A place page must never fail because a listing lookup did.
+    return null;
+  }
+}
+
+/** `?src=partner-<slug>`, trimmed to the slug. Nothing is trusted yet. */
+function claimedSlug(url) {
+  const m = String(url || '').match(/[?&]src=partner-([a-z0-9][a-z0-9-]{0,29})\b/);
+  return m ? m[1] : null;
+}
+
+/** The business's own offer, as plain escaped text. */
+function offerLine(listing) {
+  if (!listing || !listing.offer_text) return '';
+  let line = `From the business: ${listing.offer_text}`;
+  if (listing.offer_until) {
+    const d = new Date(`${listing.offer_until}T00:00:00+08:00`);
+    if (!Number.isNaN(d.getTime())) {
+      line += ` (until ${new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kuala_Lumpur', day: 'numeric', month: 'long',
+      }).format(d)})`;
+    }
+  }
+  return line;
+}
+
 /** The canonical address for this place, free of rewrite artefacts. */
 function canonicalURL(origin, id) {
   return `${origin}/place/${encodeURIComponent(id)}`;
@@ -147,6 +198,17 @@ export default async function handler(req, res) {
   // No canonical for a request that names no place: `/place/` is not an address
   // worth consolidating onto, and pointing at it would be worse than silence.
   const canonical = id ? canonicalURL(origin, id) : '';
+
+  // The campaign token. `?src=partner-<slug>` is a claim by whoever shared the
+  // link; it becomes `ct=partner-<slug>` only when the database agrees that
+  // slug belongs to THIS place. Otherwise the ordinary token applies, so a
+  // guessed or stale slug costs nothing and attributes nothing.
+  const listing = id ? await listingFor(id) : null;
+  const claimed = claimedSlug(req.url);
+  const campaign = (claimed && listing && listing.slug === claimed)
+    ? `partner-${claimed}`
+    : null;
+  const offer = offerLine(listing);
   const tags = [
     `<title>${escapeHtml(title)}</title>`,
     canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : '',
@@ -165,6 +227,10 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     indexable ? '' : `<meta name="robots" content="noindex,follow">`,
+    // Read by place.html to swap the App Store link's token and to show the
+    // offer. Both are escaped: offer_text is written by the business.
+    campaign ? `<meta name="suna:campaign" content="${escapeHtml(campaign)}">` : '',
+    offer ? `<meta name="suna:offer" content="${escapeHtml(offer)}">` : '',
   ].filter(Boolean).join('\n  ');
 
   // Replace rather than append: a duplicate og:title is resolved differently by
@@ -178,6 +244,10 @@ export default async function handler(req, res) {
   res
     .status(200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
+    // A partner link renders a different page from the same path, so it
+    // cannot share a cache entry with the plain one. Vercel keys on the full
+    // URL including the query, so `?src=` already separates them; this header
+    // is unchanged, and an expired offer simply drops off within the window.
     .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
     .send(rendered);
 }
