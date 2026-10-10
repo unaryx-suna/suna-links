@@ -37,7 +37,7 @@
   h1 { font-size: 19px; margin: 18px 0 4px; }
   .sub { color: var(--dim); font-size: 13px; margin: 0 0 18px; }
   label { display: block; font-size: 12px; color: var(--muted); margin: 18px 0 6px; }
-  input[type=text], input[type=email], input[type=tel], textarea, select {
+  input[type=text], input[type=email], input[type=tel], input[type=search], textarea, select {
     width: 100%; background: var(--card); color: var(--text);
     border: 1px solid var(--line); border-radius: 12px;
     padding: 13px 14px; font-size: 16px; /* 16 or iOS zooms on focus */
@@ -213,6 +213,18 @@
     border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 8px; color: var(--text);
   }
   .opt small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
+  /* An event row: the thumbnail, the name, and one line under it. Built on
+     `.opt` so it is the same tappable row as everywhere else in the Panel,
+     with only the picture and the ellipsis added. */
+  .evrow { display: flex; gap: 10px; align-items: center; }
+  .evrow .evthumb {
+    flex: 0 0 46px; width: 46px; height: 46px; border-radius: 8px;
+    background: rgba(255,255,255,.06); overflow: hidden; display: block;
+  }
+  .evrow .evthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .evrow .evbody { min-width: 0; flex: 1; }
+  .evrow strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evrow .badge { float: right; margin-left: 8px; }
   /* A result that is already in the catalogue. Marked, not hidden: it is still
      the place he searched for, it just wants opening rather than re-capturing. */
   .opt.known { border-color: rgba(246,203,148,.45); }
@@ -518,6 +530,66 @@
   </div>
 
   <!-- country -->
+  <!-- ════ Event photos ═══════════════════════════════════════════════
+       Brian, 10 Oct: "tell Dex to incorporate this into Suna Panel so that
+       it's easier for me to upload images."
+
+       TWO SCREENS, ONE PANE. A list of upcoming events, and the photo
+       screen for one of them. Not two tabs, because the whole point is a
+       deep link that lands on the second without passing through the first.
+
+       The list leads with what is missing, but it is NOT a missing-photos
+       tool: Ops checked production on 10 Oct and found 0 upcoming events
+       without our photo. A screen that only filled gaps would open empty
+       for ever. Replacing is the common case. -->
+  <div class="wrap" id="pane-events" hidden>
+    <div id="ev-list-screen">
+      <h1>Event photos</h1>
+      <p class="sub">Upcoming events. The ones with no photo of ours come first.</p>
+
+      <input id="ev-search" type="search" placeholder="Search by name" autocomplete="off">
+      <div class="chips" style="margin-top:8px">
+        <button class="chip" id="ev-filter-missing" aria-pressed="false">Missing photo</button>
+        <button class="chip" id="ev-filter-all" aria-pressed="true">All</button>
+      </div>
+
+      <div id="ev-list" style="margin-top:12px"></div>
+      <p class="sub" id="ev-list-note" hidden></p>
+    </div>
+
+    <div id="ev-photo-screen" hidden>
+      <button class="linkish" id="ev-back" style="margin-bottom:10px">&larr; All events</button>
+      <h1 id="ev-name">…</h1>
+      <p class="sub" id="ev-meta"></p>
+      <p style="margin:-4px 0 10px"><span class="badge" id="ev-pending" hidden>Pending</span></p>
+
+      <label>Current photo</label>
+      <div class="thumbs" id="ev-current-thumbs"></div>
+
+      <label>New photo</label>
+      <div class="thumbs" id="ev-new-thumbs">
+        <button class="addphoto" id="btn-ev-camera">📷<br>Photograph</button>
+        <button class="addphoto" id="btn-ev-upload">⬆<br>Upload</button>
+      </div>
+      <input id="in-ev-camera" type="file" accept="image/*" capture="environment" hidden>
+      <input id="in-ev-upload" type="file" accept="image/*" hidden>
+      <p class="sub" style="margin-top:4px">Or paste an image. At least 600&nbsp;px wide.</p>
+
+      <label for="ev-credit">Photo credit (optional)</label>
+      <input id="ev-credit" type="text" placeholder="Who took it, or where it came from" autocomplete="off">
+
+      <p class="sub" id="ev-note" hidden></p>
+    </div>
+
+    <div id="ev-done-screen" hidden>
+      <h1 id="ev-done-title">Photo saved</h1>
+      <p class="sub" id="ev-done-name"></p>
+      <div class="thumbs" id="ev-done-thumbs"></div>
+      <button class="opt" id="ev-next" style="margin-top:12px">Next event without a photo</button>
+      <button class="linkish" id="ev-done-back" style="margin-top:8px">Back to the list</button>
+    </div>
+  </div>
+
   <div class="wrap" id="pane-country" hidden>
     <h1>Welcome to …</h1>
     <p class="sub">229 countries are selectable. Two have a hero image, two have
@@ -660,6 +732,7 @@
     <button class="opt" id="menu-finish">Finish these<small>Places missing a photo, hours or a description</small></button>
     <button class="opt" id="menu-queue">Queue<small id="menu-queue-sub">Nothing waiting</small></button>
     <button class="opt" id="menu-country" hidden>Country<small>Hero image, subtitle, foods and apps</small></button>
+    <button class="opt" id="menu-events" hidden>Event photos<small>Upcoming events, missing photos first</small></button>
     <button class="opt" id="menu-signout">Sign out</button>
     <p class="note" style="margin-top:14px">
       Build <span id="build-stamp" class="build">…</span>
@@ -744,7 +817,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v30';
+const BUILD = 'field-v31';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -4331,6 +4404,45 @@ async function coverAlreadyLanded(err, path, blob) {
 function AppLoggerNoop(e) { console.warn('featured append failed', e); }
 
 /** Hero, food, subtitle and app attach — the four country writes. */
+/**
+ * Upload the photo, then point the row at it.
+ *
+ * TWO STEPS, AND THE SECOND IS THE ONE THAT CAN FAIL TWICE. If the upload
+ * succeeds and the row update does not, a retry must not upload again — the
+ * bucket would collect an orphan per attempt. So the path is remembered on
+ * the queue item the moment the upload lands, and a retry skips straight to
+ * the update.
+ *
+ * A NEW KEY EVERY TIME. `event-photos` has no UPDATE policy, so upsert to a
+ * fixed key is not available; and the old object is left alone, because
+ * deleting one out from under a page that is rendering it is worse than a
+ * file nobody reads.
+ */
+async function uploadEventPhoto(item) {
+  const c = item.country || {};
+  const id = c.eventID;
+  if (!id) throw new Error('queued event photo with no event');
+
+  let path = c.path;
+  if (!path) {
+    if (!c.blob) throw new Error('queued event photo with no image');
+    path = 'events/' + id + '-' + Date.now() + '.jpg';
+    const { error } = await db.storage.from('event-photos')
+      .upload(path, c.blob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw new Error('event photo upload: ' + error.message);
+    // Remember it BEFORE the update, so a failure below retries the update
+    // rather than the upload.
+    c.path = path;
+    try { await idbPut('queue', Object.assign({}, item, { country: c })); } catch (e) {}
+  }
+
+  const url = db.storage.from('event-photos').getPublicUrl(path).data.publicUrl;
+  const patch = { image_url: url, storage_path: path };
+  if (c.credit !== undefined) patch.image_credit = c.credit;
+  const { error: uErr } = await db.from('world_events').update(patch).eq('id', id);
+  if (uErr) throw new Error('world_events: ' + uErr.message);
+}
+
 async function uploadCountryWork(item) {
   const c = item.country || {};
   const code = c.code;
@@ -4345,9 +4457,16 @@ async function uploadCountryWork(item) {
   //
   // Found by running this function against a queued hint rather than by reading
   // it. `place_hint` is keyed by its landmark, never by a country code.
-  if (item.kind !== 'place_hint' && !code) {
+  if (item.kind !== 'place_hint' && item.kind !== 'event_photo' && !code) {
     throw new Error('queued country work with no country');
   }
+
+  // **An event photo is not country work**, but it rides the same queue so
+  // that an upload taken underground drains when the signal comes back,
+  // retries on `online`, and shows in the Queue tab like everything else.
+  // Handled before the country guard for the same reason `place_hint` is:
+  // it has no country code and never will.
+  if (item.kind === 'event_photo') return uploadEventPhoto(item);
 
   if (item.kind === 'country_hero') {
     // **Fixed path, upsert.** One object per country, so a retry overwrites
@@ -4488,6 +4607,7 @@ $('tab-capture').onclick = () => switchTab('capture');
 function openMenu() {
   $('btn-menu').setAttribute('aria-expanded', 'true');
   $('menu-country').hidden = !(profile && profile.is_admin);
+  $('menu-events').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
     $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
@@ -4505,11 +4625,12 @@ $('menu-close').onclick   = () => closeMenu();
 $('menu-finish').onclick  = () => { closeMenu(); switchTab('finish'); };
 $('menu-queue').onclick   = () => { closeMenu(); switchTab('queue'); };
 $('menu-country').onclick = () => { closeMenu(); switchTab('country'); };
+$('menu-events').onclick = () => { closeMenu(); switchTab('events'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country']) {
+  for (const t of ['capture', 'finish', 'queue', 'country', 'events']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
@@ -4521,6 +4642,7 @@ function switchTab(which) {
   if (which === 'finish') { buildFinishScope(); if (!finishRows.length) loadFinishList(false); }
   if (which === 'queue') loadQueueList();
   if (which === 'country') renderCountryTab();
+  if (which === 'events') loadEventList();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
 }
@@ -4946,6 +5068,7 @@ const QUEUE_WHAT = {
   place: 'Place',
   place_hint: 'Tip or hint',
   country_hero: 'Country hero photo',
+  event_photo: 'Event photo',
   country_food: 'Country food',
   country_subtitle: 'Country subtitle',
   country_app: 'Country app',
@@ -6226,6 +6349,461 @@ function countryNote(msg) { $('country-note').textContent = msg; $('country-erro
 /** Country work goes through the SAME IndexedDB queue as a capture — the badge,
  *  the five-attempt cap, the `online` retry and first-failure error reporting
  *  all apply unchanged. Hero and food carry blobs and must survive a reload. */
+/* ════════════════════════════════════════════════════════════════════════
+   Event photos — app.unaryx.com/field, admins only
+   ════════════════════════════════════════════════════════════════════════
+
+   Brian, 10 Oct: *"tell Dex to incorporate this into Suna Panel so that it's
+   easier for me to upload images."*
+
+   WHAT THIS IS NOT: a missing-photos queue. Ops checked production the same
+   day — 268 approved upcoming events, every one with a photo in our bucket,
+   0 pending. A screen that only filled gaps would open empty and stay empty.
+   Replacing a photo is the common case, so the list shows everything with
+   the gaps first, and "Missing photo" is a filter rather than the whole
+   screen.
+
+   WHY A NEW OBJECT EVERY TIME: `event-photos` has no UPDATE policy, so an
+   upsert to a fixed key would fail. Each upload writes
+   `events/<event id>-<unix ms>.jpg` and the row is pointed at it. The old
+   file is left where it is — deleting is not the Panel's job, and a delete
+   that raced a reader would break a live page.
+
+   The menu entry is hidden for non-admins, which is UI only. The write is
+   enforced by `is_admin()` on the table and the storage policies, exactly as
+   the Country tab is. */
+
+/**
+ * The Panel has no analytics.
+ *
+ * There is no PostHog in `suna-links-main` at all — checked, zero matches
+ * across every page. The brief asks for `panel_event_photo_uploaded`, and
+ * the call below is correct and in the right place, but nothing is
+ * listening: adding a third-party script to a signed-in admin tool is a
+ * decision for Brian, not something to slip in with a photo uploader.
+ *
+ * So this records the event the day the Panel gains a tracker, and does
+ * nothing until then, rather than the call site being wrong either way.
+ */
+function track(name, props) {
+  try {
+    if (window.posthog && typeof window.posthog.capture === 'function') {
+      window.posthog.capture(name, Object.assign({ site: 'app.unaryx.com' }, props || {}));
+    }
+  } catch (e) { /* analytics must never break an upload */ }
+}
+
+const EV_MIN_WIDTH = 600;
+const EV_MAX_WIDTH = 1600;
+const EV_BUCKET = 'event-photos';
+/** Ours, as opposed to an organiser's URL we merely linked to. */
+const EV_OURS = '/storage/v1/object/public/event-photos/';
+
+/**
+ * The event cities, mirrored — NOT queried.
+ *
+ * `public.event_cities` has RLS on and **zero policies**, so the table is
+ * readable by the service role and by nobody else: not anon, not a signed-in
+ * user, and not an admin either, because `is_admin()` has no policy to live
+ * in. Checked in production on 10 Oct: `relrowsecurity = true`, `0` policies.
+ *
+ * That matters because a blocked `select` under RLS is not an error — it is
+ * an empty array. The first version of this queried the table, got `[]`, and
+ * every row in the list showed no city at all while looking like it had
+ * simply not matched a radius. Nothing would have reported it.
+ *
+ * So the four rows are mirrored here, exactly as `unaryx-site` mirrors them
+ * in `data/cities.json` for the same reason, with the same obligation:
+ * **adding a city is a row there and an edit here.** Verified identical to
+ * the live table on 10 Oct.
+ */
+const EV_CITIES = [
+  { slug: 'melbourne',    name: 'Melbourne',    lat: -37.8136, lng: 144.9631, radius_km: 60, tz: 'Australia/Melbourne' },
+  { slug: 'sydney',       name: 'Sydney',       lat: -33.8688, lng: 151.2093, radius_km: 60, tz: 'Australia/Sydney' },
+  { slug: 'kuala-lumpur', name: 'Kuala Lumpur', lat:   3.139,  lng: 101.687,  radius_km: 50, tz: 'Asia/Kuala_Lumpur' },
+  { slug: 'singapore',    name: 'Singapore',    lat:   1.3521, lng: 103.8198, radius_km: 30, tz: 'Asia/Singapore' },
+];
+
+let evRows = [];            // the loaded upcoming events
+let evFilter = 'all';       // 'all' | 'missing'
+let evCurrent = null;       // the event on the photo screen
+let evLoading = null;       // the in-flight load, so two callers share one
+let evBusy = false;         // a photo is being resized and queued
+
+/**
+ * Does this event already carry a photo of OURS?
+ *
+ * `_queued` is set the moment a photo goes on the queue, before it has
+ * uploaded. Without it the list would keep offering an event as missing
+ * while its photo sat in the queue, and "Next event without a photo" would
+ * hand back the one just done.
+ */
+function evHasOurPhoto(row) {
+  if (row._queued) return true;
+  return typeof row.image_url === 'string' && row.image_url.includes(EV_OURS);
+}
+
+/** Any photo at all, ours or an organiser's link. */
+function evAnyPhoto(row) {
+  return typeof row.image_url === 'string' && /^https?:/.test(row.image_url)
+    ? row.image_url : '';
+}
+
+/** The nearest mirrored city centre whose radius contains the event. */
+function evCity(row) {
+  if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') return null;
+  let best = null, bestKm = Infinity;
+  for (const c of EV_CITIES) {
+    const km = evDistanceKm(row.latitude, row.longitude, c.lat, c.lng);
+    if (km <= c.radius_km && km < bestKm) { bestKm = km; best = c; }
+  }
+  return best;
+}
+
+function evCityName(row) {
+  const c = evCity(row);
+  return c ? c.name : '';
+}
+
+function evDistanceKm(aLat, aLng, bLat, bLng) {
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * The date, IN THE CITY'S OWN TIMEZONE.
+ *
+ * Not the phone's. A KL event starting at 10pm local is 1am the next day in
+ * Melbourne, so a phone-local date puts it on the wrong day in the list —
+ * and picking the wrong event is the one mistake this screen must not help
+ * anyone make. `/events` on the website dates events the same way.
+ */
+function evDateLine(row) {
+  try {
+    const city = evCity(row);
+    const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+    if (city) opts.timeZone = city.tz;
+    return new Date(row.start_time).toLocaleDateString(undefined, opts);
+  } catch (e) { return ''; }
+}
+
+/**
+ * Upcoming events, once.
+ *
+ * **Two callers, one fetch.** Opening the tab loads the list, and so does a
+ * deep link arriving a moment later; both used to fire their own query
+ * because each found `evRows` still empty. `evLoading` holds the in-flight
+ * promise so the second caller waits on the first.
+ */
+async function loadEventList(force) {
+  if (evLoading) return evLoading;
+  if (evRows.length && !force) { renderEventList(); return; }
+  evLoading = (async () => {
+    const note = $('ev-list-note');
+    note.hidden = false; note.textContent = 'Loading…';
+    try {
+      // Admins see pending rows through "Admins have full access"; everyone
+      // else gets approved ones only, which is why the menu entry is hidden.
+      const { data, error } = await db.from('world_events')
+        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude')
+        .gte('end_time', new Date().toISOString())
+        .in('status', ['pending', 'approved'])
+        .order('start_time', { ascending: true })
+        .limit(400);
+      if (error) throw new Error(error.message);
+      evRows = data || [];
+      note.hidden = true;
+      renderEventList();
+    } catch (err) {
+      note.hidden = false;
+      note.textContent = 'Could not load events. ' + (err.message || '');
+    }
+  })();
+  try { await evLoading; } finally { evLoading = null; }
+}
+
+function renderEventList() {
+  const q = ($('ev-search').value || '').trim().toLowerCase();
+  const list = $('ev-list');
+  const note = $('ev-list-note');
+
+  $('ev-filter-missing').setAttribute('aria-pressed', String(evFilter === 'missing'));
+  $('ev-filter-all').setAttribute('aria-pressed', String(evFilter === 'all'));
+
+  let rows = evRows.slice();
+  if (q) rows = rows.filter((r) => (r.name || '').toLowerCase().includes(q));
+  if (evFilter === 'missing') rows = rows.filter((r) => !evHasOurPhoto(r));
+
+  // Missing first, then soonest. Within "missing" it is still soonest first,
+  // because the query already ordered by start_time and sort is stable.
+  rows.sort((a, b) => Number(evHasOurPhoto(a)) - Number(evHasOurPhoto(b)));
+
+  list.innerHTML = '';
+  if (!rows.length) {
+    note.hidden = false;
+    note.innerHTML = evFilter === 'missing'
+      ? 'Every upcoming event has a photo. <button class="linkish" id="ev-show-all">Show all</button>'
+      : (q ? 'Nothing matches that.' : 'No upcoming events.');
+    const showAll = $('ev-show-all');
+    if (showAll) showAll.onclick = () => { evFilter = 'all'; renderEventList(); };
+    return;
+  }
+  note.hidden = true;
+
+  for (const row of rows) {
+    const card = document.createElement('button');
+    card.className = 'opt evrow';
+
+    const thumb = document.createElement('span');
+    thumb.className = 'evthumb';
+    // Whatever photo it has, ours or an organiser's — seeing the current
+    // picture is the point, and a blank tile for an event that already has
+    // a linked image would read as "no photo" when there is one.
+    const existing = evAnyPhoto(row);
+    if (existing) {
+      const im = document.createElement('img');
+      im.src = existing;
+      im.loading = 'lazy';
+      im.alt = '';
+      im.onerror = () => im.remove();
+      thumb.appendChild(im);
+    }
+
+    const body = document.createElement('span');
+    body.className = 'evbody';
+    if (row.status === 'pending') {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = 'Pending';
+      body.appendChild(badge);
+    }
+    const name = document.createElement('strong');
+    name.textContent = row.name || '(unnamed)';
+    const line = document.createElement('small');
+    // "no photo" and "not our photo" are different jobs: one needs a picture
+    // taking, the other needs one of ours in place of a link that can rot.
+    const want = row._queued ? 'photo queued'
+      : evHasOurPhoto(row) ? ''
+      : existing ? 'not our photo'
+      : 'no photo';
+    line.textContent = [evDateLine(row), evCityName(row), want].filter(Boolean).join(' · ');
+    body.appendChild(name);
+    body.appendChild(line);
+
+    card.appendChild(thumb);
+    card.appendChild(body);
+    card.onclick = () => openEventPhoto(row.id);
+    list.appendChild(card);
+  }
+}
+
+function openEventPhoto(id) {
+  const row = evRows.find((r) => r.id === id);
+  if (!row) { evNote('Couldn\'t find that event.'); showEventScreen('list'); return; }
+  evCurrent = row;
+  evBusy = false;
+  $('ev-name').textContent = row.name || '(unnamed)';
+  $('ev-meta').textContent = [evDateLine(row), evCityName(row), row.venue]
+    .filter(Boolean).join(' · ');
+  $('ev-pending').hidden = row.status !== 'pending';
+  $('ev-credit').value = row.image_credit || '';
+  const cur = $('ev-current-thumbs');
+  cur.innerHTML = '';
+  const existing = evAnyPhoto(row);
+  const label = document.createElement('span');
+  label.className = 'sub';
+  if (existing) {
+    const im = document.createElement('img');
+    im.src = existing; im.alt = '';
+    im.style.cssText = 'width:96px;height:96px;object-fit:cover;border-radius:10px';
+    im.onerror = () => { im.remove(); label.textContent = 'Its photo will not load.'; };
+    cur.appendChild(im);
+    // Worth saying out loud: an organiser's URL is the thing this screen
+    // exists to replace, and it looks identical to one of ours in a thumbnail.
+    label.textContent = evHasOurPhoto(row) ? '' : 'Linked from elsewhere — replace it with one of ours.';
+  } else {
+    label.textContent = 'No photo yet.';
+  }
+  if (label.textContent) cur.appendChild(label);
+  $('ev-new-thumbs').querySelectorAll('img').forEach((n) => n.remove());
+  $('ev-note').hidden = true;
+  showEventScreen('photo');
+  // The address names the event, so a reload or a share lands back here.
+  try { history.replaceState(null, '', '#event=' + row.id); } catch (e) {}
+}
+
+function showEventScreen(which) {
+  $('ev-list-screen').hidden = which !== 'list';
+  $('ev-photo-screen').hidden = which !== 'photo';
+  $('ev-done-screen').hidden = which !== 'done';
+  if (which === 'list') {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+}
+
+function evNote(msg) {
+  const n = $('ev-note');
+  n.hidden = false;
+  n.textContent = msg;
+}
+
+/** 1600 px wide, JPEG 85%, and a floor the browser can check before upload. */
+function evResize(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (img.naturalWidth < EV_MIN_WIDTH) {
+        reject(new Error('That photo is ' + img.naturalWidth
+          + ' pixels wide. We need at least ' + EV_MIN_WIDTH + '.'));
+        return;
+      }
+      const scale = Math.min(1, EV_MAX_WIDTH / img.naturalWidth);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob((blob) => blob ? resolve({ blob, width: w, height: h })
+                              : reject(new Error('Could not encode that photo.')),
+               'image/jpeg', 0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('That file is not a photo. Use a JPEG, PNG or WebP.'));
+    };
+    img.src = url;
+  });
+}
+
+async function evAccept(file, source) {
+  if (!evCurrent) return;
+  // One photo at a time. A tap on Photograph while the last one was still
+  // encoding queued two uploads for the same event, and the row ended up
+  // pointing at whichever finished second.
+  if (evBusy) return;
+  if (!file || !/^image\//.test(file.type || '')) {
+    evNote('That file is not a photo. Use a JPEG, PNG or WebP.');
+    return;
+  }
+  evBusy = true;
+  evNote('Preparing…');
+  try {
+    const { blob, width } = await evResize(file);
+    const replaced = evHasOurPhoto(evCurrent);
+    await queueCountryWork({
+      kind: 'event_photo',
+      eventID: evCurrent.id,
+      credit: ($('ev-credit').value || '').trim() || null,
+      blob,
+    }, evCurrent.name || 'Event');
+    track('panel_event_photo_uploaded', { source: source, replaced: replaced ? 'yes' : 'no' });
+    $('ev-note').hidden = true;
+    evShowDone(blob, width);
+  } catch (err) {
+    evNote(err.message || 'Could not read that photo.');
+  } finally {
+    evBusy = false;
+  }
+}
+
+function evShowDone(blob, width) {
+  $('ev-done-name').textContent = (evCurrent && evCurrent.name) || '';
+  const t = $('ev-done-thumbs');
+  t.innerHTML = '';
+  const im = document.createElement('img');
+  im.src = URL.createObjectURL(blob);
+  im.alt = '';
+  im.style.cssText = 'width:140px;height:140px;object-fit:cover;border-radius:12px';
+  t.appendChild(im);
+  // Optimistic, with a FLAG rather than a URL. The row's real `image_url`
+  // arrives when the queue drains; writing a placeholder one in the meantime
+  // put a 404 in the list's thumbnail, which looks exactly like a photo that
+  // failed to upload.
+  if (evCurrent) {
+    evCurrent._queued = true;
+    evCurrent.image_credit = ($('ev-credit').value || '').trim() || null;
+  }
+  const name = (evCurrent && evCurrent.name) || 'That event';
+  const size = width ? width + '\u00a0px wide' : '';
+  const next = evRows.find((r) => !evHasOurPhoto(r));
+
+  // **"Saved" is a claim, and offline it is a false one.** The photo is in
+  // the queue either way; only the network decides whether it has landed.
+  // The Country tab says "queued — it will save when you are back online",
+  // and this says the same thing in the same words.
+  const online = navigator.onLine;
+  $('ev-done-title').textContent = online ? 'Photo saved' : 'Photo queued';
+  const tail = online ? '' : ' — it will upload when you are back online.';
+  $('ev-done-name').textContent = name + (size ? ' · ' + size : '')
+    + (next ? '' : ' — that\'s all of them.') + tail;
+  $('ev-next').hidden = !next;
+  $('ev-next').onclick = () => { if (next) openEventPhoto(next.id); };
+  showEventScreen('done');
+}
+
+/**
+ * `#event=<id>` lands straight on the photo screen.
+ *
+ * Ops puts this link beside each row in Event Review, so it is usually
+ * opened on a phone that is signed out. Nothing navigates during sign-in —
+ * the login pane just hides — so the hash is still there afterwards, and
+ * `showApp` is where this is called from.
+ *
+ * **Anything that is not a known event lands on the list with a message**,
+ * a mistyped id included. Matching the UUID shape first and bailing silently
+ * meant a truncated link dropped you on the capture screen with no
+ * explanation, which reads as the link being broken rather than wrong.
+ */
+async function evOpenFromHash() {
+  const m = (location.hash || '').match(/^#event=(.+)$/);
+  if (!m) return false;
+  const id = decodeURIComponent(m[1]).trim();
+  switchTab('events');
+  await loadEventList();
+  const row = evRows.find((r) => r.id === id);
+  if (!row) {
+    showEventScreen('list');
+    const note = $('ev-list-note');
+    note.hidden = false;
+    // It may simply be over: the list is upcoming events only.
+    note.textContent = 'Couldn\'t find that event. It may have finished, or the link may be wrong.';
+    return true;
+  }
+  openEventPhoto(row.id);
+  return true;
+}
+
+$('ev-search').oninput = () => renderEventList();
+$('ev-filter-missing').onclick = () => { evFilter = 'missing'; renderEventList(); };
+$('ev-filter-all').onclick = () => { evFilter = 'all'; renderEventList(); };
+$('ev-back').onclick = () => showEventScreen('list');
+$('ev-done-back').onclick = () => { showEventScreen('list'); loadEventList(true); };
+$('btn-ev-camera').onclick = () => $('in-ev-camera').click();
+$('btn-ev-upload').onclick = () => $('in-ev-upload').click();
+$('in-ev-camera').onchange = (e) => evAccept((e.target.files || [])[0], 'camera');
+$('in-ev-upload').onchange = (e) => evAccept((e.target.files || [])[0], 'upload');
+
+// A link tapped while the Panel is already open changes the hash and
+// nothing else, so the deep link needs this as well as the one in showApp.
+window.addEventListener('hashchange', () => {
+  if (profile && profile.is_admin) { evOpenFromHash().catch(() => {}); }
+});
+
+// Paste, only while the photo screen is open.
+window.addEventListener('paste', (e) => {
+  if ($('pane-events').hidden || $('ev-photo-screen').hidden) return;
+  const item = [...((e.clipboardData && e.clipboardData.items) || [])]
+    .find((i) => i.type && i.type.startsWith('image/'));
+  if (!item) return;
+  const file = item.getAsFile();
+  if (file) { e.preventDefault(); evAccept(file, 'paste'); }
+});
+
 async function queueCountryWork(item, label) {
   await idbPut('queue', {
     id: crypto.randomUUID(),
@@ -6446,6 +7024,7 @@ async function loadProfile() {
   // `country_foods` are all `is_admin()` for writes, so for anyone else this
   // entry could only produce errors. It is a menu row now, not a tab.
   $('menu-country').hidden = !profile.is_admin;
+  $('menu-events').hidden = !profile.is_admin;
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -6555,6 +7134,17 @@ async function showApp(s) {
   await refreshQueueBadge();
   watchGPS();
   drainQueue();
+
+  // **The deep link is honoured AFTER sign-in, not before.**
+  //
+  // `app.unaryx.com/field#event=<id>` is the link Ops puts next to each row
+  // in Event Review. Someone tapping it on a phone is usually signed out,
+  // and the hash survives the sign-in because nothing navigates — the login
+  // pane just hides. So the only correct place to read it is here, once
+  // there is a session and a profile to check `is_admin` against.
+  if (profile && profile.is_admin) {
+    try { await evOpenFromHash(); } catch (e) {}
+  }
 }
 
 boot();
