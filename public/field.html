@@ -6373,26 +6373,6 @@ function countryNote(msg) { $('country-note').textContent = msg; $('country-erro
    enforced by `is_admin()` on the table and the storage policies, exactly as
    the Country tab is. */
 
-/**
- * The Panel has no analytics.
- *
- * There is no PostHog in `suna-links-main` at all — checked, zero matches
- * across every page. The brief asks for `panel_event_photo_uploaded`, and
- * the call below is correct and in the right place, but nothing is
- * listening: adding a third-party script to a signed-in admin tool is a
- * decision for Brian, not something to slip in with a photo uploader.
- *
- * So this records the event the day the Panel gains a tracker, and does
- * nothing until then, rather than the call site being wrong either way.
- */
-function track(name, props) {
-  try {
-    if (window.posthog && typeof window.posthog.capture === 'function') {
-      window.posthog.capture(name, Object.assign({ site: 'app.unaryx.com' }, props || {}));
-    }
-  } catch (e) { /* analytics must never break an upload */ }
-}
-
 const EV_MIN_WIDTH = 600;
 const EV_MAX_WIDTH = 1600;
 const EV_BUCKET = 'event-photos';
@@ -6417,6 +6397,7 @@ const EV_OURS = '/storage/v1/object/public/event-photos/';
  * **adding a city is a row there and an edit here.** Verified identical to
  * the live table on 10 Oct.
  */
+/* UPDATE THIS WHEN A CITY IS ADDED TO `event_cities`. */
 const EV_CITIES = [
   { slug: 'melbourne',    name: 'Melbourne',    lat: -37.8136, lng: 144.9631, radius_km: 60, tz: 'Australia/Melbourne' },
   { slug: 'sydney',       name: 'Sydney',       lat: -33.8688, lng: 151.2093, radius_km: 60, tz: 'Australia/Sydney' },
@@ -6680,7 +6661,7 @@ function evResize(file) {
   });
 }
 
-async function evAccept(file, source) {
+async function evAccept(file) {
   if (!evCurrent) return;
   // One photo at a time. A tap on Photograph while the last one was still
   // encoding queued two uploads for the same event, and the row ended up
@@ -6694,14 +6675,12 @@ async function evAccept(file, source) {
   evNote('Preparing…');
   try {
     const { blob, width } = await evResize(file);
-    const replaced = evHasOurPhoto(evCurrent);
     await queueCountryWork({
       kind: 'event_photo',
       eventID: evCurrent.id,
       credit: ($('ev-credit').value || '').trim() || null,
       blob,
     }, evCurrent.name || 'Event');
-    track('panel_event_photo_uploaded', { source: source, replaced: replaced ? 'yes' : 'no' });
     $('ev-note').hidden = true;
     evShowDone(blob, width);
   } catch (err) {
@@ -6785,8 +6764,8 @@ $('ev-back').onclick = () => showEventScreen('list');
 $('ev-done-back').onclick = () => { showEventScreen('list'); loadEventList(true); };
 $('btn-ev-camera').onclick = () => $('in-ev-camera').click();
 $('btn-ev-upload').onclick = () => $('in-ev-upload').click();
-$('in-ev-camera').onchange = (e) => evAccept((e.target.files || [])[0], 'camera');
-$('in-ev-upload').onchange = (e) => evAccept((e.target.files || [])[0], 'upload');
+$('in-ev-camera').onchange = (e) => evAccept((e.target.files || [])[0]);
+$('in-ev-upload').onchange = (e) => evAccept((e.target.files || [])[0]);
 
 // A link tapped while the Panel is already open changes the hash and
 // nothing else, so the deep link needs this as well as the one in showApp.
@@ -6801,7 +6780,7 @@ window.addEventListener('paste', (e) => {
     .find((i) => i.type && i.type.startsWith('image/'));
   if (!item) return;
   const file = item.getAsFile();
-  if (file) { e.preventDefault(); evAccept(file, 'paste'); }
+  if (file) { e.preventDefault(); evAccept(file); }
 });
 
 async function queueCountryWork(item, label) {
