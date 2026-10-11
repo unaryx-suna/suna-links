@@ -106,12 +106,33 @@
       // so fall back to the App Store — but only if we're still on screen. When
       // the app DOES open, this page is backgrounded and the redirect must not
       // fire, or the user comes back to the App Store later.
+      // WHERE A PARTNER'S TOKEN SURVIVES TO.
+      //
+      // A counter card at a WORQ reception desk sends someone to
+      // /i/<slug>?via=partner-worq-ttdi. Both App Store links on this page
+      // threw the token away — the button's default href and the fallback
+      // redirect below — so a download that started at that desk arrived
+      // with nothing to credit it to, which is the single number the pilot
+      // exists to produce.
+      //
+      // Only `partner-` tokens go on the App Store link. Every other `via`
+      // is a person's share and keeps today's behaviour, because `ct` is a
+      // campaign field and a creator is not a campaign.
+      var viaParam = new URLSearchParams(window.location.search).get('via');
+      var APPSTORE = 'https://apps.apple.com/app/id6759053765';
+      function storeURL() {
+        if (!viaParam || viaParam.indexOf('partner-') !== 0) return APPSTORE;
+        return 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765'
+          + '?pt=128539200&ct=' + encodeURIComponent(viaParam) + '&mt=8';
+      }
+      document.getElementById('cta').href = storeURL();
+
       if (isIOS && slug) {
         var cta = document.getElementById('cta');
         // Carry ?via= across the hand-off. The scheme URL is a fresh URL, so
         // anything not copied here is dropped — which is how every open through
         // this button used to arrive at the app with no idea whose share it was.
-        var via = new URLSearchParams(window.location.search).get('via');
+        var via = viaParam;
         cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug)
                  + (via ? '&via=' + encodeURIComponent(via) : '');
         cta.textContent = 'Open in Suna';
@@ -122,7 +143,7 @@
             // Backgrounded, or the timer was starved while the app launched —
             // either way the app took the tap.
             if (document.hidden || Date.now() - start > 1600) return;
-            window.location.href = 'https://apps.apple.com/app/id6759053765';
+            window.location.href = storeURL();
           }, 1200);
         });
       }
@@ -159,7 +180,7 @@
 
       var url = SUPABASE_URL + '/rest/v1/public_itineraries'
         + '?share_slug=eq.' + encodeURIComponent(slug)
-        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url'
+        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url,partner_name'
         + '&limit=1';
 
       fetch(url, { headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY } })
@@ -176,7 +197,16 @@
           if (bits.length) document.getElementById('eyebrow').textContent = bits.join(' · ');
           if (it.intro_story) document.getElementById('intro').textContent = it.intro_story;
 
-          if (it.creator_username) {
+          // A PARTNER'S NAME REPLACES THE CREATOR'S, it does not join it.
+          // WORQ's itineraries are built by someone at WORQ, and a reader
+          // at their counter is being told whose recommendation this is —
+          // "By WORQ" is the answer, not the name of the staff member who
+          // typed it. The avatar is the creator's, so it goes too.
+          if (it.partner_name) {
+            document.getElementById('creator').textContent = 'By ' + it.partner_name;
+            document.getElementById('avatar').hidden = true;
+            document.getElementById('byline').hidden = false;
+          } else if (it.creator_username) {
             document.getElementById('creator').textContent = '@' + it.creator_username;
             if (it.creator_avatar_url) document.getElementById('avatar').src = it.creator_avatar_url;
             document.getElementById('byline').hidden = false;
