@@ -224,7 +224,16 @@
   .evrow .evthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .evrow .evbody { min-width: 0; flex: 1; }
   .evrow strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .evrow .badge { float: right; margin-left: 8px; }
+.evrow .badge { float: right; margin-left: 8px; }
+  /* W-9: the photo and the event are two states, shown as two. Brian saved
+     a photo for a pending event, saw "Pending" and read it as the upload
+     having failed — it was the EVENT that was pending. */
+  .evstate { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin: 2px 0 0; }
+  .evrow .evstate { display: flex; }   /* beats `.evrow small`, which is block */
+  .evstate .ok { font-size: inherit; }
+  .evstate .wait { color: var(--sand); }
+  .evstate .none { color: var(--muted); }
+  .evstate a { color: var(--sand); }
   /* A result that is already in the catalogue. Marked, not hidden: it is still
      the place he searched for, it just wants opening rather than re-capturing. */
   .opt.known { border-color: rgba(246,203,148,.45); }
@@ -561,7 +570,7 @@
       <button class="linkish" id="ev-back" style="margin-bottom:10px">&larr; All events</button>
       <h1 id="ev-name">…</h1>
       <p class="sub" id="ev-meta"></p>
-      <p style="margin:-4px 0 10px"><span class="badge" id="ev-pending" hidden>Pending</span></p>
+      <p class="evstate" id="ev-state" style="margin:-4px 0 10px"></p>
 
       <label>Current photo</label>
       <div class="thumbs" id="ev-current-thumbs"></div>
@@ -584,6 +593,7 @@
     <div id="ev-done-screen" hidden>
       <h1 id="ev-done-title">Photo saved</h1>
       <p class="sub" id="ev-done-name"></p>
+      <p class="evstate" id="ev-done-state" style="margin:-4px 0 10px"></p>
       <div class="thumbs" id="ev-done-thumbs"></div>
       <button class="opt" id="ev-next" style="margin-top:12px">Next event without a photo</button>
       <button class="linkish" id="ev-done-back" style="margin-top:8px">Back to the list</button>
@@ -817,7 +827,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v31';
+const BUILD = 'field-v32';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -6555,29 +6565,75 @@ function renderEventList() {
 
     const body = document.createElement('span');
     body.className = 'evbody';
-    if (row.status === 'pending') {
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = 'Pending';
-      body.appendChild(badge);
-    }
     const name = document.createElement('strong');
     name.textContent = row.name || '(unnamed)';
     const line = document.createElement('small');
-    // "no photo" and "not our photo" are different jobs: one needs a picture
-    // taking, the other needs one of ours in place of a link that can rot.
-    const want = row._queued ? 'photo queued'
-      : evHasOurPhoto(row) ? ''
-      : existing ? 'not our photo'
-      : 'no photo';
-    line.textContent = [evDateLine(row), evCityName(row), want].filter(Boolean).join(' · ');
+    line.textContent = [evDateLine(row), evCityName(row)].filter(Boolean).join(' · ');
+    const state = document.createElement('small');
+    state.className = 'evstate';
+    // No Event Review link in the list: the row is a button, and a link
+    // inside a button is two targets in one. It is on the photo screen.
+    evRenderState(state, evPhotoState(row), row, false);
     body.appendChild(name);
     body.appendChild(line);
+    body.appendChild(state);
 
     card.appendChild(thumb);
     card.appendChild(body);
     card.onclick = () => openEventPhoto(row.id);
     list.appendChild(card);
+  }
+}
+
+/**
+ * Where "Approve in Event Review" goes, as a function of the event id — or
+ * null, which is today: Event Review has no address that opens one event
+ * (it is the Events tab of admin/index.html, which is not deployed and
+ * reads nothing from its URL). Until it does, the line names the place to
+ * go without linking anywhere — a link to the wrong page is worse.
+ */
+const EVENT_REVIEW_URL = null;   // e.g. (id) => 'https://…/admin#event=' + id
+
+/** The photo's own state, which has nothing to do with the event's. */
+function evPhotoState(row) {
+  if (row._queued) return { text: 'Photo queued', cls: 'wait' };
+  if (evHasOurPhoto(row)) return { text: 'Photo saved \u2713', cls: 'ok' };
+  // "no photo" and "not our photo" are different jobs: one needs a picture
+  // taking, the other needs one of ours in place of a link that can rot.
+  if (evAnyPhoto(row)) return { text: 'Photo linked from elsewhere', cls: 'none' };
+  return { text: 'No photo yet', cls: 'none' };
+}
+
+/**
+ * "Photo saved ✓" and "Event: waiting for approval", side by side and never
+ * merged. `withAction` adds the way to approve a pending event.
+ */
+function evRenderState(el, photo, row, withAction) {
+  el.innerHTML = '';
+  const add = (text, cls) => {
+    const s = document.createElement('span');
+    if (cls) s.className = cls;
+    s.textContent = text;
+    el.appendChild(s);
+    return s;
+  };
+  add(photo.text, photo.cls);
+  if (!row) return;
+  if (row.status === 'pending') {
+    add('Event: waiting for approval', 'wait');
+    if (withAction) {
+      const url = EVENT_REVIEW_URL ? EVENT_REVIEW_URL(row.id) : null;
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = 'Approve in Event Review';
+        el.appendChild(a);
+      } else {
+        add('Approve it in Event Review', 'none');
+      }
+    }
+  } else if (row.status === 'approved') {
+    add('Event: live', 'ok');
   }
 }
 
@@ -6589,7 +6645,7 @@ function openEventPhoto(id) {
   $('ev-name').textContent = row.name || '(unnamed)';
   $('ev-meta').textContent = [evDateLine(row), evCityName(row), row.venue]
     .filter(Boolean).join(' · ');
-  $('ev-pending').hidden = row.status !== 'pending';
+  evRenderState($('ev-state'), evPhotoState(row), row, true);
   $('ev-credit').value = row.image_credit || '';
   const cur = $('ev-current-thumbs');
   cur.innerHTML = '';
@@ -6717,6 +6773,9 @@ function evShowDone(blob, width) {
   // and this says the same thing in the same words.
   const online = navigator.onLine;
   $('ev-done-title').textContent = online ? 'Photo saved' : 'Photo queued';
+  evRenderState($('ev-done-state'), online
+    ? { text: 'Photo saved \u2713', cls: 'ok' }
+    : { text: 'Photo queued', cls: 'wait' }, evCurrent, true);
   const tail = online ? '' : ' — it will upload when you are back online.';
   $('ev-done-name').textContent = name + (size ? ' · ' + size : '')
     + (next ? '' : ' — that\'s all of them.') + tail;
