@@ -46,5 +46,12 @@ check('no country is Europe', regionFromCountry(null), 'europe');
 check('an unknown category falls back to Monument', poolKey('Picturesque-ish', 'europe'), 'monument-statue/europe');
 check('no id, no stock', stockFor({ landmarkId: null, category: 'Museum', countryCode: 'JP' }), null);
 
+// W-17 (I-23): sacred places get no stock photo, whichever way the category arrives.
+// Jamia Masjid Gung Mahal, Lahore: a real Sacred Space stop on a public itinerary.
+check('Sacred Space gets no stock', stockFor({ landmarkId: '238e4fba-bec9-4891-abdc-63428fcbf1c6', category: 'Sacred Space', countryCode: 'PK' }), null);
+check('legacy Temple gets no stock', stockFor({ landmarkId: '238e4fba-bec9-4891-abdc-63428fcbf1c6', category: 'Temple', countryCode: 'TH' }), null);
+check('sacred, any region', stockFor({ landmarkId: '3F2504E0-4F89-41D3-9A0C-0305E82C3301', category: 'Sacred Space', countryCode: 'JP' }), null);
+check('a museum still gets its stock', stockFor({ landmarkId: '3F2504E0-4F89-41D3-9A0C-0305E82C3301', category: 'Museum', countryCode: 'JP' }).path, 'museum/east-asia/20593434.jpg');
+
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log(`all ${CASES.length} Swift fixtures match`);

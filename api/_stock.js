@@ -93,6 +93,18 @@ export function stockHash(id) {
   return h;
 }
 
+/**
+ * Sacred places never get a stock photo (W-17, mirroring the app's I-23).
+ * The `sacred-space` pools mix faiths, so a mosque could be dealt a church's
+ * statue. The app routes them to its designed placeholder; here the card has
+ * no image, as for a place with nothing. Blocked by the resolved pool, and by
+ * the legacy "Temple" string, which the app's legacyMapping files as
+ * Sacred Space but the pool fallback would otherwise deal a statue.
+ */
+const SACRED_RAW = new Set(['Sacred Space', 'Temple']);
+const isSacred = (categoryRaw, key) =>
+  key.startsWith('sacred-space/') || SACRED_RAW.has(String(categoryRaw || '').trim());
+
 // AppTheme.brandGround, brandInk, brandSand, brandSand.
 const TINTS = ['#406543', '#111111', '#F6CB94', '#F6CB94'];
 
@@ -108,6 +120,7 @@ export function stockFor({ landmarkId, category, countryCode, latitude, longitud
     : (Number.isFinite(latitude) && Number.isFinite(longitude)
       ? regionFromCoordinates(latitude, longitude) : regionFromCountry(null));
   const key = poolKey(category, region);
+  if (isSacred(category, key)) return null;
   const pool = STOCK_POOLS[key];
   if (!pool || !pool.length) return null;
   const h = stockHash(landmarkId);
