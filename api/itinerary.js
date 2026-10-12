@@ -14,6 +14,8 @@
 // cover, the byline and every stop (api/_preview.js). A private, draft or
 // missing slug still gets the generic page exactly as before.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
 // Suna herself, from the app's own source (the Lab's copy is byte-identical to
@@ -22,6 +24,20 @@ import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.
 import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
 
 const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
+
+// vercel.json `includeFiles` ships public/i.html inside this function, at
+// the same path under the function's working directory. (Not import.meta:
+// Vercel compiles these files to CommonJS, where it is a syntax error.)
+let shellCache = null;
+function readShell() {
+  if (shellCache) return shellCache;
+  try {
+    shellCache = readFileSync(join(process.cwd(), 'public', 'i.html'), 'utf8');
+  } catch {
+    shellCache = null;
+  }
+  return shellCache;
+}
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 
@@ -129,17 +145,20 @@ export default async function handler(req, res) {
   // arrived rather than when the database write got round to it.
   const requestedAt = new Date();
 
-  // The static shell, fetched from the same deployment. Serving it through this
-  // function rather than duplicating the markup means the page has exactly one
-  // definition and cannot drift.
+  // The static shell, public/i.html: one definition of the page, so it cannot
+  // drift. Read from the function's own bundle first. Fetching it over HTTP
+  // from the same deployment (the old way, now the fallback) gets Vercel's
+  // login page on a protected preview, so every /i/ preview rendered blank.
   const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
-  let html;
-  try {
-    const shell = await fetch(`${origin}/i.html`);
-    html = await shell.text();
-  } catch {
-    res.status(302).setHeader('Location', '/i.html').end();
-    return;
+  let html = readShell();
+  if (!html) {
+    try {
+      const shell = await fetch(`${origin}/i.html`);
+      html = await shell.text();
+    } catch {
+      res.status(302).setHeader('Location', '/i.html').end();
+      return;
+    }
   }
 
   let title = 'An itinerary on Suna';
@@ -150,6 +169,8 @@ export default async function handler(req, res) {
   let rawName = '';
   // The server-rendered body, or null for the generic page.
   let body = null;
+  // True when the body carries signed moment URLs, which expire in an hour.
+  let signed = false;
 
   if (slug) {
     try {
@@ -176,6 +197,7 @@ export default async function handler(req, res) {
         const cover = coverFor(data, await imageResolves(data.cover));
         image = cover;
         body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
+        signed = data.signedMoments;
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -274,7 +296,11 @@ export default async function handler(req, res) {
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     // Short enough that publishing a fix propagates, long enough that a viral
     // link is not re-resolved per scrape.
-    .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
+    // A page with signed moment URLs (valid 3600 s) is never served older
+    // than 300 + 600 + 1800 = 2700 s, so no reader is handed a dead image.
+    .setHeader('Cache-Control', signed
+      ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
+      : 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
     .send(rendered);
 
 }
