@@ -144,11 +144,15 @@ function stopBlock(s, n, url) {
   const area = String(s.city_name || '').trim();
   const name = s.place_name || 'Stop';
   return `<li class="stop">
-      ${url ? `<div class="stop-pic">${photo(url, 640, 'stop-img', name, false)}</div>` : ''}
-      <p class="stop-meta">${escapeHtml(meta)}</p>
-      <h2 class="stop-name">${escapeHtml(name)}</h2>
-      ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
-      ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
+      <article class="card">
+        ${url ? `<div class="stop-pic">${photo(url, 640, 'stop-img', name, false)}</div>` : ''}
+        <div class="stop-text">
+          <p class="stop-meta">${escapeHtml(meta)}</p>
+          <h3 class="stop-name">${escapeHtml(name)}</h3>
+          ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
+          ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
+        </div>
+      </article>
     </li>`;
 }
 
@@ -179,24 +183,26 @@ export async function coverVariants(cover, resolves) {
   return { 640: okA ? a : null, 1280: okB ? b : null };
 }
 
-/** The body of the preview page. */
-export function previewBody(data, cover, variants) {
+/** The body of the preview page: Figma B1, "The shared itinerary". */
+export function previewBody(data, cover, variants, mascot) {
   const { it, stops, photos } = data;
   const title = it.name || 'An itinerary on Suna';
 
+  // On the web, Follow does what the bar's button does: opens Suna, or the
+  // App Store. The client points both at the same place.
   let byline = '';
   if (it.partner_name) {
-    // A partner's name replaces the creator's (WORQ's are built by someone at
-    // WORQ; the reader is told whose recommendation it is, not who typed it).
-    byline = `<div class="by"><div><p class="by-name">By ${escapeHtml(it.partner_name)}`
-      + ' <span class="tag">Partner</span></p></div></div>';
+    // A partner's name replaces the creator's: no avatar, no Follow.
+    byline = `<div class="by"><div class="by-text"><p class="by-name">By ${escapeHtml(it.partner_name)}`
+      + '<span class="tag">Partner</span></p></div></div>';
   } else if (it.creator_username) {
     const initial = escapeHtml(it.creator_username.slice(0, 1).toUpperCase());
     const avatar = it.creator_avatar_url
       ? `<img class="by-avatar" src="${escapeHtml(it.creator_avatar_url)}" alt="" width="40" height="40" decoding="async" onerror="this.style.visibility='hidden'">`
       : `<span class="by-avatar by-initial" aria-hidden="true">${initial}</span>`;
-    byline = `<div class="by">${avatar}<div><p class="by-name">@${escapeHtml(it.creator_username)}</p>`
-      + '<p class="by-sub">Their itinerary</p></div></div>';
+    byline = `<div class="by">${avatar}<div class="by-text"><p class="by-name">@${escapeHtml(it.creator_username)}</p>`
+      + '<p class="by-sub">Their itinerary</p></div>'
+      + `<a class="follow" data-open-suna href="https://apps.apple.com/app/id6759053765" aria-label="Follow @${escapeHtml(it.creator_username)} in Suna">Follow</a></div>`;
   }
   const intro = String(it.intro_story || '').trim();
 
@@ -207,7 +213,7 @@ export function previewBody(data, cover, variants) {
     const { day } = splitTime(s.suggested_time);
     let head = '';
     if (days.size > 1 && day !== null && day !== lastDay) {
-      head = `<li class="day"><h2 class="day-label">Day ${day + 1}</h2></li>`;
+      head = `<li class="day"><h3 class="day-label">Day ${day + 1}</h3></li>`;
       lastDay = day;
     }
     return head + stopBlock(s, i + 1, photos.get(s));
@@ -215,23 +221,27 @@ export function previewBody(data, cover, variants) {
 
   return `<main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">
-    ${cover ? coverImg(cover, variants) : '<div class="cover-mark" aria-hidden="true"></div>'}
-    <div class="cover-fade"></div>
+    ${cover ? coverImg(cover, variants) : `<div class="cover-mascot">${mascot || ''}</div>`}
+    <div class="fade-top"></div>
+    <div class="fade-bottom"></div>
+    <button class="round-btn" id="share" type="button" aria-label="Share this itinerary"><img src="/icons/share.svg" width="16" height="16" alt=""></button>
     <div class="cover-text">
       <h1 id="title">${escapeHtml(title)}</h1>
       <p class="cover-sub">${escapeHtml(summaryLine(it, stops))}</p>
     </div>
   </header>
-  <section class="about">
+  ${byline || intro ? `<section class="about">
     ${byline}
     ${intro ? `<p class="intro">${escapeHtml(intro)}</p>` : ''}
-  </section>
-  ${stops.length ? `<ol class="stops">
+  </section>` : ''}
+  ${stops.length ? `<h2 class="route-head">The route</h2>
+  <ol class="route">
     ${items}
   </ol>` : ''}
 </main>
-<div class="dock">
-  <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765">Copy this itinerary in Suna</a>
-  <p class="dock-sub">Pick a day after copying, and Suna reminds you on the day.</p>
-</div>`;
+<div class="bar">
+  <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765"><img src="/icons/copy.svg" width="17" height="17" alt="">Copy itinerary</a>
+  <p class="bar-sub">Pick a day, and Suna takes you through it.</p>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>`;
 }

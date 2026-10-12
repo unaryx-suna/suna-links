@@ -16,6 +16,12 @@
 
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
+// Suna herself, from the app's own source (the Lab's copy is byte-identical to
+// TravelMug/Resources/suna-faces.js). Rendered here as SVG, so she cannot fail
+// to load the way an <img> can.
+import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
+
+const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 
@@ -169,7 +175,7 @@ export default async function handler(req, res) {
         // place photo: the same picture the page opens on.
         const cover = coverFor(data, await imageResolves(data.cover));
         image = cover;
-        body = previewBody(data, cover, await coverVariants(cover, imageResolves));
+        body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -213,7 +219,13 @@ export default async function handler(req, res) {
     .replace('</head>', `  ${tags}\n</head>`)
     .replace(/<body>[\s\S]*?<!--\/BODY-->/, (generic) => (body
       ? `<body class="pv-body" data-preview="1">\n${body}`
-      : generic));
+      : generic))
+    // Her gradients and her motion, only where she is drawn.
+    .replace('<!--MASCOT-->', mascot())
+    .replace('</head>', () => (/class="sn /.test(body || '<!--MASCOT-->')
+      ? `<style>${SUNA_CSS}</style>\n</head>` : '</head>'))
+    .replace(/<body([^>]*)>/, (m) => (/class="sn /.test(body || 'generic')
+      ? `${m}\n<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${SUNA_DEFS}</defs></svg>` : m));
 
   // Record the open. Started BEFORE the response so the request is already in
   // flight, then handed to the platform to finish afterwards.
