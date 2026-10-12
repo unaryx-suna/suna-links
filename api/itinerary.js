@@ -150,6 +150,8 @@ export default async function handler(req, res) {
   let rawName = '';
   // The server-rendered body, or null for the generic page.
   let body = null;
+  // True when the body carries signed moment URLs, which expire in an hour.
+  let signed = false;
 
   if (slug) {
     try {
@@ -176,6 +178,7 @@ export default async function handler(req, res) {
         const cover = coverFor(data, await imageResolves(data.cover));
         image = cover;
         body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
+        signed = data.signedMoments;
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -274,7 +277,11 @@ export default async function handler(req, res) {
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     // Short enough that publishing a fix propagates, long enough that a viral
     // link is not re-resolved per scrape.
-    .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
+    // A page with signed moment URLs (valid 3600 s) is never served older
+    // than 300 + 600 + 1800 = 2700 s, so no reader is handed a dead image.
+    .setHeader('Cache-Control', signed
+      ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
+      : 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
     .send(rendered);
 
 }

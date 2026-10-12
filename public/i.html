@@ -146,6 +146,20 @@
       font-size: 15px; line-height: 21px; color: var(--body); white-space: pre-line;
     }
     .day-label { margin: 8px 0 12px; font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+    /* A stock image is the app's designed backdrop: the dealt photo under its
+       dealt tint (PlaceStockDealer), never a credit. */
+    .stock-tint { position: absolute; inset: 0; z-index: 1; }
+    .stop-pic.stock::before, .stop-pic.stock::after { z-index: 2; }
+    /* Stops 4 onward: the count and the times, nothing else. */
+    .locked { padding: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+    .locked-head { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      font-size: 12px; font-weight: 600; color: var(--sand); padding: 4px 10px; border-radius: 999px;
+      background: rgba(246,203,148,.12);
+    }
+    .locked-sub { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    a.locked-cta { display: inline-block; padding: 11px 22px; font-size: 15px; border-radius: 26px; }
     .bar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--bg);
       border-top: 1px solid var(--line); text-align: center;
@@ -289,17 +303,25 @@
         });
       }
 
-      // Count the preview's button. A number, nothing about the reader: which
-      // platform, and whether the tap went to the app's scheme or the store.
-      if (preview) {
-        document.getElementById('cta').addEventListener('click', function () {
+      // Count the preview's buttons: "Copy itinerary", Follow and the locked
+      // card's "Download Suna". The slug, the share token, the platform and
+      // whether the tap went to the app's scheme; the server adds the hashed
+      // IP. Fired and forgotten, so the hand-off never waits on it.
+      if (preview && slug) {
+        var platform = isIOS ? 'ios' : (/Android/.test(navigator.userAgent) ? 'android'
+          : (/Mobi|Tablet/.test(navigator.userAgent) ? 'other' : 'desktop'));
+        var countTap = function () {
           try {
-            var u = '/api/cta?platform=' + (isIOS ? 'ios' : (/Android/.test(navigator.userAgent) ? 'android' : 'other'))
-              + '&has_app_scheme=' + (isIOS && slug ? '1' : '0');
+            var u = '/api/cta?slug=' + encodeURIComponent(slug)
+              + '&platform=' + platform
+              + '&has_app_scheme=' + (isIOS ? '1' : '0')
+              + (viaParam ? '&via=' + encodeURIComponent(viaParam) : '');
             if (navigator.sendBeacon) navigator.sendBeacon(u);
             else fetch(u, { method: 'POST', keepalive: true }).catch(function () {});
           } catch (e) { /* counting must never affect the page */ }
-        });
+        };
+        document.getElementById('cta').addEventListener('click', countTap);
+        for (var k = 0; k < followers.length; k++) followers[k].addEventListener('click', countTap);
       }
 
       if (!slug) return;

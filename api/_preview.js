@@ -7,25 +7,32 @@
 // It is all in the HTML, so it is on screen at first paint and readable with
 // JavaScript off.
 //
-// WHAT IT READS, all through the publishable key and all already public:
-//   public_itineraries, public_itinerary_stops   the two anon-safe views
-//   landmarks                                    the place's own photo, the
-//                                                same read /place makes
-// A private, draft or missing slug finds nothing in the views, and the caller
-// serves the generic page unchanged, so the page never reveals that a private
-// itinerary exists at an address.
+// THE TEASER (W-15c, Brian 12 Oct): only the first SHOWN_STOPS stops are
+// shown. The rest are one locked card with their count and times, and their
+// names, notes and images never leave this file: the loader keeps only what
+// the locked card needs, so nothing later can render them by accident.
 //
-// PHOTOS ARE THE PLACE'S OWN (Brian, 12 Oct). Never the creator's photos or
-// moments: those are for people signed in to Suna. The view has no
-// landmark_id, so a stop is matched to its landmark by exact name and the
-// nearest coordinates, within MATCH_METRES. A stop with no stored place photo
-// shows no photo rather than a stand-in.
+// WHAT IT READS:
+//   public_itineraries, public_itinerary_stops   the anon-safe views. The
+//     stops view only returns public, published creator itineraries, so a
+//     private, draft or missing slug finds nothing and the caller serves the
+//     generic page, never revealing that a private itinerary exists.
+//   creator-media (service role, server only)    a signed URL for a shown
+//     stop's moment, and only for a path the view just returned.
+//
+// ONE IMAGE PER SHOWN STOP, the first that exists: the creator's moment, the
+// place's own photo, the stock image the app deals that place (_stock.js).
+// Never a photographer credit, never more than one.
+
+import { stockFor } from './_stock.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 const HEADERS = { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` };
 
-const MATCH_METRES = 300;
+export const SHOWN_STOPS = 3;
+// Signed moment URLs last an hour; the page's cache stays well inside that.
+const SIGN_SECONDS = 3600;
 
 export function escapeHtml(value) {
   return String(value ?? '')
@@ -62,32 +69,33 @@ function photo(url, width, cls, alt, eager) {
     + ` alt="${escapeHtml(alt)}" decoding="async" ${load}>`;
 }
 
-const metres = (a, b) => {
-  const dLat = (a.latitude - b.latitude) * 111000;
-  const dLng = (a.longitude - b.longitude) * 111000 * Math.cos((a.latitude * Math.PI) / 180);
-  return Math.sqrt(dLat * dLat + dLng * dLng);
-};
-
-/** Each stop's own place photo, matched by exact name and nearest coordinates. */
-async function placePhotos(stops) {
-  const names = [...new Set(stops.map((s) => s.place_name).filter(Boolean))];
-  if (!names.length) return new Map();
-  const list = names.map((n) => `"${n.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',');
-  const rows = await rest(`landmarks?name=in.(${encodeURIComponent(list)})`
-    + '&cover_image_url=not.is.null&select=name,latitude,longitude,cover_image_url&limit=200');
+/**
+ * Signed URLs for shown stops' moments in the private `creator-media` bucket.
+ *
+ * With the service role, on the server, and ONLY for paths the public view
+ * just returned (I-11: anon gets 404 there, because the storage policy reads
+ * tables anon cannot). Nothing from the request is ever signed. Without the
+ * key the moments are skipped and the stop falls through to the place photo.
+ */
+async function signMoments(paths) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key || !paths.length) return new Map();
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/creator-media`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresIn: SIGN_SECONDS, paths }),
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!r.ok) return new Map();
   const out = new Map();
-  for (const s of stops) {
-    if (!Number.isFinite(s.latitude) || !Number.isFinite(s.longitude)) continue;
-    let best = null;
-    for (const l of rows) {
-      if (l.name !== s.place_name || !Number.isFinite(l.latitude)) continue;
-      const d = metres(s, l);
-      if (d <= MATCH_METRES && (!best || d < best.d)) best = { d, url: l.cover_image_url };
-    }
-    if (best) out.set(s, best.url);
+  for (const row of await r.json()) {
+    if (row && row.signedURL && !row.error) out.set(row.path, `${SUPABASE_URL}/storage/v1${row.signedURL}`);
   }
   return out;
 }
+
+const publicObject = (bucket, path) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${
+  String(path).split('/').map(encodeURIComponent).join('/')}`;
 
 /** "Day 2 · 9:00 AM" -> { day: 2, time: "9:00 AM" }. */
 export function splitTime(raw) {
@@ -112,19 +120,61 @@ export async function loadItinerary(slug, coverURL) {
     + 'creator_avatar_url,partner_name,cover_media_path&limit=1');
   const it = Array.isArray(rows) ? rows[0] : null;
   if (!it) return null;
-  const stops = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
-    + '&select=order_index,place_name,city_name,suggested_time,duration_label,creator_note,latitude,longitude'
+  const all = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
+    + '&select=order_index,place_name,city_name,suggested_time,duration_label,creator_note,'
+    + 'latitude,longitude,landmark_id,category,country_code,place_image_url,moment_path,moment_bucket'
     + '&order=order_index.asc');
-  let photos = new Map();
-  try { photos = await placePhotos(stops); } catch { /* photos are optional; the stops are not */ }
-  return { it, stops, photos, cover: coverURL(it.cover_media_path) };
+
+  // The whole itinerary is counted; only the first stops are kept.
+  const summary = summaryLine(it, all);
+  const shown = all.slice(0, SHOWN_STOPS);
+  const locked = all.slice(SHOWN_STOPS).map((s) => splitTime(s.suggested_time).time).filter(Boolean);
+  const lockedCount = Math.max(all.length - SHOWN_STOPS, 0);
+  const multiDay = new Set(all.map((s) => splitTime(s.suggested_time).day).filter((d) => d !== null)).size > 1;
+
+  let signed = new Map();
+  try {
+    signed = await signMoments(shown
+      .filter((s) => s.moment_path && s.moment_bucket === 'creator-media')
+      .map((s) => s.moment_path));
+  } catch { /* a moment is optional; the stop falls through to the next image */ }
+
+  const images = new Map();
+  for (const s of shown) images.set(s, imageFor(s, signed));
+  return {
+    it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked,
+    signedMoments: [...images.values()].some((im) => im && im.kind === 'moment' && im.signed),
+    cover: coverURL(it.cover_media_path),
+  };
 }
 
-/** The cover: the itinerary's own, else the first stop with a place photo. */
+/** One image for a shown stop: moment, else place photo, else stock. */
+function imageFor(s, signed) {
+  if (s.moment_path) {
+    if (s.moment_bucket === 'creator-media' && signed.get(s.moment_path)) {
+      return { kind: 'moment', url: signed.get(s.moment_path), signed: true };
+    }
+    if (s.moment_bucket === 'community-post-photos') {
+      return { kind: 'moment', url: publicObject('community-post-photos', s.moment_path) };
+    }
+  }
+  if (s.place_image_url) return { kind: 'place', url: s.place_image_url };
+  const stock = stockFor({
+    landmarkId: s.landmark_id, category: s.category, countryCode: s.country_code,
+    latitude: s.latitude, longitude: s.longitude,
+  });
+  return stock ? { kind: 'stock', url: stock.url, tint: stock.tint, tintOpacity: stock.tintOpacity } : null;
+}
+
+/**
+ * The cover: the itinerary's own, else the first shown stop's place photo.
+ * Never a signed moment (it is also og:image, which crawlers keep for days,
+ * long after an hour's signature) and never a stock image.
+ */
 export function coverFor(data, coverResolves) {
   if (coverResolves) return data.cover;
-  const first = data.stops.find((s) => data.photos.get(s));
-  return first ? data.photos.get(first) : null;
+  const first = data.shown.find((s) => s.place_image_url);
+  return first ? first.place_image_url : null;
 }
 
 /** "Kuala Lumpur · 1 day · 4 stops", from what is actually stored. */
@@ -137,7 +187,20 @@ export function summaryLine(it, stops) {
   return parts.join(' · ');
 }
 
-function stopBlock(s, n, url) {
+function stopImage(image, name) {
+  if (!image) return '';
+  if (image.kind === 'place') return `<div class="stop-pic">${photo(image.url, 640, 'stop-img', name, false)}</div>`;
+  if (image.kind === 'stock') {
+    // The app's designed backdrop: the dealt image (its _w/640 copy; every
+    // place-stock image has one) under its dealt tint.
+    return `<div class="stop-pic stock">${photo(image.url, 640, 'stop-img', name, false)}`
+      + `<span class="stock-tint" style="background:${image.tint};opacity:${image.tintOpacity}"></span></div>`;
+  }
+  const img = `<img class="stop-img" src="${escapeHtml(image.url)}" alt="${escapeHtml(name)}" decoding="async" loading="lazy">`;
+  return `<div class="stop-pic">${img}</div>`;
+}
+
+function stopBlock(s, n, image) {
   const { time } = splitTime(s.suggested_time);
   const meta = [String(n).padStart(2, '0'), time, readableDuration(s.duration_label)].filter(Boolean).join(' · ');
   const note = String(s.creator_note || '').trim();
@@ -145,13 +208,27 @@ function stopBlock(s, n, url) {
   const name = s.place_name || 'Stop';
   return `<li class="stop">
       <article class="card">
-        ${url ? `<div class="stop-pic">${photo(url, 640, 'stop-img', name, false)}</div>` : ''}
+        ${stopImage(image, name)}
         <div class="stop-text">
           <p class="stop-meta">${escapeHtml(meta)}</p>
           <h3 class="stop-name">${escapeHtml(name)}</h3>
           ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
           ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
         </div>
+      </article>
+    </li>`;
+}
+
+/** Stops 4 onward: how many and when, nothing else. */
+function lockedBlock(count, times) {
+  if (!count) return '';
+  const chips = times.map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
+  return `<li class="stop stop-locked">
+      <article class="card locked">
+        <p class="locked-head"><img src="/icons/lock.svg" width="16" height="16" alt="">+${count} more stop${count === 1 ? '' : 's'}</p>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+        <p class="locked-sub">See the full route in Suna</p>
+        <a class="cta locked-cta" data-open-suna href="https://apps.apple.com/app/id6759053765">Download Suna</a>
       </article>
     </li>`;
 }
@@ -185,7 +262,7 @@ export async function coverVariants(cover, resolves) {
 
 /** The body of the preview page: Figma B1, "The shared itinerary". */
 export function previewBody(data, cover, variants, mascot) {
-  const { it, stops, photos } = data;
+  const { it, shown, images, summary, multiDay, lockedCount, lockedTimes } = data;
   const title = it.name || 'An itinerary on Suna';
 
   // On the web, Follow does what the bar's button does: opens Suna, or the
@@ -207,17 +284,16 @@ export function previewBody(data, cover, variants, mascot) {
   const intro = String(it.intro_story || '').trim();
 
   // Day headings only when the itinerary really spans more than one day.
-  const days = new Set(stops.map((s) => splitTime(s.suggested_time).day).filter((d) => d !== null));
   let lastDay = null;
-  const items = stops.map((s, i) => {
+  const items = shown.map((s, i) => {
     const { day } = splitTime(s.suggested_time);
     let head = '';
-    if (days.size > 1 && day !== null && day !== lastDay) {
+    if (multiDay && day !== null && day !== lastDay) {
       head = `<li class="day"><h3 class="day-label">Day ${day + 1}</h3></li>`;
       lastDay = day;
     }
-    return head + stopBlock(s, i + 1, photos.get(s));
-  }).join('\n    ');
+    return head + stopBlock(s, i + 1, images.get(s));
+  }).join('\n    ') + lockedBlock(lockedCount, lockedTimes);
 
   return `<main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">
@@ -227,14 +303,14 @@ export function previewBody(data, cover, variants, mascot) {
     <button class="round-btn" id="share" type="button" aria-label="Share this itinerary"><img src="/icons/share.svg" width="16" height="16" alt=""></button>
     <div class="cover-text">
       <h1 id="title">${escapeHtml(title)}</h1>
-      <p class="cover-sub">${escapeHtml(summaryLine(it, stops))}</p>
+      <p class="cover-sub">${escapeHtml(summary)}</p>
     </div>
   </header>
   ${byline || intro ? `<section class="about">
     ${byline}
     ${intro ? `<p class="intro">${escapeHtml(intro)}</p>` : ''}
   </section>` : ''}
-  ${stops.length ? `<h2 class="route-head">The route</h2>
+  ${shown.length ? `<h2 class="route-head">The route</h2>
   <ol class="route">
     ${items}
   </ol>` : ''}
