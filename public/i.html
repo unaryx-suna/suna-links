@@ -14,57 +14,158 @@
   <meta property="og:type" content="article">
   <meta name="twitter:card" content="summary">
 
+  <!-- Urbanist, the app's brandFont (Figma B1). `display=swap`, and the
+       fallback below is metric-matched so the swap moves nothing (CLS 0). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;700&display=swap">
   <style>
+    /* Values are Figma B1, "The shared itinerary" (uYO3utn3nHK8cieyUZmZiM,
+       2494:2799), read with the Figma tools on 12 Oct. */
+    /* Arial, scaled per weight to Urbanist's measured widths (97.5% at 400,
+       93.3% at 600, 94.4% at 700) with its ascent and descent (95 / 25), so
+       the swap to Urbanist reflows nothing. */
+    @font-face {
+      font-family: "Urbanist Fallback"; font-weight: 400; src: local("Arial");
+      size-adjust: 97.5%; ascent-override: 97.4%; descent-override: 25.6%; line-gap-override: 0%;
+    }
+    @font-face {
+      font-family: "Urbanist Fallback"; font-weight: 600; src: local("Arial Bold"), local("Arial-BoldMT");
+      size-adjust: 93.3%; ascent-override: 101.8%; descent-override: 26.8%; line-gap-override: 0%;
+    }
+    @font-face {
+      font-family: "Urbanist Fallback"; font-weight: 700; src: local("Arial Bold"), local("Arial-BoldMT");
+      size-adjust: 94.4%; ascent-override: 100.6%; descent-override: 26.5%; line-gap-override: 0%;
+    }
     :root {
-      --bg: #1C1812;      /* warm espresso — matches the app, not pure black */
-      --surface: #272018;
-      --text: #F2EAD8;
-      --subtext: #A89070;
-      --accent: #FAC775;
+      --bg: #111;           /* AppTheme.brandInk */
+      --card: #1a1a1a;
+      --line: #2a2a2a;
+      --text: #fff;
+      --body: #dadada;
+      --muted: #979592;
+      --sand: #f6cb94;
+      --ink-on-sand: #1e1b16;
+      --font: Urbanist, "Urbanist Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
+    /* `.byline { display: flex }` beat the hidden attribute, so the generic
+       page showed an empty circle under its title. */
+    [hidden] { display: none !important; }
     body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0; background: var(--bg); color: var(--text); font-family: var(--font);
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; min-height: 100svh;
       text-align: center; padding: 28px;
     }
+
+    /* ── The generic page: a private, draft or missing slug ─────────── */
     .wrap { max-width: 460px; width: 100%; }
+    .mascot { display: flex; justify-content: center; height: 96px; margin-bottom: 18px; }
     .eyebrow {
-      font-size: 11px; font-weight: 600; letter-spacing: 1.6px;
-      color: var(--accent); text-transform: uppercase; margin-bottom: 14px;
+      font-size: 12px; font-weight: 600; letter-spacing: 1.4px;
+      color: var(--sand); text-transform: uppercase; margin-bottom: 12px;
     }
-    h1 {
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: 30px; line-height: 1.25; margin: 0 0 12px; font-weight: 700;
-    }
-    p.lede {
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: 17px; line-height: 1.6; color: rgba(242,234,216,.88);
-      margin: 0 0 8px;
-    }
-    p.meta { font-size: 13px; color: var(--subtext); margin: 0 0 30px; }
+    h1 { font-size: 28px; line-height: 1.25; margin: 0 0 12px; font-weight: 700; }
+    p.lede { font-size: 15px; line-height: 21px; color: var(--body); margin: 0 0 8px; }
+    p.meta { font-size: 13px; color: var(--muted); margin: 0 0 28px; }
     a.cta {
-      background: var(--accent); color: rgba(0,0,0,.85);
-      padding: 15px 34px; border-radius: 999px; text-decoration: none;
-      font-weight: 700; font-size: 16px; display: inline-block;
+      background: var(--sand); color: var(--ink-on-sand);
+      padding: 15px 34px; border-radius: 26px; text-decoration: none;
+      font-weight: 600; font-size: 17px; display: inline-block;
     }
-    .byline {
-      display: flex; align-items: center; justify-content: center; gap: 9px;
-      margin-bottom: 22px;
-    }
-    .avatar {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: var(--surface); object-fit: cover;
-    }
+    .byline { display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 22px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--card); object-fit: cover; }
     .byline span { font-size: 14px; font-weight: 600; }
-    .rule { height: 1px; background: #3D3020; margin: 26px 0 18px; }
-    .foot { font-size: 12px; color: var(--subtext); }
+    .rule { height: 1px; background: var(--line); margin: 26px 0 18px; }
+    .foot { font-size: 12px; color: var(--muted); }
+
+    /* ── The preview (W-15), B1 ───────────────────────────────────────
+       Every image box has its size set here, so nothing moves as photos
+       arrive, and the bar is fixed, so it never pushes content. */
+    body.pv-body {
+      display: block; text-align: left; padding: 0 0 140px;
+      justify-content: flex-start; min-height: 0;
+    }
+    .pv { max-width: 480px; margin: 0 auto; }
+    .cover { position: relative; height: 360px; overflow: hidden; background: var(--card); }
+    .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .fade-top, .fade-bottom { position: absolute; left: 0; right: 0; pointer-events: none; }
+    .fade-top { top: 0; height: 120px; background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,0)); }
+    .fade-bottom { top: 140px; height: 220px; background: linear-gradient(180deg, rgba(0,0,0,0), #000); }
+    .cover-plain .fade-bottom { background: linear-gradient(180deg, rgba(17,17,17,0), var(--bg)); }
+    .cover-mascot { position: absolute; left: 0; right: 0; top: 70px; display: flex; justify-content: center; }
+    .round-btn {
+      position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 18px;
+      border: 0; padding: 0; background: rgba(0,0,0,.35); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cover-text { position: absolute; left: 16px; right: 16px; bottom: 33px; display: flex; flex-direction: column; gap: 6px; }
+    /* Bottom-anchored where B1 puts one line (y 270-327), so a long title
+       wraps upward instead of being cut. */
+    .cover-text h1 { margin: 0; font-size: 28px; font-weight: 700; line-height: 34px; color: var(--text); }
+    .cover-sub { margin: 0; font-size: 14px; line-height: 17px; color: rgba(255,255,255,.75); }
+    .about { padding: 18px 16px 0; }
+    .by { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+    .by-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--card); flex: none; }
+    .by-initial { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--sand); }
+    .by-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .by-name { margin: 0; font-size: 16px; font-weight: 600; }
+    .by-sub { margin: 0; font-size: 12px; color: var(--muted); }
+    .follow {
+      flex: none; border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 7px 14px;
+      color: var(--text); font: 600 13px var(--font); text-decoration: none; background: transparent;
+    }
+    .tag {
+      display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; letter-spacing: .4px; vertical-align: 2px;
+      background: rgba(246,203,148,.16); color: var(--sand);
+    }
+    .intro { margin: 16px 0 0; font-size: 15px; line-height: 21px; color: var(--body); white-space: pre-line; }
+    .route-head { margin: 20px 16px 0; font-size: 17px; font-weight: 600; }
+    .route { list-style: none; margin: 16px 0 0; padding: 0 16px 0 38px; position: relative; }
+    /* The timeline: a 1 px line down the left, x 20.5, from the first dot. */
+    .route::before { content: ""; position: absolute; left: 20.5px; top: 28px; bottom: 0; width: 1px; background: var(--line); }
+    .stop { position: relative; margin-bottom: 16px; }
+    .stop::before {
+      content: ""; position: absolute; left: -22px; top: 18px; width: 10px; height: 10px;
+      border-radius: 50%; background: var(--sand);
+    }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .stop-pic { position: relative; height: 300px; background: #202020; }
+    .stop-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .stop-pic::before, .stop-pic::after { content: ""; position: absolute; left: 0; right: 0; pointer-events: none; }
+    .stop-pic::before { top: 0; height: 80px; background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0)); }
+    .stop-pic::after { top: 180px; height: 120px; background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.7)); }
+    .stop-text { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .stop-meta { margin: 0; font-size: 12px; font-weight: 600; color: var(--sand); }
+    .stop-name { margin: 0; font-size: 18px; font-weight: 600; line-height: 22px; }
+    .stop-area { margin: 0; font-size: 13px; color: var(--muted); }
+    .stop-note {
+      margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--sand);
+      font-size: 15px; line-height: 21px; color: var(--body); white-space: pre-line;
+    }
+    .day-label { margin: 8px 0 12px; font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+    .bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--bg);
+      border-top: 1px solid var(--line); text-align: center;
+      padding: 14px 16px calc(30px + env(safe-area-inset-bottom));
+    }
+    .bar .cta {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      max-width: 448px; margin: 0 auto; padding: 15px 20px; border-radius: 26px;
+    }
+    .bar-sub { margin: 8px auto 0; font-size: 12px; color: var(--muted); }
+    .toast {
+      position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 3;
+      background: #2a2a2a; color: var(--text); font-size: 13px; padding: 8px 14px; border-radius: 999px;
+    }
   </style>
 </head>
 <body>
+  <!--BODY-->
   <div class="wrap">
+    <div class="mascot"><!--MASCOT--></div>
     <div class="eyebrow" id="eyebrow">Itinerary</div>
     <h1 id="title">An itinerary on Suna</h1>
 
@@ -81,6 +182,7 @@
     <div class="rule"></div>
     <p class="foot">Open on iPhone to follow the route, with each stop's notes as you arrive.</p>
   </div>
+  <!--/BODY-->
 
   <script>
     (function () {
@@ -91,6 +193,8 @@
       // slugs still work, so links issued before this keep resolving.
       var slug = raw.indexOf('--') === -1 ? raw : raw.split('--').pop();
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      // Set by api/itinerary.js when it rendered the itinerary itself.
+      var preview = document.body.getAttribute('data-preview') === '1';
 
       // On iOS, open the app through the CUSTOM SCHEME.
       //
@@ -126,6 +230,9 @@
           + '?pt=128539200&ct=' + encodeURIComponent(viaParam) + '&mt=8';
       }
       document.getElementById('cta').href = storeURL();
+      // Follow, on the web, does what the bar's button does.
+      var followers = document.querySelectorAll('[data-open-suna]');
+      for (var i = 0; i < followers.length; i++) followers[i].href = storeURL();
 
       if (isIOS && slug) {
         var cta = document.getElementById('cta');
@@ -135,16 +242,63 @@
         var via = viaParam;
         cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug)
                  + (via ? '&via=' + encodeURIComponent(via) : '');
-        cta.textContent = 'Open in Suna';
+        // The preview's button keeps its words; only the generic page says "Open".
+        if (!preview) cta.textContent = 'Open in Suna';
 
-        cta.addEventListener('click', function () {
-          var start = Date.now();
-          setTimeout(function () {
-            // Backgrounded, or the timer was starved while the app launched —
-            // either way the app took the tap.
-            if (document.hidden || Date.now() - start > 1600) return;
-            window.location.href = storeURL();
-          }, 1200);
+        var handOff = function (el) {
+          el.href = cta.href;
+          el.addEventListener('click', function () {
+            var start = Date.now();
+            setTimeout(function () {
+              // Backgrounded, or the timer was starved while the app launched —
+              // either way the app took the tap.
+              if (document.hidden || Date.now() - start > 1600) return;
+              window.location.href = storeURL();
+            }, 1200);
+          });
+        };
+        handOff(cta);
+        for (var j = 0; j < followers.length; j++) handOff(followers[j]);
+      }
+
+      // Share, on the cover. The Web Share sheet where there is one, else the
+      // link goes on the clipboard and the page says so. The shared address is
+      // the canonical one, so a share never forks attribution with a stale via.
+      var shareBtn = document.getElementById('share');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function () {
+          var link = document.querySelector('link[rel="canonical"]');
+          var url = link ? link.href : window.location.href;
+          var title = document.getElementById('title') ? document.getElementById('title').textContent : document.title;
+          if (navigator.share) {
+            navigator.share({ title: title, url: url }).catch(function () {});
+            return;
+          }
+          var toast = document.getElementById('toast');
+          var say = function (text) {
+            if (!toast) return;
+            toast.textContent = text; toast.hidden = false;
+            clearTimeout(say.t); say.t = setTimeout(function () { toast.hidden = true; }, 2000);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () { say('Link copied'); },
+              function () { say(url); });
+          } else {
+            say(url);
+          }
+        });
+      }
+
+      // Count the preview's button. A number, nothing about the reader: which
+      // platform, and whether the tap went to the app's scheme or the store.
+      if (preview) {
+        document.getElementById('cta').addEventListener('click', function () {
+          try {
+            var u = '/api/cta?platform=' + (isIOS ? 'ios' : (/Android/.test(navigator.userAgent) ? 'android' : 'other'))
+              + '&has_app_scheme=' + (isIOS && slug ? '1' : '0');
+            if (navigator.sendBeacon) navigator.sendBeacon(u);
+            else fetch(u, { method: 'POST', keepalive: true }).catch(function () {});
+          } catch (e) { /* counting must never affect the page */ }
         });
       }
 
@@ -170,6 +324,9 @@
           fetch(beacon, { method: 'POST', keepalive: true }).catch(function () {});
         }
       } catch (e) { /* counting must never affect the page */ }
+
+      // The server already rendered the itinerary; nothing to fill in.
+      if (preview) return;
 
       // Fill in the real itinerary from the anonymous-safe view. Only PUBLIC
       // published itineraries are readable, so a followers-only or draft slug

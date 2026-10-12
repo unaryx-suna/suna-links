@@ -10,14 +10,20 @@
 // share that converts and one that does not, which makes og:image the single
 // largest click-through lever the product has.
 //
-// The page still renders client-side for humans — this only fills the <head>
-// before it is served, so nothing about the reader experience changes.
+// Since W-15 (12 Oct) it renders the BODY too for a public itinerary: the
+// cover, the byline and every stop (api/_preview.js). A private, draft or
+// missing slug still gets the generic page exactly as before.
 
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
+import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
+// Suna herself, from the app's own source (the Lab's copy is byte-identical to
+// TravelMug/Resources/suna-faces.js). Rendered here as SVG, so she cannot fail
+// to load the way an <img> can.
+import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
+
+const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
-// Publishable key: public by design, same one the page already ships.
-const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 
 /** The real slug from either link form: `nice-name--ab12cd34ef` or `ab12cd34ef`. */
 function slugFrom(pathname) {
@@ -142,17 +148,13 @@ export default async function handler(req, res) {
   // The itinerary's own name, kept separate from the composed title so the
   // canonical prefix matches what the app generates rather than "Name — by @x".
   let rawName = '';
+  // The server-rendered body, or null for the generic page.
+  let body = null;
 
   if (slug) {
     try {
-      const url = `${SUPABASE_URL}/rest/v1/public_itineraries`
-        + `?share_slug=eq.${encodeURIComponent(slug)}`
-        + `&select=name,intro_story,resolved_city_name,creator_username,cover_media_path&limit=1`;
-      const r = await fetch(url, {
-        headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
-      });
-      const rows = r.ok ? await r.json() : [];
-      const it = Array.isArray(rows) ? rows[0] : null;
+      const data = await loadItinerary(slug, coverURL);
+      const it = data ? data.it : null;
       if (it) {
         // "Bangkok for you — a Suna itinerary by @booak55"
         rawName = it.name || '';
@@ -169,8 +171,11 @@ export default async function handler(req, res) {
               ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
               : description);
 
-        const candidate = coverURL(it.cover_media_path);
-        image = (await imageResolves(candidate)) ? candidate : null;
+        // The itinerary's own cover when it resolves, else the first stop's
+        // place photo: the same picture the page opens on.
+        const cover = coverFor(data, await imageResolves(data.cover));
+        image = cover;
+        body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -211,7 +216,16 @@ export default async function handler(req, res) {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n</head>`);
+    .replace('</head>', `  ${tags}\n</head>`)
+    .replace(/<body>[\s\S]*?<!--\/BODY-->/, (generic) => (body
+      ? `<body class="pv-body" data-preview="1">\n${body}`
+      : generic))
+    // Her gradients and her motion, only where she is drawn.
+    .replace('<!--MASCOT-->', mascot())
+    .replace('</head>', () => (/class="sn /.test(body || '<!--MASCOT-->')
+      ? `<style>${SUNA_CSS}</style>\n</head>` : '</head>'))
+    .replace(/<body([^>]*)>/, (m) => (/class="sn /.test(body || 'generic')
+      ? `${m}\n<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${SUNA_DEFS}</defs></svg>` : m));
 
   // Record the open. Started BEFORE the response so the request is already in
   // flight, then handed to the platform to finish afterwards.
