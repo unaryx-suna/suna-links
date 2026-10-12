@@ -10,14 +10,14 @@
 // share that converts and one that does not, which makes og:image the single
 // largest click-through lever the product has.
 //
-// The page still renders client-side for humans — this only fills the <head>
-// before it is served, so nothing about the reader experience changes.
+// Since W-15 (12 Oct) it renders the BODY too for a public itinerary: the
+// cover, the byline and every stop (api/_preview.js). A private, draft or
+// missing slug still gets the generic page exactly as before.
 
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
+import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
-// Publishable key: public by design, same one the page already ships.
-const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 
 /** The real slug from either link form: `nice-name--ab12cd34ef` or `ab12cd34ef`. */
 function slugFrom(pathname) {
@@ -142,17 +142,13 @@ export default async function handler(req, res) {
   // The itinerary's own name, kept separate from the composed title so the
   // canonical prefix matches what the app generates rather than "Name — by @x".
   let rawName = '';
+  // The server-rendered body, or null for the generic page.
+  let body = null;
 
   if (slug) {
     try {
-      const url = `${SUPABASE_URL}/rest/v1/public_itineraries`
-        + `?share_slug=eq.${encodeURIComponent(slug)}`
-        + `&select=name,intro_story,resolved_city_name,creator_username,cover_media_path&limit=1`;
-      const r = await fetch(url, {
-        headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
-      });
-      const rows = r.ok ? await r.json() : [];
-      const it = Array.isArray(rows) ? rows[0] : null;
+      const data = await loadItinerary(slug, coverURL);
+      const it = data ? data.it : null;
       if (it) {
         // "Bangkok for you — a Suna itinerary by @booak55"
         rawName = it.name || '';
@@ -169,8 +165,11 @@ export default async function handler(req, res) {
               ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
               : description);
 
-        const candidate = coverURL(it.cover_media_path);
-        image = (await imageResolves(candidate)) ? candidate : null;
+        // The itinerary's own cover when it resolves, else the first stop's
+        // place photo: the same picture the page opens on.
+        const cover = coverFor(data, await imageResolves(data.cover));
+        image = cover;
+        body = previewBody(data, cover, await coverVariants(cover, imageResolves));
       }
     } catch {
       // Fall through with the generic values — a preview must never 500.
@@ -211,7 +210,10 @@ export default async function handler(req, res) {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n</head>`);
+    .replace('</head>', `  ${tags}\n</head>`)
+    .replace(/<body>[\s\S]*?<!--\/BODY-->/, (generic) => (body
+      ? `<body class="pv-body" data-preview="1">\n${body}`
+      : generic));
 
   // Record the open. Started BEFORE the response so the request is already in
   // flight, then handed to the platform to finish afterwards.

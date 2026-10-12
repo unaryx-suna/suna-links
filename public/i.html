@@ -23,6 +23,9 @@
       --accent: #FAC775;
     }
     * { box-sizing: border-box; }
+    /* `.byline { display: flex }` beat the hidden attribute, so the generic
+       page showed an empty avatar circle under its title. */
+    [hidden] { display: none !important; }
     body {
       margin: 0; background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -61,9 +64,78 @@
     .byline span { font-size: 14px; font-weight: 600; }
     .rule { height: 1px; background: #3D3020; margin: 26px 0 18px; }
     .foot { font-size: 12px; color: var(--subtext); }
+
+    /* ── The preview (W-15) ─────────────────────────────────────────────
+       Server-rendered by api/itinerary.js for a public itinerary. The page
+       above stays exactly as it was for a private, draft or missing slug.
+       Every image box has its height set here, so nothing moves as photos
+       arrive (CLS 0), and the dock is fixed, so it never pushes content. */
+    body.pv-body {
+      display: block; text-align: left; padding: 0 0 148px;
+      justify-content: flex-start; min-height: 0;
+    }
+    .pv { max-width: 640px; margin: 0 auto; }
+    .cover { position: relative; height: 360px; overflow: hidden; background: var(--surface); }
+    .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cover-plain { height: 240px; }
+    .cover-mark {
+      position: absolute; left: 50%; top: 34%; width: 72px; height: 72px; margin-left: -36px;
+      border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFE3AE, var(--accent) 60%, #C9933F);
+      opacity: .9;
+    }
+    .cover-fade {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(28,24,18,0) 35%, rgba(28,24,18,.72) 72%, var(--bg) 100%);
+    }
+    .cover-text { position: absolute; left: 20px; right: 20px; bottom: 18px; }
+    .cover-text h1 { font-size: 30px; margin: 0 0 6px; color: #fff; }
+    .cover-sub { margin: 0; font-size: 14px; color: rgba(255,255,255,.82); }
+    .about { padding: 18px 20px 6px; }
+    .by { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .by-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--surface); flex: none; }
+    .by-initial { display: grid; place-items: center; font-weight: 700; color: var(--accent); }
+    .by-name { margin: 0; font-size: 15px; font-weight: 600; }
+    .by-sub { margin: 2px 0 0; font-size: 13px; color: var(--subtext); }
+    .tag {
+      display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; letter-spacing: .4px; vertical-align: 2px;
+      background: rgba(250,199,117,.16); color: var(--accent);
+    }
+    .intro {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 17px; line-height: 1.6; color: rgba(242,234,216,.9); margin: 0;
+    }
+    .stops { list-style: none; margin: 0; padding: 8px 20px 0; }
+    .stop { padding: 18px 0; border-bottom: 1px solid #3D3020; }
+    .stop:last-child { border-bottom: 0; }
+    .day { padding: 18px 0 0; }
+    .day-label { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--subtext); }
+    .stop-pic { height: 140px; border-radius: 12px; overflow: hidden; background: var(--surface); margin-bottom: 12px; }
+    .stop-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .stop-meta { margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: .3px; color: var(--accent); }
+    .stop-name { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 600; }
+    .stop-area { margin: 3px 0 0; font-size: 14px; color: var(--subtext); }
+    .stop-note {
+      margin: 10px 0 0; padding-left: 12px; border-left: 3px solid var(--accent);
+      font-family: Georgia, "Times New Roman", serif; font-size: 16px; line-height: 1.55;
+      color: rgba(242,234,216,.9); white-space: pre-line;
+    }
+    .dock {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; text-align: center;
+      padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+      background: linear-gradient(180deg, rgba(28,24,18,0), var(--bg) 30%);
+    }
+    .dock .cta { display: block; max-width: 420px; margin: 0 auto; padding: 16px 20px; }
+    .dock-sub { margin: 8px auto 0; max-width: 420px; font-size: 13px; color: var(--subtext); }
+    @media (min-width: 700px) {
+      .cover { margin-top: 24px; border-radius: 18px; }
+      .cover-text { left: 28px; right: 28px; bottom: 24px; }
+      .cover-text h1 { font-size: 36px; }
+    }
   </style>
 </head>
 <body>
+  <!--BODY-->
   <div class="wrap">
     <div class="eyebrow" id="eyebrow">Itinerary</div>
     <h1 id="title">An itinerary on Suna</h1>
@@ -81,6 +153,7 @@
     <div class="rule"></div>
     <p class="foot">Open on iPhone to follow the route, with each stop's notes as you arrive.</p>
   </div>
+  <!--/BODY-->
 
   <script>
     (function () {
@@ -91,6 +164,8 @@
       // slugs still work, so links issued before this keep resolving.
       var slug = raw.indexOf('--') === -1 ? raw : raw.split('--').pop();
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      // Set by api/itinerary.js when it rendered the itinerary itself.
+      var preview = document.body.getAttribute('data-preview') === '1';
 
       // On iOS, open the app through the CUSTOM SCHEME.
       //
@@ -135,7 +210,8 @@
         var via = viaParam;
         cta.href = 'suna://itinerary?slug=' + encodeURIComponent(slug)
                  + (via ? '&via=' + encodeURIComponent(via) : '');
-        cta.textContent = 'Open in Suna';
+        // The preview's button keeps its words; only the generic page says "Open".
+        if (!preview) cta.textContent = 'Open in Suna';
 
         cta.addEventListener('click', function () {
           var start = Date.now();
@@ -145,6 +221,19 @@
             if (document.hidden || Date.now() - start > 1600) return;
             window.location.href = storeURL();
           }, 1200);
+        });
+      }
+
+      // Count the preview's button. A number, nothing about the reader: which
+      // platform, and whether the tap went to the app's scheme or the store.
+      if (preview) {
+        document.getElementById('cta').addEventListener('click', function () {
+          try {
+            var u = '/api/cta?platform=' + (isIOS ? 'ios' : (/Android/.test(navigator.userAgent) ? 'android' : 'other'))
+              + '&has_app_scheme=' + (isIOS && slug ? '1' : '0');
+            if (navigator.sendBeacon) navigator.sendBeacon(u);
+            else fetch(u, { method: 'POST', keepalive: true }).catch(function () {});
+          } catch (e) { /* counting must never affect the page */ }
         });
       }
 
@@ -170,6 +259,9 @@
           fetch(beacon, { method: 'POST', keepalive: true }).catch(function () {});
         }
       } catch (e) { /* counting must never affect the page */ }
+
+      // The server already rendered the itinerary; nothing to fill in.
+      if (preview) return;
 
       // Fill in the real itinerary from the anonymous-safe view. Only PUBLIC
       // published itineraries are readable, so a followers-only or draft slug
