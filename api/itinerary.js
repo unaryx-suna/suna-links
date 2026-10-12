@@ -15,6 +15,7 @@
 // missing slug still gets the generic page exactly as before.
 
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
 // Suna herself, from the app's own source (the Lab's copy is byte-identical to
@@ -24,13 +25,14 @@ import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
 
 const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
 
-// `new URL(..., import.meta.url)` is the form Vercel's file tracer follows, so
-// public/i.html ships inside this function's bundle.
+// vercel.json `includeFiles` ships public/i.html inside this function, at
+// the same path under the function's working directory. (Not import.meta:
+// Vercel compiles these files to CommonJS, where it is a syntax error.)
 let shellCache = null;
 function readShell() {
   if (shellCache) return shellCache;
   try {
-    shellCache = readFileSync(new URL('../public/i.html', import.meta.url), 'utf8');
+    shellCache = readFileSync(join(process.cwd(), 'public', 'i.html'), 'utf8');
   } catch {
     shellCache = null;
   }

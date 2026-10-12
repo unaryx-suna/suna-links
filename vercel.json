@@ -43,5 +43,10 @@
       "source": "/city/:path*",
       "destination": "/city.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/itinerary.js": {
+      "includeFiles": "public/i.html"
+    }
+  }
 }
