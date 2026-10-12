@@ -14,6 +14,7 @@
 // cover, the byline and every stop (api/_preview.js). A private, draft or
 // missing slug still gets the generic page exactly as before.
 
+import { readFileSync } from 'node:fs';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
 // Suna herself, from the app's own source (the Lab's copy is byte-identical to
@@ -22,6 +23,19 @@ import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.
 import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
 
 const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
+
+// `new URL(..., import.meta.url)` is the form Vercel's file tracer follows, so
+// public/i.html ships inside this function's bundle.
+let shellCache = null;
+function readShell() {
+  if (shellCache) return shellCache;
+  try {
+    shellCache = readFileSync(new URL('../public/i.html', import.meta.url), 'utf8');
+  } catch {
+    shellCache = null;
+  }
+  return shellCache;
+}
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 
@@ -129,17 +143,20 @@ export default async function handler(req, res) {
   // arrived rather than when the database write got round to it.
   const requestedAt = new Date();
 
-  // The static shell, fetched from the same deployment. Serving it through this
-  // function rather than duplicating the markup means the page has exactly one
-  // definition and cannot drift.
+  // The static shell, public/i.html: one definition of the page, so it cannot
+  // drift. Read from the function's own bundle first. Fetching it over HTTP
+  // from the same deployment (the old way, now the fallback) gets Vercel's
+  // login page on a protected preview, so every /i/ preview rendered blank.
   const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
-  let html;
-  try {
-    const shell = await fetch(`${origin}/i.html`);
-    html = await shell.text();
-  } catch {
-    res.status(302).setHeader('Location', '/i.html').end();
-    return;
+  let html = readShell();
+  if (!html) {
+    try {
+      const shell = await fetch(`${origin}/i.html`);
+      html = await shell.text();
+    } catch {
+      res.status(302).setHeader('Location', '/i.html').end();
+      return;
+    }
   }
 
   let title = 'An itinerary on Suna';
