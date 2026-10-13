@@ -180,8 +180,10 @@ export default async function handler(req, res) {
         // "Bangkok for you — a Suna itinerary by @booak55"
         rawName = it.name || '';
         const parts = [it.name].filter(Boolean);
-        // A Suna itinerary never names its owner account (W-31).
+        // A Suna or partner itinerary never names its owner account (W-31):
+        // "by Suna", "by WORQ"; only a creator's own is "by @username".
         if (isBySuna(it)) parts.push('by Suna');
+        else if (it.partner_name) parts.push(`by ${it.partner_name}`);
         else if (it.creator_username) parts.push(`by @${it.creator_username}`);
         title = parts.join(' — ') || title;
 

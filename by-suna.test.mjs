@@ -68,16 +68,21 @@ await t('suna: ?via= still renders the same page (via is client-side)', async ()
   assert(v.includes('By Suna') && !v.includes(OWNER));
 });
 
+const creator = await render('creator');
 const worq = await render('worq');
 await t('worq: unchanged — "By WORQ" + Partner tag, no Follow, no pick pill', async () => {
   assert.match(worq, /<p class="by-name">By WORQ<span class="tag">Partner<\/span><\/p>/);
   assert(!/class="follow"/.test(worq)); assert(!/class="pick"/.test(worq)); assert(!about(worq).includes('suna-mark.svg'));
 });
-await t('worq: <title> unchanged (still "by @<owner>", as before W-31)', async () => {
-  assert.equal(tag(head(worq), /<title>([^<]*)<\/title>/), `KL in a day — by @${OWNER}`);
+await t('worq: <title>/og:title say "by WORQ", never the owner (W-31 add-on)', async () => {
+  assert.equal(tag(head(worq), /<title>([^<]*)<\/title>/), 'KL in a day — by WORQ');
+  assert.equal(tag(head(worq), /<meta property="og:title" content="([^"]*)"/), 'KL in a day — by WORQ');
+  assert(!head(worq).includes(OWNER), 'owner in the head');
+});
+await t('creator: <title> still "by @username"', async () => {
+  assert.equal(tag(head(creator), /<title>([^<]*)<\/title>/), `KL in a day — by @${OWNER}`);
 });
 
-const creator = await render('creator');
 await t('creator: unchanged — @username, avatar, Follow', async () => {
   assert.match(creator, new RegExp(`<p class="by-name">@${OWNER}</p>`));
   assert(creator.includes(AVATAR)); assert(/class="follow"/.test(creator)); assert(!/class="pick"/.test(creator));
