@@ -32,6 +32,10 @@ const HEADERS = { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_
 
 export const SHOWN_STOPS = 3;
 
+/** The App Store link before i.html's script picks the `via` token (W-30):
+ *  never bare, so even a no-JS tap is attributed to /i/. */
+const STORE_WEB_I = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8';
+
 /**
  * "By Suna" (W-31, Brian 13 Oct): Suna's own itineraries for a city and its
  * sights. Ops sets partner_slug 'suna' with set_itinerary_partner. The owner
@@ -238,7 +242,7 @@ function lockedBlock(count, times) {
         <p class="locked-head"><img src="/icons/lock.svg" width="16" height="16" alt="">+${count} more stop${count === 1 ? '' : 's'}</p>
         ${chips ? `<div class="chips">${chips}</div>` : ''}
         <p class="locked-sub">See the full route in Suna</p>
-        <a class="cta locked-cta" data-open-suna href="https://apps.apple.com/app/id6759053765">Download Suna</a>
+        <a class="cta locked-cta" data-open-suna href="${STORE_WEB_I}">Download Suna</a>
       </article>
     </li>`;
 }
@@ -295,7 +299,7 @@ export function previewBody(data, cover, variants, mascot) {
       : `<span class="by-avatar by-initial" aria-hidden="true">${initial}</span>`;
     byline = `<div class="by">${avatar}<div class="by-text"><p class="by-name">@${escapeHtml(it.creator_username)}</p>`
       + '<p class="by-sub">Their itinerary</p></div>'
-      + `<a class="follow" data-open-suna href="https://apps.apple.com/app/id6759053765" aria-label="Follow @${escapeHtml(it.creator_username)} in Suna">Follow</a></div>`;
+      + `<a class="follow" data-open-suna href="${STORE_WEB_I}" aria-label="Follow @${escapeHtml(it.creator_username)} in Suna">Follow</a></div>`;
   }
   const intro = String(it.intro_story || '').trim();
 
@@ -332,7 +336,7 @@ export function previewBody(data, cover, variants, mascot) {
   </ol>` : ''}
 </main>
 <div class="bar">
-  <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765"><img src="/icons/copy.svg" width="17" height="17" alt="">Copy itinerary</a>
+  <a class="cta" id="cta" href="${STORE_WEB_I}"><img src="/icons/copy.svg" width="17" height="17" alt="">Copy itinerary</a>
   <p class="bar-sub">Pick a day, and Suna takes you through it.</p>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>`;

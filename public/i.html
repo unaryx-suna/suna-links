@@ -198,7 +198,7 @@
     <p class="lede" id="intro">A route someone actually walked, with their own photos and notes for each stop.</p>
     <p class="meta" id="meta"></p>
 
-    <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765">Get Suna — Free</a>
+    <a class="cta" id="cta" href="https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8">Get Suna — Free</a>
 
     <div class="rule"></div>
     <p class="foot">Open on iPhone to follow the route, with each stop's notes as you arrive.</p>
@@ -240,15 +240,17 @@
       // with nothing to credit it to, which is the single number the pilot
       // exists to produce.
       //
-      // Only `partner-` tokens go on the App Store link. Every other `via`
-      // is a person's share and keeps today's behaviour, because `ct` is a
-      // campaign field and a creator is not a campaign.
+      // EVERY App Store link carries `ct` (W-30, Axel 13 Oct: installs from
+      // shared itineraries weren't attributed). The `via` token itself when
+      // it is a plain lower-case slug of at most 40 characters (partner-…,
+      // tiktok-…, a creator's share), else `web-i`. Nothing else from the
+      // query string ever reaches the link.
       var viaParam = new URLSearchParams(window.location.search).get('via');
-      var APPSTORE = 'https://apps.apple.com/app/id6759053765';
+      var CT_OK = /^[a-z0-9][a-z0-9-]{0,39}$/;
       function storeURL() {
-        if (!viaParam || viaParam.indexOf('partner-') !== 0) return APPSTORE;
+        var ct = (viaParam && CT_OK.test(viaParam)) ? viaParam : 'web-i';
         return 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765'
-          + '?pt=128539200&ct=' + encodeURIComponent(viaParam) + '&mt=8';
+          + '?pt=128539200&ct=' + encodeURIComponent(ct) + '&mt=8';
       }
       document.getElementById('cta').href = storeURL();
       // Follow, on the web, does what the bar's button does.
