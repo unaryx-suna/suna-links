@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
-import { loadItinerary, coverFor, coverVariants, previewBody } from './_preview.js';
+import { loadItinerary, coverFor, coverVariants, previewBody, isBySuna } from './_preview.js';
 // Suna herself, from the app's own source (the Lab's copy is byte-identical to
 // TravelMug/Resources/suna-faces.js). Rendered here as SVG, so she cannot fail
 // to load the way an <img> can.
@@ -180,7 +180,11 @@ export default async function handler(req, res) {
         // "Bangkok for you — a Suna itinerary by @booak55"
         rawName = it.name || '';
         const parts = [it.name].filter(Boolean);
-        if (it.creator_username) parts.push(`by @${it.creator_username}`);
+        // A Suna or partner itinerary never names its owner account (W-31):
+        // "by Suna", "by WORQ"; only a creator's own is "by @username".
+        if (isBySuna(it)) parts.push('by Suna');
+        else if (it.partner_name) parts.push(`by ${it.partner_name}`);
+        else if (it.creator_username) parts.push(`by @${it.creator_username}`);
         title = parts.join(' — ') || title;
 
         // The creator's own opening line is the best description available;

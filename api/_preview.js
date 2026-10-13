@@ -35,6 +35,16 @@ export const SHOWN_STOPS = 3;
 /** The App Store link before i.html's script picks the `via` token (W-30):
  *  never bare, so even a no-JS tap is attributed to /i/. */
 const STORE_WEB_I = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8';
+
+/**
+ * "By Suna" (W-31, Brian 13 Oct): Suna's own itineraries for a city and its
+ * sights. Ops sets partner_slug 'suna' with set_itinerary_partner. The owner
+ * is a real account under the hood and is NEVER shown: not in the byline, the
+ * title, og: tags or anywhere else this page renders.
+ */
+export function isBySuna(it) {
+  return !!it && it.partner_slug === 'suna';
+}
 // Signed moment URLs last an hour; the page's cache stays well inside that.
 const SIGN_SECONDS = 3600;
 
@@ -121,7 +131,7 @@ export async function loadItinerary(slug, coverURL) {
   if (!slug) return null;
   const rows = await rest(`public_itineraries?share_slug=eq.${encodeURIComponent(slug)}`
     + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,'
-    + 'creator_avatar_url,partner_name,cover_media_path&limit=1');
+    + 'creator_avatar_url,partner_slug,partner_name,cover_media_path&limit=1');
   const it = Array.isArray(rows) ? rows[0] : null;
   if (!it) return null;
   const all = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
@@ -272,7 +282,13 @@ export function previewBody(data, cover, variants, mascot) {
   // On the web, Follow does what the bar's button does: opens Suna, or the
   // App Store. The client points both at the same place.
   let byline = '';
-  if (it.partner_name) {
+  if (isBySuna(it)) {
+    // Suna's mark as the avatar, the app's orange "Suna's pick" pill in place
+    // of the Partner tag, and no Follow: there is no account to follow.
+    byline = '<div class="by"><span class="by-avatar by-mark" aria-hidden="true">'
+      + '<img src="/icons/suna-mark.svg" width="16" height="24" alt=""></span>'
+      + '<div class="by-text"><p class="by-name">By Suna<span class="pick">Suna\'s pick</span></p></div></div>';
+  } else if (it.partner_name) {
     // A partner's name replaces the creator's: no avatar, no Follow.
     byline = `<div class="by"><div class="by-text"><p class="by-name">By ${escapeHtml(it.partner_name)}`
       + '<span class="tag">Partner</span></p></div></div>';
