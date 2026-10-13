@@ -22,6 +22,13 @@
         border-radius: 50px; text-decoration: none;                             
         font-weight: 700; font-size: 16px; display: inline-block;               
       }                                       
+      /* Secondary to the yellow button: a text link, never a second pill. */
+      #book { margin: 20px 0 0; }
+      #book a {
+        background: none; color: #FFD76A; padding: 8px 4px;
+        font-weight: 500; font-size: 15px;
+      }
+      #book small { display: block; color: #8a8a8a; font-size: 12px; margin-top: 2px; }
       #offer {
         margin: 0 0 18px; padding: 10px 14px; border-radius: 10px;
         background: rgba(246, 203, 148, .12); color: #f6cb94;
@@ -35,6 +42,10 @@
     <p id="offer" hidden></p>
     <a id="cta" href="https://apps.apple.com/app/id6759053765">Download Suna —
   Free</a>                                
+    <p id="book" hidden>
+      <a id="book-link" target="_blank" rel="sponsored noopener">Book tickets ↗</a>
+      <small>Suna may earn a commission</small>
+    </p>
     <script>
       var parts = window.location.pathname.split('/').filter(Boolean);          
       var placeID = parts[1] || '';           
@@ -58,6 +69,14 @@
         // business, and it is the only text on this page that is.
         o.textContent = offerText;
         o.hidden = false;
+      }
+
+      // Our own unaryx.com/go link, decided on the server (api/place.js).
+      // Only ever an https://unaryx.com/go/ address; anything else is ignored.
+      var bookURL = meta('suna:book');
+      if (bookURL && bookURL.indexOf('https://unaryx.com/go/p-') === 0) {
+        document.getElementById('book-link').href = bookURL;
+        document.getElementById('book').hidden = false;
       }
 
       var campaign = meta('suna:campaign');

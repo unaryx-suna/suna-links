@@ -91,6 +91,33 @@ async function listingFor(id) {
   }
 }
 
+/**
+ * The Book tickets link (W-25), when unaryx.com has a live partner link for
+ * this place.
+ *
+ * The list is unaryx.com/go/places.json: ids only, built by the same gates
+ * as the /go redirect, so this page can never offer a link /go would refuse.
+ * The link itself is always our own /go/p-<id>, never the partner URL: the
+ * partner, its sub-id and the click line stay in one place. Bounded and
+ * silent on failure, like the listing: a place page must not wait on, or
+ * break because of, a commission link.
+ */
+const GO_ORIGIN = 'https://unaryx.com';
+async function bookingFor(id) {
+  if (!id) return null;
+  try {
+    const r = await fetch(`${GO_ORIGIN}/go/places.json`, { signal: AbortSignal.timeout(1500) });
+    if (!r.ok) return null;
+    const body = await r.json();
+    const ids = Array.isArray(body?.places) ? body.places : [];
+    return ids.includes(id.toLowerCase())
+      ? `${GO_ORIGIN}/go/p-${encodeURIComponent(id.toLowerCase())}?src=web-place`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** `?src=partner-<slug>`, trimmed to the slug. Nothing is trusted yet. */
 function claimedSlug(url) {
   const m = String(url || '').match(/[?&]src=partner-([a-z0-9][a-z0-9-]{0,29})\b/);
@@ -116,6 +143,9 @@ function offerLine(listing) {
 function canonicalURL(origin, id) {
   return `${origin}/place/${encodeURIComponent(id)}`;
 }
+
+// For place.test.mjs only.
+export const _bookingFor = bookingFor;
 
 export default async function handler(req, res) {
   const id = placeIDFrom(req.url || '');
@@ -203,7 +233,10 @@ export default async function handler(req, res) {
   // link; it becomes `ct=partner-<slug>` only when the database agrees that
   // slug belongs to THIS place. Otherwise the ordinary token applies, so a
   // guessed or stale slug costs nothing and attributes nothing.
-  const listing = id ? await listingFor(id) : null;
+  const [listing, booking] = await Promise.all([
+    id ? listingFor(id) : null,
+    bookingFor(id),
+  ]);
   const claimed = claimedSlug(req.url);
   const campaign = (claimed && listing && listing.slug === claimed)
     ? `partner-${claimed}`
@@ -231,6 +264,8 @@ export default async function handler(req, res) {
     // offer. Both are escaped: offer_text is written by the business.
     campaign ? `<meta name="suna:campaign" content="${escapeHtml(campaign)}">` : '',
     offer ? `<meta name="suna:offer" content="${escapeHtml(offer)}">` : '',
+    // Read by place.html to show "Book tickets". Our own /go URL, built here.
+    booking ? `<meta name="suna:book" content="${escapeHtml(booking)}">` : '',
   ].filter(Boolean).join('\n  ');
 
   // Replace rather than append: a duplicate og:title is resolved differently by
