@@ -116,6 +116,13 @@
       flex: none; border: 1px solid rgba(255,255,255,.5); border-radius: 999px; padding: 7px 14px;
       color: var(--text); font: 600 13px var(--font); text-decoration: none; background: transparent;
     }
+    /* "Suna's pick" (W-31): the app's pill, #FF8C18 with white 11 pt text. */
+    .pick {
+      display: inline-block; margin-left: 8px; padding: 3px 9px; border-radius: 999px;
+      font-size: 11px; font-weight: 500; line-height: 1.2; vertical-align: 2px;
+      background: #FF8C18; color: #fff;
+    }
+    .by-mark { display: flex; align-items: center; justify-content: center; }
     .tag {
       display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
       font-size: 11px; font-weight: 700; letter-spacing: .4px; vertical-align: 2px;
@@ -359,7 +366,7 @@
 
       var url = SUPABASE_URL + '/rest/v1/public_itineraries'
         + '?share_slug=eq.' + encodeURIComponent(slug)
-        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url,partner_name'
+        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url,partner_slug,partner_name'
         + '&limit=1';
 
       fetch(url, { headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY } })
@@ -381,7 +388,14 @@
           // at their counter is being told whose recommendation this is —
           // "By WORQ" is the answer, not the name of the staff member who
           // typed it. The avatar is the creator's, so it goes too.
-          if (it.partner_name) {
+          // Suna's own itineraries (W-31): "By Suna" with the mark, never
+          // the owner account's name or avatar.
+          if (it.partner_slug === 'suna') {
+            document.getElementById('creator').textContent = 'By Suna';
+            document.getElementById('avatar').src = '/icons/suna-mark.svg';
+            document.getElementById('avatar').style.objectFit = 'contain';
+            document.getElementById('byline').hidden = false;
+          } else if (it.partner_name) {
             document.getElementById('creator').textContent = 'By ' + it.partner_name;
             document.getElementById('avatar').hidden = true;
             document.getElementById('byline').hidden = false;
