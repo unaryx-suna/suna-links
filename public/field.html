@@ -828,7 +828,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v33';
+const BUILD = 'field-v34';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1005,9 +1005,60 @@ function tx(store, mode, fn) {
     t.onabort = fail;
   });
 }
-const idbPut    = (store, value) => tx(store, 'readwrite', (s) => s.put(value));
-const idbGet    = (store, key)   => tx(store, 'readonly',  (s) => s.get(key));
-const idbAll    = (store)        => tx(store, 'readonly',  (s) => s.getAll());
+/* ── Blobs go in as bytes (W-21) ──────────────────────────────────────────
+ *
+ * **Safari will not keep a Blob in IndexedDB in a Private tab** ("Error
+ * preparing Blob/File data to be stored in object store"); an ArrayBuffer it
+ * always keeps. So every Blob or File anywhere in a stored value — a place's
+ * photos, a country hero or food, a replacement — is swapped for its bytes
+ * on the way in and turned back into a Blob on the way out. Every caller
+ * still sees Blobs, and an item stored as a real Blob before field-v34 reads
+ * back exactly as it was.
+ *
+ * The bytes are read BEFORE the transaction opens: an IndexedDB transaction
+ * commits itself at the first `await` that is not one of its own requests.
+ */
+const IDB_BLOB = '__idbBlob';
+
+async function idbPack(v) {
+  if (v instanceof Blob) {
+    const packed = { [IDB_BLOB]: true, type: v.type || '', bytes: await v.arrayBuffer() };
+    if (typeof File !== 'undefined' && v instanceof File) {
+      packed.name = v.name;
+      packed.lastModified = v.lastModified;
+    }
+    return packed;
+  }
+  if (Array.isArray(v)) return Promise.all(v.map(idbPack));
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = await idbPack(v[k]);
+    return out;
+  }
+  return v;   // ArrayBuffer, Date, primitives: stored as they are
+}
+
+function idbUnpack(v) {
+  if (Array.isArray(v)) return v.map(idbUnpack);
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    if (v[IDB_BLOB] === true && v.bytes instanceof ArrayBuffer) {
+      return v.name !== undefined
+        ? new File([v.bytes], v.name, { type: v.type, lastModified: v.lastModified })
+        : new Blob([v.bytes], { type: v.type });
+    }
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = idbUnpack(v[k]);
+    return out;
+  }
+  return v;
+}
+
+const idbPut    = async (store, value) => {
+  const packed = await idbPack(value);
+  return tx(store, 'readwrite', (s) => s.put(packed));
+};
+const idbGet    = async (store, key) => idbUnpack(await tx(store, 'readonly', (s) => s.get(key)));
+const idbAll    = async (store)      => idbUnpack((await tx(store, 'readonly', (s) => s.getAll())) || []);
 const idbDelete = (store, key)   => tx(store, 'readwrite', (s) => s.delete(key));
 
 async function cacheSet(key, value) { await idbPut('cache', { key, value, at: Date.now() }); }
