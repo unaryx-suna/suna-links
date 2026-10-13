@@ -233,6 +233,7 @@
   .evstate .ok { font-size: inherit; }
   .evstate .wait { color: var(--sand); }
   .evstate .none { color: var(--muted); }
+  .evstate .bad { color: var(--danger); }
   .evstate a { color: var(--sand); }
   /* A result that is already in the catalogue. Marked, not hidden: it is still
      the place he searched for, it just wants opening rather than re-capturing. */
@@ -827,7 +828,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v32';
+const BUILD = 'field-v33';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -982,12 +983,26 @@ function openIDB() {
     req.onerror = () => reject(req.error);
   });
 }
+/** **Always rejects with a real Error.** WebKit fails a write it cannot
+ *  store (a Blob in a Private tab: "Error preparing Blob/File data to be
+ *  stored in object store") with `t.error` still null, and a null rejection
+ *  made every `catch (err) { err.message }` above it throw in turn — the
+ *  event photo screen sat on "Preparing…" for good (W-19). An abort without
+ *  an error never settled at all. */
 function tx(store, mode, fn) {
   return new Promise((resolve, reject) => {
+    let r;
+    const fail = () => {
+      const e = t.error || (r && r.error);
+      reject(e instanceof Error || (e && e.message)
+        ? new Error('This phone’s storage refused it: ' + (e.message || e.name))
+        : new Error('This phone’s storage refused it.'));
+    };
     const t = idb.transaction(store, mode);
-    const r = fn(t.objectStore(store));
+    r = fn(t.objectStore(store));
     t.oncomplete = () => resolve(r && r.result !== undefined ? r.result : undefined);
-    t.onerror = () => reject(t.error);
+    t.onerror = fail;
+    t.onabort = fail;
   });
 }
 const idbPut    = (store, value) => tx(store, 'readwrite', (s) => s.put(value));
@@ -4084,9 +4099,39 @@ async function clearSignedOutMarks() {
   if ($('pane-queue').hidden === false) loadQueueList();
 }
 
+/** **A drain asked for while one is running is remembered, not dropped.**
+ *  The running drain read the queue before the new item was written, so
+ *  returning here left an event photo sitting in IndexedDB with no request
+ *  until the next `online` or resume (W-19). */
+let drainAgain = false;
+/** The item being sent right now, so the Queue tab can say "Uploading now". */
+let uploadingID = null;
+
+/** What just happened to one queued item, for whoever is watching it (the
+ *  event done screen, the Queue tab). `id` null means "the whole queue". */
+function queueNotify(id, state, error) {
+  try {
+    window.dispatchEvent(new CustomEvent('queue-item', { detail: { id, state, error: error || null } }));
+  } catch (e) { /* nobody listening is fine */ }
+}
+
+/** An event photo that never answers must not hold `draining` forever: every
+ *  later drain would return at the top and nothing would ever send again. */
+const EVENT_UPLOAD_TIMEOUT_MS = 90_000;
+function withTimeout(promise, ms, message) {
+  let t;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { t = setTimeout(() => reject(new Error(message)), ms); }),
+  ]).finally(() => clearTimeout(t));
+}
+
 async function drainQueue() {
-  if (draining || !navigator.onLine || !session) return;
+  if (draining) { drainAgain = true; return; }
+  if (!navigator.onLine) { queueNotify(null, 'offline'); return; }
+  if (!session) { queueNotify(null, 'signed_out'); return; }
   draining = true;
+  drainAgain = false;
   try {
     const items = await idbAll('queue');
 
@@ -4100,6 +4145,7 @@ async function drainQueue() {
         item.state = 'signed_out';          // attempts deliberately untouched
         item.lastError = null;              // and no policy name stored
         await idbPut('queue', item);
+        queueNotify(item.id, 'signed_out');
       }
       return;
     }
@@ -4107,9 +4153,15 @@ async function drainQueue() {
 
     for (const item of items) {
       if (item.state === 'failed') continue;
+      uploadingID = item.id;
+      queueNotify(item.id, 'uploading');
       try {
-        await uploadOne(item);
+        await (item.kind === 'event_photo'
+          ? withTimeout(uploadOne(item), EVENT_UPLOAD_TIMEOUT_MS,
+              'No answer from the server after 90 seconds. It will try again.')
+          : uploadOne(item));
         await idbDelete('queue', item.id);
+        queueNotify(item.id, 'saved');
       } catch (e) {
         const message = e.message || String(e);
         // **An auth failure costs no attempt, anywhere.** It is not a bad
@@ -4122,6 +4174,7 @@ async function drainQueue() {
           item.state = 'signed_out';
           item.lastError = null;
           await idbPut('queue', item);
+          queueNotify(item.id, 'signed_out');
           showSignedOut(true);
           break;                            // the rest will fail identically
         }
@@ -4131,12 +4184,16 @@ async function drainQueue() {
         // dropped: he stood somewhere to make it.
         item.state = item.attempts >= 5 ? 'failed' : 'pending';
         await idbPut('queue', item);
+        queueNotify(item.id, item.state, message);
       }
     }
   } finally {
     draining = false;
+    uploadingID = null;
     await refreshQueueBadge();
     if ($('pane-finish').hidden === false) loadFinishList(false);
+    if ($('pane-queue').hidden === false) loadQueueList();
+    if (drainAgain) { drainAgain = false; drainQueue(); }
   }
 }
 
@@ -4435,10 +4492,12 @@ async function uploadEventPhoto(item) {
 
   let path = c.path;
   if (!path) {
-    if (!c.blob) throw new Error('queued event photo with no image');
+    // `bytes` from field-v33 on; `blob` on anything queued before it.
+    const body = c.bytes ? new Blob([c.bytes], { type: 'image/jpeg' }) : c.blob;
+    if (!body) throw new Error('queued event photo with no image');
     path = 'events/' + id + '-' + Date.now() + '.jpg';
     const { error } = await db.storage.from('event-photos')
-      .upload(path, c.blob, { contentType: 'image/jpeg', upsert: false });
+      .upload(path, body, { contentType: 'image/jpeg', upsert: false });
     if (error) throw new Error('event photo upload: ' + error.message);
     // Remember it BEFORE the update, so a failure below retries the update
     // rather than the upload.
@@ -4449,8 +4508,13 @@ async function uploadEventPhoto(item) {
   const url = db.storage.from('event-photos').getPublicUrl(path).data.publicUrl;
   const patch = { image_url: url, storage_path: path };
   if (c.credit !== undefined) patch.image_credit = c.credit;
-  const { error: uErr } = await db.from('world_events').update(patch).eq('id', id);
+  // `.select` so a refusal that RLS turns into "0 rows updated" says so —
+  // without it PostgREST answers 200 and the photo is in the bucket but on no row.
+  const { data: uRows, error: uErr } = await db.from('world_events').update(patch).eq('id', id).select('id');
   if (uErr) throw new Error('world_events: ' + uErr.message);
+  if (!uRows || !uRows.length) {
+    throw new Error('world_events: the photo uploaded but the event was not updated (not found, or not allowed)');
+  }
 }
 
 async function uploadCountryWork(item) {
@@ -5146,6 +5210,7 @@ function queueState(item) {
   if (item.state === 'signed_out') return 'Waiting — you’re signed out';
   if (needsAName(item)) return 'Needs a name — open it and add one';
   if (item.state === 'failed') return 'Stopped after 5 attempts';
+  if (item.id === uploadingID) return 'Uploading now…';
   const n = item.attempts || 0;
   return n ? 'Retrying, attempt ' + n + ' of 5' : 'Waiting';
 }
@@ -6420,6 +6485,7 @@ let evFilter = 'all';       // 'all' | 'missing'
 let evCurrent = null;       // the event on the photo screen
 let evLoading = null;       // the in-flight load, so two callers share one
 let evBusy = false;         // a photo is being resized and queued
+let evWatch = null;         // { id, row, state, error }: the queued photo the done screen follows
 
 /**
  * Does this event already carry a photo of OURS?
@@ -6596,6 +6662,7 @@ const EVENT_REVIEW_URL = null;   // e.g. (id) => 'https://…/admin#event=' + id
 
 /** The photo's own state, which has nothing to do with the event's. */
 function evPhotoState(row) {
+  if (row._saved) return { text: 'Photo saved \u2713', cls: 'ok' };
   if (row._queued) return { text: 'Photo queued', cls: 'wait' };
   if (evHasOurPhoto(row)) return { text: 'Photo saved \u2713', cls: 'ok' };
   // "no photo" and "not our photo" are different jobs: one needs a picture
@@ -6687,11 +6754,28 @@ function evNote(msg) {
   n.textContent = msg;
 }
 
+/** How long a photo may take to open before we say so. A HEIC the browser
+ *  can't read, or a 48 MP shot on an older phone, used to leave "Preparing…"
+ *  up for ever with nothing else happening (W-19). */
+const EV_RESIZE_TIMEOUT_MS = 15_000;
+
 /** 1600 px wide, JPEG 85%, and a floor the browser can check before upload. */
 function evResize(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      img.onload = img.onerror = null;
+      img.src = '';
+      URL.revokeObjectURL(url);
+      reject(new Error('That photo took more than 15 seconds to open, so we stopped. '
+        + 'Try it again, or take a screenshot of it and upload the screenshot.'));
+    }, EV_RESIZE_TIMEOUT_MS);
+    const done = (fn, v) => { if (settled) return; settled = true; clearTimeout(timer); fn(v); };
+    resolve = done.bind(null, resolve);
+    reject = done.bind(null, reject);
     img.onload = () => {
       URL.revokeObjectURL(url);
       if (img.naturalWidth < EV_MIN_WIDTH) {
@@ -6717,13 +6801,28 @@ function evResize(file) {
   });
 }
 
+/** **Every way out of here says why, on screen** (W-19). Brian's iPhone took
+ *  a photo and "nothing happened": each of these returns used to be silent. */
 async function evAccept(file) {
-  if (!evCurrent) return;
+  if (!evCurrent) {
+    evNote('Open an event first, then add its photo.');
+    return;
+  }
   // One photo at a time. A tap on Photograph while the last one was still
   // encoding queued two uploads for the same event, and the row ended up
   // pointing at whichever finished second.
-  if (evBusy) return;
-  if (!file || !/^image\//.test(file.type || '')) {
+  if (evBusy) {
+    evNote('Still preparing the last photo. Wait a moment, then try again.');
+    return;
+  }
+  if (!file) {
+    evNote('No photo came through. Try again, or use Upload.');
+    return;
+  }
+  // Some pickers hand over a file with no type at all; the name decides then,
+  // and the resize below is the real test either way.
+  const type = file.type || '';
+  if (type ? !/^image\//.test(type) : !/\.(jpe?g|png|webp|heic|heif|gif)$/i.test(file.name || '')) {
     evNote('That file is not a photo. Use a JPEG, PNG or WebP.');
     return;
   }
@@ -6731,16 +6830,23 @@ async function evAccept(file) {
   evNote('Preparing…');
   try {
     const { blob, width } = await evResize(file);
+    // Watch the item BEFORE it is queued: `queueCountryWork` starts the drain,
+    // and its first news can arrive before the done screen is up.
+    const qid = crypto.randomUUID();
+    evWatch = { id: qid, row: evCurrent, state: navigator.onLine ? 'uploading' : 'offline', error: null };
+    // **Bytes, not a Blob.** Safari will not keep a Blob in IndexedDB in a
+    // Private tab; an ArrayBuffer it always keeps.
     await queueCountryWork({
       kind: 'event_photo',
       eventID: evCurrent.id,
       credit: ($('ev-credit').value || '').trim() || null,
-      blob,
-    }, evCurrent.name || 'Event');
+      bytes: await blob.arrayBuffer(),
+    }, evCurrent.name || 'Event', qid);
     $('ev-note').hidden = true;
     evShowDone(blob, width);
   } catch (err) {
-    evNote(err.message || 'Could not read that photo.');
+    evWatch = null;
+    evNote((err && err.message) || 'Could not read that photo.');
   } finally {
     evBusy = false;
   }
@@ -6767,22 +6873,51 @@ function evShowDone(blob, width) {
   const size = width ? width + '\u00a0px wide' : '';
   const next = evRows.find((r) => !evHasOurPhoto(r));
 
-  // **"Saved" is a claim, and offline it is a false one.** The photo is in
-  // the queue either way; only the network decides whether it has landed.
-  // The Country tab says "queued — it will save when you are back online",
-  // and this says the same thing in the same words.
-  const online = navigator.onLine;
-  $('ev-done-title').textContent = online ? 'Photo saved' : 'Photo queued';
-  evRenderState($('ev-done-state'), online
-    ? { text: 'Photo saved \u2713', cls: 'ok' }
-    : { text: 'Photo queued', cls: 'wait' }, evCurrent, true);
-  const tail = online ? '' : ' — it will upload when you are back online.';
   $('ev-done-name').textContent = name + (size ? ' · ' + size : '')
-    + (next ? '' : ' — that\'s all of them.') + tail;
+    + (next ? '' : ' — that\'s all of them.');
   $('ev-next').hidden = !next;
   $('ev-next').onclick = () => { if (next) openEventPhoto(next.id); };
+  evRenderDone();
   showEventScreen('done');
 }
+
+/**
+ * **"Saved" is a claim, made only when the queue says so** (W-19). It used to
+ * say "Photo saved" the moment the photo went on the queue, online or not,
+ * which is how an upload that never left the phone read as a success. Now it
+ * says "Uploading…" until this item really drains, then the outcome.
+ */
+function evRenderDone() {
+  if (!evWatch) return;
+  const w = evWatch;
+  const says = {
+    uploading:  ['Uploading…',       { text: 'Uploading…', cls: 'wait' }],
+    saved:      ['Photo saved',      { text: 'Photo saved \u2713', cls: 'ok' }],
+    offline:    ['Photo queued',     { text: 'Photo queued — it will upload when you are back online.', cls: 'wait' }],
+    signed_out: ['Photo not sent',   { text: 'You’re signed out — sign in and it will send.', cls: 'bad' }],
+    pending:    ['Not saved yet',    { text: 'Upload failed, will try again: ' + (w.error || 'no reason given'), cls: 'bad' }],
+    failed:     ['Photo not saved',  { text: 'Stopped after 5 attempts: ' + (w.error || 'no reason given') + ' — see the Queue tab.', cls: 'bad' }],
+  }[w.state] || ['Uploading…', { text: 'Uploading…', cls: 'wait' }];
+  $('ev-done-title').textContent = says[0];
+  evRenderState($('ev-done-state'), says[1], w.row, true);
+}
+
+window.addEventListener('queue-item', (e) => {
+  const d = e.detail || {};
+  if ($('pane-queue').hidden === false) loadQueueList();
+  if (!evWatch) return;
+  // A whole-queue message (offline, signed out) only matters while we are
+  // still waiting; it never overwrites an outcome.
+  if (d.id === null) {
+    if (evWatch.state !== 'uploading') return;
+  } else if (d.id !== evWatch.id) {
+    return;
+  }
+  evWatch.state = d.state;
+  evWatch.error = d.error;
+  if (d.state === 'saved' && evWatch.row) evWatch.row._saved = true;
+  evRenderDone();
+});
 
 /**
  * `#event=<id>` lands straight on the photo screen.
@@ -6823,8 +6958,15 @@ $('ev-back').onclick = () => showEventScreen('list');
 $('ev-done-back').onclick = () => { showEventScreen('list'); loadEventList(true); };
 $('btn-ev-camera').onclick = () => $('in-ev-camera').click();
 $('btn-ev-upload').onclick = () => $('in-ev-upload').click();
-$('in-ev-camera').onchange = (e) => evAccept((e.target.files || [])[0]);
-$('in-ev-upload').onchange = (e) => evAccept((e.target.files || [])[0]);
+// **The value is cleared after every pick.** Picking the same photo a second
+// time is not a change, so without this the second try did nothing at all.
+const evPicked = (e) => {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  evAccept(file);
+};
+$('in-ev-camera').onchange = evPicked;
+$('in-ev-upload').onchange = evPicked;
 
 // A link tapped while the Panel is already open changes the hash and
 // nothing else, so the deep link needs this as well as the one in showApp.
@@ -6842,9 +6984,9 @@ window.addEventListener('paste', (e) => {
   if (file) { e.preventDefault(); evAccept(file); }
 });
 
-async function queueCountryWork(item, label) {
+async function queueCountryWork(item, label, id) {
   await idbPut('queue', {
-    id: crypto.randomUUID(),
+    id: id || crypto.randomUUID(),
     kind: item.kind,
     country: item,
     // **Stored here, at queue time.** A `place_hint` is filed through this
