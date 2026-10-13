@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Same as place.html. A link tapped in Safari never shows an App Clip card
-       on its own; this meta tag is what surfaces it. -->
-  <meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com.unaryx.TravelMug.Clip">
+  <!-- The app banner only. NO app-clip-bundle-id here (W-32), unlike
+       place.html, i.html and trip.html: the 3.2 App Clip does not handle
+       /city/ and would open empty. I-69 puts it back with city support. -->
+  <meta name="apple-itunes-app" content="app-id=6759053765">
   <title>Suna — Things to do this week</title>
   <meta name="description" content="Things to do this week, on Suna.">
   <!-- Palette is place.html's, not the app's new green. These three landing
