@@ -13,7 +13,7 @@
 // way on to /events, never a 404.
 
 import {
-  EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenLine, eventState, priceLine, ourImage,
+  EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenText, eventState, priceLine, ourImage,
   eventLD, eventsPage, storeURL, page, send, segment,
 } from './_clip.js';
 import { mapsLinks, openInSuna } from './_maps.js';
@@ -29,7 +29,16 @@ export function eventId(rawURL) {
 
 async function loadEvent(id) {
   const rows = await rest(`world_events?id=eq.${id}&status=eq.approved&select=${EVENT_SELECT}&limit=1`);
-  return rows[0] || null;
+  const e = rows[0] || null;
+  // WHERE is the venue, never just the city (W-48). Every live event has
+  // venue text today; when one doesn't, the place it's linked to names it.
+  if (e && !String(e.venue || '').trim() && e.venue_landmark_id) {
+    try {
+      const place = await rest(`landmarks?id=eq.${encodeURIComponent(e.venue_landmark_id)}&is_hidden=eq.false&select=name&limit=1`);
+      if (place[0] && place[0].name) e.venue = place[0].name;
+    } catch { /* the city it is */ }
+  }
+  return e;
 }
 
 export function eventBody(e, now = new Date()) {
@@ -39,16 +48,20 @@ export function eventBody(e, now = new Date()) {
   const img = ourImage(e.image_url);
   const venue = (e.venue && String(e.venue).trim()) || null;
   const price = priceLine(e);
+  // A free event with nowhere to sign up needs saying so (W-48): people
+  // otherwise go looking for a ticket that doesn't exist.
+  const noTicket = e.price_type === 'free' && !e.source_url;
   const facts = [
-    ['When', whenLine(e, tz, now)],
+    ['When', whenText(e, tz, now)],
     ['Where', [venue, city && city.name].filter(Boolean).join(', ')],
-    price && ['Price', price],
+    price && ['Price', price, noTicket ? 'Free entry · no ticket needed' : null],
   ].filter((f) => f && f[1]);
   const desc = String(e.description || '').trim();
   const actions = [
     // Not once it's over: there is nothing left to buy.
     !over && e.source_url
-      ? `<a class="btn" href="https://unaryx.com/go/e-${escapeHtml(e.id)}" rel="nofollow noopener">${e.price_type === 'free' ? 'Sign up ↗' : 'Get tickets ↗'}</a>`
+      // Tickets only when there are tickets; otherwise the organiser's page is "More info".
+      ? `<a class="btn" href="https://unaryx.com/go/e-${escapeHtml(e.id)}" rel="nofollow noopener">${e.price_type === 'paid' ? 'Get tickets ↗' : 'More info ↗'}</a>`
       : '',
     // Take me there: Google Maps for everyone, Apple Maps beside it on Apple devices.
     !over ? mapsLinks(e.latitude, e.longitude) : '',
@@ -58,9 +71,9 @@ export function eventBody(e, now = new Date()) {
   ${img ? `<img class="hero" src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
   ${over ? '<p class="over-pill">Ended</p>' : ''}
   <h1>${escapeHtml(e.name)}</h1>
-  <ul class="facts">${facts.map(([k, v]) => `<li><b>${k}</b>${escapeHtml(v)}</li>`).join('')}</ul>
-  <div class="actions">${open}${actions}</div>
+  <ul class="facts">${facts.map(([k, v, sub]) => `<li><b>${k}</b>${escapeHtml(v)}${sub ? `<span class="fact-sub">${escapeHtml(sub)}</span>` : ''}</li>`).join('')}</ul>
   ${desc ? `<p class="desc">${escapeHtml(desc)}</p>` : ''}
+  <div class="actions">${open}${actions}</div>
   ${over ? `<p class="empty"><a class="link" href="${escapeHtml(eventsPage(city))}">See what's on this week</a></p>` : ''}
 </main>
 <div class="bar">
@@ -98,7 +111,7 @@ export default async function handler(req, res) {
   const city = cityFor(e.latitude, e.longitude);
   const canonical = `${ORIGIN}/e/${e.id}`;
   const venue = (e.venue && String(e.venue).trim()) || (city && city.name) || '';
-  const description = [whenLine(e, tz), venue].filter(Boolean).join(' · ');
+  const description = [whenText(e, tz), venue].filter(Boolean).join(' · ');
   send(res, page({
     title: `${e.name}${venue ? ` · ${venue}` : ''} · Suna`,
     description,

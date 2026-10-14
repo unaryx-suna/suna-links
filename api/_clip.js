@@ -41,13 +41,14 @@ export const CITIES = [
 const CITY_PATH = { 'kuala-lumpur': 'kuala-lumpur', melbourne: 'melbourne', sydney: 'sydney', singapore: 'singapore' };
 const CURRENCY = { AU: 'AUD', MY: 'MYR', SG: 'SGD' };
 
-// The same columns /events reads, so nothing new is exposed.
+// The columns /events reads, plus venue_landmark_id (W-48: the place's name
+// when the venue text is empty). Same table, same approved-only policy.
 export const EVENT_SELECT = [
   'id', 'name', 'description', 'category', 'latitude', 'longitude', 'image_url',
   'start_time', 'end_time', 'daily_start_time', 'daily_end_time',
   'recurrence_type', 'recurrence_days', 'recurrence_until',
   'price_type', 'price_amount', 'price_currency', 'source_url', 'venue',
-  'organizer_name', 'performer_names', 'on_sale_from',
+  'organizer_name', 'performer_names', 'on_sale_from', 'venue_landmark_id',
 ].join(',');
 
 const STORE = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765';
@@ -173,6 +174,37 @@ export function whenLine(event, timeZone, now = new Date()) {
   return `${fmtWeekday(start, timeZone)} ${fmtDate(start, timeZone, crossesYear)} · ${hours}`;
 }
 
+// ---- opening hours written in the description (W-48) ----
+//
+// Brian, 14 Oct: Rauschenberg's description says "Tue-Sat 11am-7pm, Sun
+// 11am-5pm", and the page said "11:00–19:00 daily", which is wrong on
+// Sundays and Mondays. daily_start_time/daily_end_time hold one pair of
+// times; when the description spells out days and hours, those win.
+const DAY = '(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*\\.?|daily|every day)';
+const TIME = '\\d{1,2}(?:[:.]\\d{2})?\\s*(?:am|pm)?';
+const SEG = `${DAY}(?:\\s*[-–—]\\s*${DAY})?(?:\\s*(?:,|&|and)\\s*${DAY})*\\s*:?\\s*${TIME}\\s*[-–—to]+\\s*${TIME}`;
+const HOURS = new RegExp(`${SEG}(?:\\s*[,;]\\s*${SEG})*`, 'i');
+
+/** "Tue–Sat 11am–7pm, Sun 11am–5pm" from a description, or null. */
+export function hoursFromDescription(text) {
+  const m = String(text || '').match(HOURS);
+  if (!m) return null;
+  const line = m[0].replace(/\s*[-—]\s*/g, '–').replace(/\s*–\s*/g, '–').replace(/\s+/g, ' ').trim();
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+/**
+ * whenLine, except where the description's own hours contradict "daily":
+ * then the dates, then the description's hours line.
+ */
+export function whenText(event, timeZone, now = new Date()) {
+  const hours = event.daily_start_time && event.daily_end_time ? hoursFromDescription(event.description) : null;
+  if (!hours) return whenLine(event, timeZone, now);
+  const base = whenLine({ ...event, daily_start_time: null, daily_end_time: null }, timeZone, now);
+  // A one-day event's line already carries its times; only a run gets the hours.
+  return / – |until|weekly|, /.test(base) || event.recurrence_type ? `${base.split(' · ')[0]} · ${hours}` : base;
+}
+
 /** 'ended' once its end time has passed, else null. (Cancelled rows aren't readable; see the top.) */
 export function eventState(event, now = Date.now()) {
   const ends = Date.parse(event && event.end_time || '');
@@ -288,6 +320,7 @@ export function page({ title, description, canonical, image, body, ld }) {
     .hero { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px; background: var(--card); display: block; }
     .facts { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 10px; }
     .facts li { color: var(--body); font-size: 15px; }
+    .fact-sub { display: block; color: var(--sand); font-size: 13px; margin-top: 2px; }
     .facts b { color: var(--muted); font-weight: 600; display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
     .desc { color: var(--body); font-size: 15px; line-height: 1.5; white-space: pre-line; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }

@@ -27,6 +27,7 @@ globalThis.fetch = async (url) => {
   if (u.startsWith('https://unaryx.com/clip/venues.json')) {
     return state.venuesOk ? ok({ venues: [VENUE] }) : { ok: false, status: 500, json: async () => ({}) };
   }
+  if (u.includes('/rest/v1/landmarks')) return ok(state.landmark ? [state.landmark] : []);
   if (u.includes('/rest/v1/world_events')) {
     if (state.restFails) return { ok: false, status: 503, json: async () => ({}) };
     if (u.includes('id=eq.')) return ok(state.eventRow ? [state.eventRow] : []);
@@ -208,7 +209,8 @@ await t('/e/: no price → no offers; free → Sign up and price 0', async () =>
   r = await render(event, `/e/${U(6)}`);
   ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers.price, 0);
-  assert.match(r.body, />Sign up ↗</);
+  assert.match(r.body, />More info ↗</);   // W-48: a free event's link is information, not a ticket
+  assert.doesNotMatch(r.body, /no ticket needed/);
 });
 await t('/e/: unknown, junk and database failure → 200 with a link to /events', async () => {
   state.eventRow = null;
@@ -274,6 +276,61 @@ await t('W-47 Open in Suna: hidden, store href with the page ct, scheme for the 
   assert.match(r.body, /<div class="ev-maps"><a class="btn maps-apple"[^>]*>Apple Maps<\/a><a class="btn maps-google"[^>]*>Google Maps<\/a><\/div>/);
   r = await render(venue, '/c/nope');
   assert.doesNotMatch(r.body, /id="open-suna"/, 'an unknown venue has nowhere in the app to open');
+});
+
+// ---- W-48: what people need, from Brian's own test of /e/ ----
+const RR = {
+  start_time: '2026-06-16T03:00:00Z', end_time: '2027-11-01T09:00:00Z', recurrence_type: 'period',
+  daily_start_time: '11:00', daily_end_time: '19:00', price_type: 'free', price_amount: null, source_url: null,
+  description: "M+ and ILHAM survey of Rauschenberg's projects in Asia on Level 5; free entry, Tue-Sat 11am-7pm, Sun 11am-5pm, closes 1 Nov.",
+};
+await t('W-48 the description\'s days and hours beat "daily"', async () => {
+  const m = await import('./api/_clip.js');
+  assert.equal(m.hoursFromDescription(RR.description), 'Tue–Sat 11am–7pm, Sun 11am–5pm');
+  assert.equal(m.hoursFromDescription('Open daily 10am to 6pm'), 'Daily 10am to 6pm');
+  assert.equal(m.hoursFromDescription('Doors at 7pm. A daily dose of jazz.'), null);
+  state.eventRow = ev(U(9), 0, RR);
+  const r = await render(event, `/e/${U(9)}`);
+  assert.match(r.body, /<li><b>When<\/b>16 Jun(e)? 2026 – 1 Nov 2027 · Tue–Sat 11am–7pm, Sun 11am–5pm<\/li>/);
+  assert.doesNotMatch(r.body, /11:00–19:00 daily/);
+  // No hours in the description: the stored daily times, as before.
+  state.eventRow = ev(U(9), 0, { ...RR, description: 'A survey of his work.' });
+  assert.match((await render(event, `/e/${U(9)}`)).body, /11:00–19:00 daily/);
+});
+await t('W-48 the description comes before the buttons', async () => {
+  state.eventRow = ev(U(9), 0, RR);
+  const b = (await render(event, `/e/${U(9)}`)).body;
+  assert(b.indexOf('<p class="desc">') > 0 && b.indexOf('<p class="desc">') < b.indexOf('<div class="actions">'));
+});
+await t('W-48 free with no link: "Free entry · no ticket needed", no ticket button', async () => {
+  state.eventRow = ev(U(9), 0, RR);
+  const b = (await render(event, `/e/${U(9)}`)).body;
+  assert.match(b, /<li><b>Price<\/b>Free<span class="fact-sub">Free entry · no ticket needed<\/span><\/li>/);
+  assert.doesNotMatch(b, /unaryx\.com\/go\//);
+});
+await t('W-48 paid with a link: Get tickets; free with a link: More info, both via /go/', async () => {
+  state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example' });
+  assert.match((await render(event, `/e/${U(9)}`)).body, new RegExp(`href="https://unaryx\\.com/go/e-${U(9)}" rel="nofollow noopener">More info ↗`));
+  state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example', price_type: 'paid', price_amount: 20 });
+  assert.match((await render(event, `/e/${U(9)}`)).body, />Get tickets ↗</);
+});
+await t('W-48 WHERE is the venue, else the linked place\'s name; never just the city when either exists', async () => {
+  state.eventRow = ev(U(9), 0, { ...RR, venue: 'ILHAM Gallery' });
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>ILHAM Gallery, Kuala Lumpur<\/li>/);
+  state.eventRow = ev(U(9), 0, { ...RR, venue: '  ', venue_landmark_id: 'aaaaaaaa-1111-4111-8111-111111111111' });
+  state.landmark = { name: 'Menara Public Bank 2' };
+  calls.length = 0;
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>Menara Public Bank 2, Kuala Lumpur<\/li>/);
+  assert.match(calls.find((c) => c.includes('/landmarks')), /id=eq\.aaaaaaaa-1111-4111-8111-111111111111&is_hidden=eq\.false&select=name/);
+  state.landmark = null;
+  state.eventRow = ev(U(9), 0, { ...RR, venue: null, venue_landmark_id: null });
+  calls.length = 0;
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>Kuala Lumpur<\/li>/);
+  assert(!calls.some((c) => c.includes('/landmarks')), 'no lookup without a linked place');
+});
+await t('W-48 /c/ cards: on now with the description\'s hours', async () => {
+  const n2 = new Date();
+  assert.equal(onNowLine({ ...RR, end_time: iso(n2.getTime() + 40 * 24 * H) }, 'Asia/Kuala_Lumpur', n2), 'On now · Tue–Sat 11am–7pm, Sun 11am–5pm');
 });
 
 console.log(bad ? `\n${bad} failed` : '\nall passed');

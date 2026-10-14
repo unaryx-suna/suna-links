@@ -13,7 +13,7 @@
 
 import {
   VENUES_URL, EVENT_SELECT, rest, escapeHtml, distanceKm, cityFor, zoneFor, endOfLocalDay,
-  whenLine, fmtTime, ourImage, distanceLabel, eventsPage, storeURL, page, send, segment,
+  whenText, hoursFromDescription, fmtTime, ourImage, distanceLabel, eventsPage, storeURL, page, send, segment,
 } from './_clip.js';
 import { mapsLinks, openInSuna } from './_maps.js';
 
@@ -68,13 +68,16 @@ export function pickStep(rows, city) {
 export function onNowLine(e, tz, now) {
   const end = new Date(e.end_time);
   if (end <= endOfLocalDay(now, tz)) return `On now · until ${fmtTime(end, tz)}`;
-  if (e.daily_start_time && e.daily_end_time) return `On now · ${e.daily_start_time}–${e.daily_end_time}`;
+  if (e.daily_start_time && e.daily_end_time) {
+    // The description's own days and hours beat "daily" (W-48).
+    return `On now · ${hoursFromDescription(e.description) || `${e.daily_start_time}–${e.daily_end_time}`}`;
+  }
   return 'On now';
 }
 
 function eventCard(e, tz, now) {
   const img = ourImage(e.image_url);
-  const when = Date.parse(e.start_time) <= now.getTime() ? onNowLine(e, tz, now) : whenLine(e, tz, now);
+  const when = Date.parse(e.start_time) <= now.getTime() ? onNowLine(e, tz, now) : whenText(e, tz, now);
   const meta = [when, e.venue && String(e.venue).trim(), distanceLabel(e.km)].filter(Boolean).join(' · ');
   return `<li class="ev"><a href="/e/${escapeHtml(e.id)}">`
     + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
