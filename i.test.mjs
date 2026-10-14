@@ -37,6 +37,15 @@ await t('server render: no bare App Store link; every one is ct=web-i', async ()
   for (const l of links) assert.equal(l.replace(/&amp;/g, '&'), `href="${WEB_I}"`);
 });
 
+await t('W-47 each shown stop has Apple Maps and Google Maps; the locked ones have none', async () => {
+  const google = html.match(/class="map-btn maps-google" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.15,101\.7&amp;travelmode=walking"/g) || [];
+  const apple = html.match(/class="map-btn maps-apple" href="https:\/\/maps\.apple\.com\/\?daddr=3\.15,101\.7&amp;dirflg=w"/g) || [];
+  assert.equal(google.length, 3); assert.equal(apple.length, 3);
+  assert.match(html, /classList\.add\('apple-maps'\)/);
+  assert(html.includes('html:not(.apple-maps) .maps-apple{display:none !important}'));
+  assert(html.indexOf("classList.add('apple-maps')") < html.indexOf('</head>'), 'decided before first paint');
+});
+
 let chromium;
 try { ({ chromium } = await import('playwright')); } catch { console.log('  (playwright not installed: browser checks skipped)'); }
 if (chromium) {

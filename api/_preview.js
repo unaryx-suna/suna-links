@@ -25,6 +25,7 @@
 // Never a photographer credit, never more than one.
 
 import { stockFor } from './_stock.js';
+import { mapsLinks } from './_maps.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -238,6 +239,8 @@ function stopBlock(s, n, image) {
   const note = String(s.creator_note || '').trim();
   const area = String(s.city_name || '').trim();
   const name = s.place_name || 'Stop';
+  // Take me there (W-47), for a stop with a real pin that isn't over.
+  const maps = state ? '' : mapsLinks(s.latitude, s.longitude, 'map-btn');
   return `<li class="stop${state ? ' stop-over' : ''}">
       <article class="card">
         ${stopImage(image, name)}
@@ -246,6 +249,7 @@ function stopBlock(s, n, image) {
           <h3 class="stop-name">${escapeHtml(name)}</h3>
           ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
           ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
+          ${maps ? `<div class="stop-maps">${maps}</div>` : ''}
         </div>
       </article>
     </li>`;

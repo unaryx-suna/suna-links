@@ -16,6 +16,8 @@
 // would change what that number means without anyone deciding to. If place
 // views are worth counting, they get their own decision and their own rows.
 
+import { mapsLinks, MAPS_HEAD, MAPS_CSS } from './_maps.js';
+
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, the same one place.html already ships.
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -166,13 +168,15 @@ export default async function handler(req, res) {
   let description = 'Places worth walking to, with notes from people who went.';
   let image = null;
   let indexable = false;
+  // Take me there (W-47), when the place has a real pin.
+  let maps = '';
 
   if (id) {
     try {
       const url = `${SUPABASE_URL}/rest/v1/landmarks`
         + `?id=eq.${encodeURIComponent(id)}`
         + `&is_hidden=eq.false`
-        + `&select=name,category,description,address,cover_image_url,city_id&limit=1`;
+        + `&select=name,category,description,address,cover_image_url,city_id,latitude,longitude&limit=1`;
       const r = await fetch(url, {
         headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
         signal: AbortSignal.timeout(2500),
@@ -210,6 +214,8 @@ export default async function handler(req, res) {
         } else if (place.address) {
           description = `${place.name} — ${place.address}`;
         }
+
+        maps = mapsLinks(place.latitude, place.longitude, 'map-btn');
 
         const candidate = coverURL(place.cover_image_url);
         image = (await imageResolves(candidate)) ? candidate : null;
@@ -274,7 +280,8 @@ export default async function handler(req, res) {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description|robots)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n</head>`);
+    .replace('</head>', `  ${tags}\n  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>`)
+    .replace('<!--MAPS-->', maps ? `<p id="maps">${maps}</p>` : '');
 
   res
     .status(200)

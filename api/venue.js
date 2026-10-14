@@ -15,6 +15,7 @@ import {
   VENUES_URL, EVENT_SELECT, rest, escapeHtml, distanceKm, cityFor, zoneFor, endOfLocalDay,
   whenLine, fmtTime, ourImage, distanceLabel, eventsPage, storeURL, page, send, segment,
 } from './_clip.js';
+import { mapsLinks, openInSuna } from './_maps.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 export const STEPS_KM = [0.8, 3];
@@ -77,7 +78,9 @@ function eventCard(e, tz, now) {
   const meta = [when, e.venue && String(e.venue).trim(), distanceLabel(e.km)].filter(Boolean).join(' · ');
   return `<li class="ev"><a href="/e/${escapeHtml(e.id)}">`
     + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
-    + `<span><p class="ev-name">${escapeHtml(e.name)}</p><p class="ev-meta">${escapeHtml(meta)}</p></span></a></li>`;
+    + `<span><p class="ev-name">${escapeHtml(e.name)}</p><p class="ev-meta">${escapeHtml(meta)}</p></span></a>`
+    + (mapsLinks(e.latitude, e.longitude) ? `<div class="ev-maps">${mapsLinks(e.latitude, e.longitude)}</div>` : '')
+    + '</li>';
 }
 
 export function venueBody(venue, found, now) {
@@ -97,8 +100,12 @@ export function venueBody(venue, found, now) {
     list = `<p class="empty">Nothing listed near ${escapeHtml(name)} today.`
       + ` <a class="link" href="${escapeHtml(eventsPage(found && found.city))}">See what's on this week</a>.</p>`;
   }
+  // Only a known venue has somewhere in the app to open to.
+  const open = venue
+    ? `<div class="actions">${openInSuna(`suna://venue?slug=${encodeURIComponent(venue.slug)}`, store)}</div>` : '';
   return `<main>
   <h1>${escapeHtml(heading)}</h1>
+  ${open}
   ${list}
 </main>
 <div class="bar">

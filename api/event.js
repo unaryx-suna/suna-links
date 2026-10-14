@@ -3,7 +3,8 @@
 // What a shared event link shows anyone the app or the Clip doesn't open
 // for: the name, when (in the venue's own time), where, the photo, Get
 // tickets ↗ through unaryx.com/go (the one place an outbound link is checked
-// and attributed), Take me there in Apple Maps, and the Event JSON-LD the
+// and attributed), Take me there (Google Maps, plus Apple Maps on Apple
+// devices: W-47), Open in Suna on iPhone, and the Event JSON-LD the
 // /events pages emit.
 //
 // An event that has ended is greyed the way W-28 greys an itinerary stop.
@@ -13,8 +14,9 @@
 
 import {
   EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenLine, eventState, priceLine, ourImage,
-  mapsURL, eventLD, eventsPage, storeURL, page, send, segment,
+  eventLD, eventsPage, storeURL, page, send, segment,
 } from './_clip.js';
+import { mapsLinks, openInSuna } from './_maps.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,14 +50,16 @@ export function eventBody(e, now = new Date()) {
     !over && e.source_url
       ? `<a class="btn" href="https://unaryx.com/go/e-${escapeHtml(e.id)}" rel="nofollow noopener">${e.price_type === 'free' ? 'Sign up ↗' : 'Get tickets ↗'}</a>`
       : '',
-    !over ? `<a class="btn" href="${escapeHtml(mapsURL(e.latitude, e.longitude, venue || e.name))}">Take me there</a>` : '',
+    // Take me there: Google Maps for everyone, Apple Maps beside it on Apple devices.
+    !over ? mapsLinks(e.latitude, e.longitude) : '',
   ].filter(Boolean).join('');
+  const open = openInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, storeURL('web-e', 'web-e'));
   return `<main class="${over ? 'over' : ''}">
   ${img ? `<img class="hero" src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
   ${over ? '<p class="over-pill">Ended</p>' : ''}
   <h1>${escapeHtml(e.name)}</h1>
   <ul class="facts">${facts.map(([k, v]) => `<li><b>${k}</b>${escapeHtml(v)}</li>`).join('')}</ul>
-  ${actions ? `<div class="actions">${actions}</div>` : ''}
+  <div class="actions">${open}${actions}</div>
   ${desc ? `<p class="desc">${escapeHtml(desc)}</p>` : ''}
   ${over ? `<p class="empty"><a class="link" href="${escapeHtml(eventsPage(city))}">See what's on this week</a></p>` : ''}
 </main>

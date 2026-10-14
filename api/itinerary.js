@@ -22,6 +22,7 @@ import { loadItinerary, coverFor, coverVariants, previewBody, isBySuna } from '.
 // TravelMug/Resources/suna-faces.js). Rendered here as SVG, so she cannot fail
 // to load the way an <img> can.
 import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
+import { MAPS_HEAD, MAPS_CSS } from './_maps.js';
 
 const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
 
@@ -243,6 +244,9 @@ export default async function handler(req, res) {
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
     .replace('</head>', `  ${tags}\n</head>`)
+    // Before first paint, so the Apple Maps button (W-47) never flashes in or out.
+    .replace('</head>', () => (/maps-apple/.test(body || '')
+      ? `  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>` : '</head>'))
     .replace(/<body>[\s\S]*?<!--\/BODY-->/, (generic) => (body
       ? `<body class="pv-body" data-preview="1">\n${body}`
       : generic))

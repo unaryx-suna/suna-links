@@ -172,7 +172,9 @@ await t('/e/: an event renders name, local time, venue, tickets, maps, JSON-LD',
   assert.match(r.body, /Fri 5 Mar 2027 · 7:30pm–10:00pm/);
   assert.match(r.body, /Taman Tun Park, Kuala Lumpur/);
   assert.match(r.body, new RegExp(`href="https://unaryx\\.com/go/e-${U(4)}" rel="nofollow noopener">Get tickets ↗`));
-  assert.match(r.body, /href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;q=Taman%20Tun%20Park">Take me there/);
+  assert.match(r.body, /<a class="btn maps-apple" href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;dirflg=w">Apple Maps<\/a>/);
+  assert.match(r.body, /<a class="btn maps-google" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.14231\d*,101\.6295679&amp;travelmode=walking">Google Maps<\/a>/);
+  assert(r.body.includes(`data-scheme="suna://event?id=${U(4)}"`));
   assert(r.body.includes(CLIP_META));
   assert(r.body.includes(`href="${STORE('web-e').replace(/&/g, '&amp;')}"`));
   const ld = JSON.parse(r.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
@@ -194,7 +196,7 @@ await t('/e/: an ended event is greyed, with no tickets or maps', async () => {
   const r = await render(event, `/e/${U(5)}`);
   assert.match(r.body, /<main class="over">/);
   assert.match(r.body, /<p class="over-pill">Ended<\/p>/);
-  assert.doesNotMatch(r.body, /Get tickets|Take me there/);
+  assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"/);
   assert.match(r.body, /href="https:\/\/unaryx\.com\/events\/kuala-lumpur"/);
 });
 await t('/e/: no price → no offers; free → Sign up and price 0', async () => {
@@ -227,7 +229,51 @@ await t('/e/: a hostile name cannot close the JSON-LD script', async () => {
   state.eventRow = ev(U(8), 0, { name: '</script><script>alert(1)</script>', start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   const r = await render(event, `/e/${U(8)}`);
   assert.doesNotMatch(r.body, /<script>alert/);
-  assert.equal((r.body.match(/<\/script>/g) || []).length, 1);
+  assert.equal((r.body.match(/<script[ >]/g) || []).length, (r.body.match(/<\/script>/g) || []).length);
+  const ld = r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1];
+  assert.equal(JSON.parse(ld).name, '</script><script>alert(1)</script>');
+});
+
+// ---- W-47: maps for people without Apple Maps, Open in Suna from Chrome.
+const maps = await import('./api/_maps.js');
+const UA = {
+  iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1',
+  ipados: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+  mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+  windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+};
+await t('W-47 user-agent split: Apple Maps on iPhone, iPad and Mac only; Open in Suna on iPhone only', async () => {
+  assert.deepEqual(Object.fromEntries(Object.entries(UA).map(([k, v]) => [k, maps.APPLE_UA.test(v)])),
+    { iphone: true, ipados: true, mac: true, android: false, windows: false });
+  assert.deepEqual(Object.fromEntries(Object.entries(UA).map(([k, v]) => [k, maps.IOS_UA.test(v)])),
+    { iphone: true, ipados: false, mac: false, android: false, windows: false });
+});
+await t('W-47 the split runs in the browser, so one cached page serves every device', async () => {
+  // Both links are always in the HTML; the head script adds the class that
+  // un-hides Apple Maps, and the CSS hides it otherwise.
+  assert(maps.MAPS_HEAD.includes(String(maps.APPLE_UA)));
+  assert.equal(maps.MAPS_CSS, 'html:not(.apple-maps) .maps-apple{display:none !important}');
+  assert(maps.OPEN_SCRIPT.includes(String(maps.IOS_UA)));
+  assert.match(maps.OPEN_SCRIPT, /setTimeout\(function\(\)\{if\(document\.hidden\|\|Date\.now\(\)-t>2000\)return;window\.location\.href=store\},1500\)/);
+});
+await t('W-47 maps links: walking directions, and nothing for a missing or 0,0 pin', async () => {
+  assert.equal(maps.googleMapsURL(3.1, 101.6), 'https://www.google.com/maps/dir/?api=1&destination=3.1,101.6&travelmode=walking');
+  assert.equal(maps.appleMapsURL(3.1, 101.6), 'https://maps.apple.com/?daddr=3.1,101.6&dirflg=w');
+  for (const [a, b] of [[null, null], [0, 0], [NaN, 1], [91, 0], ['x', 'y']]) assert.equal(maps.mapsLinks(a, b), '', `${a},${b}`);
+});
+await t('W-47 Open in Suna: hidden, store href with the page ct, scheme for the app', async () => {
+  state.eventRow = ev(U(4), 0, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  let r = await render(event, `/e/${U(4)}`);
+  assert.match(r.body, new RegExp(`<a class="btn open-suna" id="open-suna" hidden data-scheme="suna://event\\?id=${U(4)}" href="${STORE('web-e').replace(/[?.]/g, '\\$&').replace(/&/g, '&amp;')}">Open in Suna</a>`));
+  assert(r.body.includes(maps.OPEN_SCRIPT) && r.body.includes(maps.MAPS_HEAD));
+  state.events = [ev(U(1), 0.0045)];
+  r = await render(venue, '/c/worq-ttdi');
+  assert(r.body.includes('data-scheme="suna://venue?slug=worq-ttdi"'));
+  assert(r.body.includes(`id="open-suna" hidden data-scheme="suna://venue?slug=worq-ttdi" href="${STORE('partner-worq-ttdi').replace(/&/g, '&amp;')}"`));
+  assert.match(r.body, /<div class="ev-maps"><a class="btn maps-apple"[^>]*>Apple Maps<\/a><a class="btn maps-google"[^>]*>Google Maps<\/a><\/div>/);
+  r = await render(venue, '/c/nope');
+  assert.doesNotMatch(r.body, /id="open-suna"/, 'an unknown venue has nowhere in the app to open');
 });
 
 console.log(bad ? `\n${bad} failed` : '\nall passed');

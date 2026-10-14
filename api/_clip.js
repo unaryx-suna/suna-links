@@ -16,6 +16,8 @@
 // The date formatting is mirrored from events-data.js: the two repos deploy
 // separately, and these pages must say the same time /events does.
 
+import { MAPS_HEAD, MAPS_CSS, OPEN_SCRIPT } from './_maps.js';
+
 export const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 const HEADERS = { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` };
@@ -196,11 +198,6 @@ export function distanceLabel(km) {
   return km < 1 ? `${Math.max(10, Math.round(km * 100) * 10)} m` : `${km.toFixed(1)} km`;
 }
 
-/** Apple Maps directions to a point, labelled. */
-export function mapsURL(lat, lng, label) {
-  return `https://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(label || '')}`;
-}
-
 /** The Event JSON-LD node /events emits, for one event. */
 export function eventLD(event, url) {
   const city = cityFor(event.latitude, event.longitude);
@@ -272,6 +269,7 @@ export function page({ title, description, canonical, image, body, ld }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com.unaryx.TravelMug.Clip">
+  ${MAPS_HEAD}
   ${tags}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -281,6 +279,8 @@ export function page({ title, description, canonical, image, body, ld }) {
       --sand: #f6cb94; --ink-on-sand: #1e1b16;
       --font: Urbanist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    ${MAPS_CSS}
     body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
     main { max-width: 480px; margin: 0 auto; padding: 24px 20px 140px; }
     h1 { font-size: 28px; line-height: 1.15; margin: 8px 0 6px; }
@@ -294,11 +294,13 @@ export function page({ title, description, canonical, image, body, ld }) {
     .btn { flex: 1 1 140px; text-align: center; padding: 13px 16px; border-radius: 22px; text-decoration: none;
       font-weight: 600; font-size: 15px; border: 1px solid var(--line); color: var(--text); background: var(--card); }
     .events { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-    .ev a { display: flex; gap: 12px; padding: 10px; border-radius: 14px; background: var(--card);
+    .ev > a { display: flex; gap: 12px; padding: 10px; border-radius: 14px; background: var(--card);
       border: 1px solid var(--line); color: inherit; text-decoration: none; }
     .ev img, .ev .ph { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: #222; flex: none; }
     .ev-name { font-weight: 700; font-size: 16px; margin: 2px 0 4px; }
     .ev-meta { color: var(--muted); font-size: 13px; margin: 0; }
+    .ev-maps { display: flex; gap: 8px; margin: 6px 0 0; }
+    .ev-maps .btn { flex: 1 1 0; padding: 8px 10px; font-size: 13px; border-radius: 16px; }
     .empty { color: var(--body); font-size: 15px; line-height: 1.5; }
     .link { color: var(--sand); }
     .over-pill { display: inline-block; margin: 0 0 6px; padding: 3px 8px; border-radius: 999px;
@@ -314,6 +316,7 @@ export function page({ title, description, canonical, image, body, ld }) {
 </head>
 <body>
 ${body}
+${OPEN_SCRIPT}
 </body>
 </html>`;
 }

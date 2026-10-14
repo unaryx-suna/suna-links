@@ -29,6 +29,13 @@
         font-weight: 500; font-size: 15px;
       }
       #book small { display: block; color: #8a8a8a; font-size: 12px; margin-top: 2px; }
+      /* Take me there (W-47): two equal outline buttons, below the yellow one.
+         api/place.js fills the MAPS comment in the body when the place has a pin. */
+      #maps { margin: 20px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+      #maps a {
+        background: none; color: white; border: 1px solid #3a3a3a;
+        padding: 10px 20px; font-weight: 600; font-size: 15px;
+      }
       #offer {
         margin: 0 0 18px; padding: 10px 14px; border-radius: 10px;
         background: rgba(246, 203, 148, .12); color: #f6cb94;
@@ -46,6 +53,7 @@
       <a id="book-link" target="_blank" rel="sponsored noopener">Book tickets ↗</a>
       <small>Suna may earn a commission</small>
     </p>
+    <!--MAPS-->
     <script>
       var parts = window.location.pathname.split('/').filter(Boolean);          
       var placeID = parts[1] || '';           

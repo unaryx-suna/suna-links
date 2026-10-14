@@ -88,6 +88,14 @@ await t('nothing else changes: name, area, note and the Copy bar are all still t
   assert.doesNotMatch(html.a, /Delete|Get tickets/);
 });
 
+await t('W-47 a cancelled or ended stop offers no directions; one still on does', async () => {
+  const [cancelled, ended, on] = stopsOf(html.a);
+  assert.doesNotMatch(cancelled, /map-btn/);
+  assert.doesNotMatch(ended, /map-btn/);
+  assert.match(on, /class="map-btn maps-google"/);
+  assert.match(on, /class="map-btn maps-apple"/);
+});
+
 let chromium;
 try { ({ chromium } = await import('playwright')); } catch { console.log('  (playwright not installed: browser checks skipped)'); }
 if (chromium) {

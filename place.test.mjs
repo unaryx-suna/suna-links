@@ -10,6 +10,7 @@ const SHELL = readFileSync(new URL('./public/place.html', import.meta.url), 'utf
 
 let placesList = { places: [LINKED] };
 let placesFails = false;
+let pin = { latitude: 3.1537, longitude: 101.7134 };
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, text: async () => body, json: async () => body });
@@ -18,7 +19,7 @@ globalThis.fetch = async (url, opts = {}) => {
     if (placesFails) throw new Error('timeout');
     return ok(placesList);
   }
-  if (u.includes('/rest/v1/landmarks')) return ok([{ name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: null, city_id: null }]);
+  if (u.includes('/rest/v1/landmarks')) return ok([{ name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: null, city_id: null, ...pin }]);
   if (u.includes('/rpc/listing_public')) return ok([]);
   return { ok: false, json: async () => [] };
 };
@@ -69,6 +70,30 @@ await t('the link markup: sponsored, new tab, commission line, hidden by default
   assert.match(SHELL, /rel="sponsored noopener"/);
   assert.match(SHELL, /target="_blank"/);
   assert.match(SHELL, /Suna may earn a commission/);
+});
+
+// W-47: Take me there for people without Apple Maps.
+await t('W-47 a place with a pin gets Apple Maps and Google Maps; the Apple one shows only on Apple devices', async () => {
+  pin = { latitude: 3.1537, longitude: 101.7134 };
+  const r = await render(`/place/${PLAIN}`);
+  assert(r.body.includes('<p id="maps"><a class="map-btn maps-apple" href="https://maps.apple.com/?daddr=3.1537,101.7134&amp;dirflg=w">Apple Maps</a>'
+    + '<a class="map-btn maps-google" href="https://www.google.com/maps/dir/?api=1&amp;destination=3.1537,101.7134&amp;travelmode=walking">Google Maps</a></p>'));
+  assert.match(r.body, /classList\.add\('apple-maps'\)/);
+  assert(r.body.includes('html:not(.apple-maps) .maps-apple{display:none !important}'));
+  assert(!r.body.includes('<!--MAPS-->'));
+});
+await t('W-47 no pin, or 0,0: no maps buttons, and the slot is removed', async () => {
+  for (const p of [{ latitude: null, longitude: null }, { latitude: 0, longitude: 0 }]) {
+    pin = p;
+    const r = await render(`/place/${PLAIN}`);
+    assert(!r.body.includes('id="maps"'), JSON.stringify(p));
+    assert(!r.body.includes('<!--MAPS-->'));
+  }
+  pin = { latitude: 3.1537, longitude: 101.7134 };
+});
+await t('W-47 Open in Suna on iPhone is unchanged (the existing suna://place hand-off)', async () => {
+  assert.match(SHELL, /btn\.href = 'suna:\/\/place\?id=' \+ encodeURIComponent\(placeID\)/);
+  assert.match(SHELL, /btn\.textContent = 'Open in Suna'/);
 });
 
 console.log(bad ? `\nplace: ${bad} FAILED` : '\nplace: all passed');

@@ -148,6 +148,13 @@
     .stop-meta { margin: 0; font-size: 12px; font-weight: 600; color: var(--sand); }
     .stop-name { margin: 0; font-size: 18px; font-weight: 600; line-height: 22px; }
     .stop-area { margin: 0; font-size: 13px; color: var(--muted); }
+    /* Take me there (W-47): two equal outline pills, the Follow button's look.
+       api/_preview.js adds them; the Apple one shows on Apple devices only. */
+    .stop-maps { display: flex; gap: 8px; margin: 10px 0 0; }
+    .map-btn {
+      flex: 1 1 0; text-align: center; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px;
+      color: var(--text); font: 600 13px var(--font); text-decoration: none; background: transparent;
+    }
     .stop-note {
       margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--sand);
       font-size: 15px; line-height: 21px; color: var(--body); white-space: pre-line;
