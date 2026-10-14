@@ -14,7 +14,7 @@
 
 import {
   EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenLine, eventState, priceLine, ourImage,
-  eventLD, eventsPage, storeURL, page, send, segment,
+  eventLD, eventPageURL, eventsPage, storeURL, page, send, segment,
 } from './_clip.js';
 import { mapsLinks, openInSuna } from './_maps.js';
 
@@ -96,13 +96,18 @@ export default async function handler(req, res) {
   }
   const tz = zoneFor(e.latitude, e.longitude);
   const city = cityFor(e.latitude, e.longitude);
-  const canonical = `${ORIGIN}/e/${e.id}`;
+  const own = `${ORIGIN}/e/${e.id}`;
+  // The indexable copy is the event's page on unaryx.com (W-45); this one is
+  // the Clip's and the share link's, so it points there and keeps its own
+  // og:url. An ended event's page there redirects away, so it keeps its own.
+  const canonical = (!eventState(e) && eventPageURL(e)) || own;
   const venue = (e.venue && String(e.venue).trim()) || (city && city.name) || '';
   const description = [whenLine(e, tz), venue].filter(Boolean).join(' · ');
   send(res, page({
     title: `${e.name}${venue ? ` · ${venue}` : ''} · Suna`,
     description,
     canonical,
+    ogUrl: own,
     image: ourImage(e.image_url),
     body: eventBody(e),
     ld: eventLD(e, canonical),
