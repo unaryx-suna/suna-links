@@ -190,14 +190,14 @@ const LODGING_WORDS = new Set([
 const FILLER_DESCRIPTION = /^highly rated .+ nearby\.?$/i;
 const MIN_DESCRIPTION_LENGTH = 60;
 
-function hasRealContent(row) {
+export function hasRealContent(row) {
   const description = (row.description || '').trim();
   if (description.length < MIN_DESCRIPTION_LENGTH) return false;
   if (FILLER_DESCRIPTION.test(description)) return false;
   return true;
 }
 
-function isLodging(row) {
+export function isLodging(row) {
   const haystack = `${row.name || ''} ${row.category || ''}`.toLowerCase();
   return haystack
     .split(/[^a-zà-ÿ0-9]+/)

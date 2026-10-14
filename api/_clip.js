@@ -16,7 +16,7 @@
 // The date formatting is mirrored from events-data.js: the two repos deploy
 // separately, and these pages must say the same time /events does.
 
-import { MAPS_HEAD, MAPS_CSS, OPEN_SCRIPT } from './_maps.js';
+import { MAPS_HEAD, MAPS_CSS, PAGE_SCRIPT } from './_maps.js';
 
 export const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -223,6 +223,35 @@ export function whenText(event, timeZone, now = new Date()) {
   return / – |until|weekly|, /.test(base) || event.recurrence_type ? `${base.split(' · ')[0]} · ${hours}` : base;
 }
 
+/** The facts card's When (Ops's W2): a run that has started reads "Until Sun 1 Nov"; its hours go under Hours. */
+export function whenFact(event, timeZone, now = new Date()) {
+  const start = new Date(event.start_time);
+  const end = new Date(event.end_time);
+  const run = event.recurrence_type === 'period' || event.recurrence_type === 'weekly' || !sameLocalDay(start, end, timeZone);
+  if (!run) return whenLine(event, timeZone, now);
+  if (event.recurrence_type !== 'weekly' && start <= now) {
+    const crossesYear = zoned(end, timeZone).year !== zoned(now, timeZone).year;
+    return `Until ${fmtWeekday(end, timeZone)} ${fmtDate(end, timeZone, crossesYear)}`;
+  }
+  return whenLine({ ...event, daily_start_time: null, daily_end_time: null }, timeZone, now);
+}
+
+/**
+ * The facts card's Hours, for a run only (a one-day event's When has its
+ * times). The organiser's own words when Ops has written them (`hours_text`,
+ * I-100); else the hours the description spells out; else the daily times.
+ * Never "daily" when the description says otherwise (W-48).
+ */
+export function hoursFact(event, timeZone) {
+  const own = typeof event.hours_text === 'string' && event.hours_text.trim();
+  if (own) return own;
+  const start = new Date(event.start_time);
+  const end = new Date(event.end_time);
+  const run = event.recurrence_type === 'period' || event.recurrence_type === 'weekly' || !sameLocalDay(start, end, timeZone);
+  if (!run || !event.daily_start_time || !event.daily_end_time) return null;
+  return hoursFromDescription(event.description) || `${event.daily_start_time}–${event.daily_end_time} daily`;
+}
+
 /** 'ended' once its end time has passed, else null. (Cancelled rows aren't readable; see the top.) */
 export function eventState(event, now = Date.now()) {
   const ends = Date.parse(event && event.end_time || '');
@@ -291,12 +320,87 @@ export function eventLD(event, url) {
   return node;
 }
 
+// ---- W-48 (2): the rows and labels on Ops's cleaner /e/ and /c/ ----
+
+/**
+ * The short orange label over an event: "On now · until 7pm", "Tonight ·
+ * 7:30pm", "Today · 10am", "Sat 17 Oct · 8pm", "From Sat 17 Oct". Shown in
+ * small caps (an eyebrow), so it's written in sentence case here.
+ */
+export function eyebrow(event, timeZone, now = new Date()) {
+  const start = new Date(event.start_time);
+  const end = new Date(event.end_time);
+  const tonight = endOfLocalDay(now, timeZone);
+  if (start <= now) {
+    if (end <= tonight) return `On now · until ${fmtTime(end, timeZone)}`;
+    return 'On now';
+  }
+  const multiDay = event.recurrence_type === 'period' || !sameLocalDay(start, end, timeZone);
+  if (start <= tonight) {
+    const z = zoned(start, timeZone);
+    return `${z.hour >= 17 ? 'Tonight' : 'Today'} · ${fmtTime(start, timeZone)}`;
+  }
+  const day = `${fmtWeekday(start, timeZone)} ${fmtDate(start, timeZone, false)}`;
+  return multiDay ? `From ${day}` : `${day} · ${fmtTime(start, timeZone)}`;
+}
+
+/** "Free", "From A$35", "Paid", or null: the price as a row or the facts card says it. */
+export function priceShort(event) {
+  if (event.price_type === 'free') return 'Free';
+  const p = priceLine(event);
+  if (p) return `From ${p}`;
+  return event.price_type === 'paid' ? 'Paid' : null;
+}
+
+/** A whole-row link to an event's /e/ page (Ops: no buttons on rows). */
+export function eventRow(event, { timeZone, now = new Date(), km = null } = {}) {
+  const img = ourImage(event.image_url);
+  const venue = event.venue && String(event.venue).trim();
+  const meta = [priceShort(event), venue, km != null ? distanceLabel(km) : null].filter(Boolean).join(' · ');
+  return `<li><a class="row" href="/e/${escapeHtml(event.id)}">`
+    + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
+    + `<span class="row-text"><span class="row-eyebrow">${escapeHtml(eyebrow(event, timeZone, now))}</span>`
+    + `<span class="row-name">${escapeHtml(event.name)}</span>`
+    + (meta ? `<span class="row-meta">${escapeHtml(meta)}</span>` : '')
+    + '</span><span class="chev" aria-hidden="true">›</span></a></li>';
+}
+
+/**
+ * Approved events on at some point in the next `days` days within `km` of a
+ * point, nearest first, each with its distance. One bounded query.
+ */
+export async function eventsAround(lat, lng, { km, days = 7, now = new Date(), limit = 300 } = {}) {
+  const dLat = km / 111;
+  const dLng = km / (111 * Math.cos((lat * Math.PI) / 180));
+  const until = new Date(now.getTime() + days * 86400000);
+  const rows = await rest('world_events?status=eq.approved'
+    + `&end_time=gte.${encodeURIComponent(now.toISOString())}`
+    + `&start_time=lte.${encodeURIComponent(until.toISOString())}`
+    + `&latitude=gte.${lat - dLat}&latitude=lte.${lat + dLat}`
+    + `&longitude=gte.${lng - dLng}&longitude=lte.${lng + dLng}`
+    + `&select=${EVENT_SELECT}&order=start_time.asc&limit=${limit}`);
+  return rows
+    .map((e) => ({ ...e, km: distanceKm(lat, lng, e.latitude, e.longitude) }))
+    .filter((e) => e.km <= km)
+    .sort((a, b) => a.km - b.km);
+}
+
+/** The line at the foot of every page; the commission note only where a page links to tickets. */
+export function footer({ tickets = false } = {}) {
+  return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a> · events and places within a short walk'
+    + (tickets ? '<br>Suna may earn a commission on some ticket links' : '') + '</footer>';
+}
+
+/** The Suna mark, top left, back to unaryx.com/events (Ops's W1). */
+export const MARK = '<a class="mark" href="https://unaryx.com/events"><span class="mark-dot" aria-hidden="true"></span>Suna</a>';
+
 /**
  * The page around a body. Same palette and font as /i/. The meta tag is what
  * surfaces the Clip card in Safari: both routes are registered experiences.
  */
-export function page({ title, description, canonical, ogUrl, image, body, ld }) {
+export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '' }) {
   const tags = [
+    noindex ? '<meta name="robots" content="noindex">' : '',
     `<title>${escapeHtml(title)}</title>`,
     `<link rel="canonical" href="${escapeHtml(canonical)}">`,
     `<meta name="description" content="${escapeHtml(description)}">`,
@@ -323,51 +427,94 @@ export function page({ title, description, canonical, ogUrl, image, body, ld }) 
   ${tags}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap">
   <style>
-    :root { --bg: #111; --card: #1a1a1a; --line: #2a2a2a; --text: #fff; --body: #dadada; --muted: #979592;
-      --sand: #f6cb94; --ink-on-sand: #1e1b16;
+    /* Ops's W1–W6 (Figma 2602:3659): #111 ground, #222 cards, one sand button per page. */
+    :root { --bg: #111; --card: #222; --line: #5a5a5a; --text: #fff; --body: #d0d0d0; --muted: #9a9a9a;
+      --sand: #f6cb94; --ink-on-sand: #111; --now: #ff8c18; --pill: #2c2c2c; --sheet: #2b2b2b;
       --font: Urbanist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
     ${MAPS_CSS}
     body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
-    main { max-width: 480px; margin: 0 auto; padding: 24px 20px 140px; }
-    h1 { font-size: 28px; line-height: 1.15; margin: 8px 0 6px; }
-    .sub { color: var(--muted); font-size: 15px; margin: 0 0 20px; }
-    .hero { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px; background: var(--card); display: block; }
-    .facts { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 10px; }
-    .facts li { color: var(--body); font-size: 15px; }
-    .fact-sub { display: block; color: var(--sand); font-size: 13px; margin-top: 2px; }
-    .facts b { color: var(--muted); font-weight: 600; display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-    .desc { color: var(--body); font-size: 15px; line-height: 1.5; white-space: pre-line; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
-    .btn { flex: 1 1 140px; text-align: center; padding: 13px 16px; border-radius: 22px; text-decoration: none;
-      font-weight: 600; font-size: 15px; border: 1px solid var(--line); color: var(--text); background: var(--card); }
-    .events { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-    .ev > a { display: flex; gap: 12px; padding: 10px; border-radius: 14px; background: var(--card);
-      border: 1px solid var(--line); color: inherit; text-decoration: none; }
-    .ev img, .ev .ph { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: #222; flex: none; }
-    .ev-name { font-weight: 700; font-size: 16px; margin: 2px 0 4px; }
-    .ev-meta { color: var(--muted); font-size: 13px; margin: 0; }
-    .ev-maps { display: flex; gap: 8px; margin: 6px 0 0; }
-    .ev-maps .btn { flex: 1 1 0; padding: 8px 10px; font-size: 13px; border-radius: 16px; }
+    main { max-width: 480px; margin: 0 auto; padding: 0 16px 32px; }
+    .mark { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 6px; border-radius: 999px;
+      background: rgba(0,0,0,.45); color: var(--text); font-weight: 700; font-size: 14px; text-decoration: none; }
+    .mark-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--sand); }
+    .hero { position: relative; margin: 0 -16px; min-height: 360px; display: flex; flex-direction: column;
+      justify-content: space-between; padding: 16px; background: linear-gradient(#5c4d3d, var(--bg)); overflow: hidden; }
+    .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(17,17,17,0) 30%, var(--bg)); }
+    .hero > * { position: relative; z-index: 1; }
+    .hero > img { z-index: 0; }
+    .hero-top { align-self: flex-start; }
+    .pills { display: flex; gap: 7px; margin: 0 0 7px; }
+    .pill { padding: 4px 9px; border-radius: 999px; background: var(--pill); color: #fff; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .02em; }
+    .pill-now { background: var(--now); }
+    .pill-over { background: #4a4a4a; color: var(--body); text-transform: none; letter-spacing: 0; }
+    h1 { font-size: 30px; line-height: 1.2; font-weight: 700; margin: 0; }
+    .hero-sub { color: var(--body); font-size: 14px; margin: 6px 0 0; }
+    .over .hero > img { filter: grayscale(1); }
+    .over h1, .over .hero-sub { opacity: .6; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin: 20px 0 24px; }
+    .actions > * { grid-column: 1 / -1; }
+    .actions .half { grid-column: auto; }
+    .btn { display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 16px; border-radius: 999px;
+      text-decoration: none; font-weight: 600; font-size: 16px; background: var(--sand); color: var(--ink-on-sand); border: 0; }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .note { text-align: center; font-size: 14px; font-weight: 600; margin: 0; }
+    .caption { text-align: center; color: var(--muted); font-size: 12px; margin: -2px 0 4px; }
+    .facts { background: var(--card); border-radius: 18px; padding: 14px; margin: 0 0 28px; display: grid; gap: 10px;
+      font-weight: 500; }
+    .facts div { display: flex; gap: 12px; align-items: flex-start; }
+    .facts dt { width: 56px; flex: none; color: var(--muted); font-size: 13px; line-height: 19px; }
+    .facts dd { margin: 0; flex: 1; font-size: 14px; line-height: 19px; white-space: pre-line; }
+    h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+    .desc { color: var(--body); font-size: 15px; line-height: 21px; margin: 0 0 10px; white-space: pre-line; }
+    .link { color: var(--sand); font-size: 14px; font-weight: 600; text-decoration: none; }
+    .about { margin: 0 0 32px; }
+    .rows { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
+    .row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 10px 40px 10px 10px;
+      border-radius: 20px; background: var(--card); color: inherit; text-decoration: none; }
+    .row img, .row .ph { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #3b332b; flex: none; }
+    .row-place { min-height: 72px; }
+    .row-place img, .row-place .ph { width: 52px; height: 52px; }
+    .row-text { display: grid; gap: 3px; min-width: 0; }
+    .row-eyebrow { color: var(--now); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+    .row-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chev { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 24px; font-weight: 500; }
+    .state { background: var(--card); border-radius: 18px; padding: 16px; margin: 20px 0 36px; }
+    .state p { margin: 0; }
+    .state-lead { font-size: 16px; font-weight: 600; }
+    .state-sub { color: var(--muted); font-size: 13px; margin-top: 8px !important; }
     .empty { color: var(--body); font-size: 15px; line-height: 1.5; }
-    .link { color: var(--sand); }
-    .over-pill { display: inline-block; margin: 0 0 6px; padding: 3px 8px; border-radius: 999px;
-      background: #3a3a3a; color: #d6d6d6; font-size: 11px; font-weight: 600; }
-    .over .hero { filter: grayscale(1); opacity: .5; }
-    .over h1, .over .sub, .over .facts, .over .desc { opacity: .5; }
-    .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-      background: linear-gradient(to top, var(--bg) 70%, transparent); text-align: center; }
-    .cta { display: block; max-width: 440px; margin: 0 auto; background: var(--sand); color: var(--ink-on-sand);
-      padding: 15px 20px; border-radius: 26px; text-decoration: none; font-weight: 600; font-size: 17px; }
-    .bar-sub { margin: 8px auto 0; font-size: 12px; color: var(--muted); }
+    .foot { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.6; margin: 32px 0 0; }
+    .foot a { color: inherit; text-decoration: none; }
+    .clipbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; color: var(--muted); font-size: 13px; }
+    .clipbar a { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; font-size: 16px; text-decoration: none; }
+    .clipbar .mark-dot { width: 22px; height: 22px; }
+    .venue-h1 { font-size: 28px; margin: 16px 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 26px; }
+    .has-bar main { padding-bottom: 150px; }
+    .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid rgba(90,90,90,.5);
+      padding: 16px 16px calc(12px + env(safe-area-inset-bottom)); }
+    .bar .btn { max-width: 448px; margin: 0 auto; }
+    .bar .caption { margin: 8px 0 0; }
+    .sheet-dim { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.5); display: flex; align-items: flex-end; justify-content: center;
+      padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); }
+    .sheet { width: 100%; max-width: 386px; display: grid; gap: 12px; }
+    .sheet-group { background: var(--sheet); border-radius: 16px; overflow: hidden; display: grid; text-align: center; }
+    .sheet-title { color: var(--muted); font-size: 13px; font-weight: 500; margin: 0; padding: 18px 16px; }
+    .sheet-opt { color: var(--sand); font-size: 18px; font-weight: 600; text-decoration: none; padding: 18px 16px;
+      border-top: 1px solid rgba(90,90,90,.6); }
+    .sheet-cancel { color: var(--text); font: 700 18px var(--font); border: 0; height: 60px; cursor: pointer; }
   </style>
 </head>
-<body>
+<body${bodyClass ? ` class="${bodyClass}"` : ''}>
 ${body}
-${OPEN_SCRIPT}
+${PAGE_SCRIPT}
 </body>
 </html>`;
 }

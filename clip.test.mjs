@@ -27,7 +27,10 @@ globalThis.fetch = async (url) => {
   if (u.startsWith('https://unaryx.com/clip/venues.json')) {
     return state.venuesOk ? ok({ venues: [VENUE] }) : { ok: false, status: 500, json: async () => ({}) };
   }
-  if (u.includes('/rest/v1/landmarks')) return ok(state.landmark ? [state.landmark] : []);
+  if (u.includes('/rest/v1/landmarks')) {
+    if (u.includes('id=eq.')) return ok(state.landmark ? [state.landmark] : []);
+    return ok(state.places || []);
+  }
   if (u.includes('/rest/v1/world_events')) {
     if (state.restFails) return { ok: false, status: 503, json: async () => ({}) };
     if (u.includes('id=eq.')) return ok(state.eventRow ? [state.eventRow] : []);
@@ -36,7 +39,7 @@ globalThis.fetch = async (url) => {
   return { ok: false, status: 404, json: async () => ({}) };
 };
 
-const { default: venue, pickStep, onNowLine } = await import('./api/venue.js');
+const { default: venue, pickStep, splitTonight } = await import('./api/venue.js');
 const { default: event, eventId } = await import('./api/event.js');
 
 async function render(handler, url) {
@@ -69,28 +72,29 @@ await t('vercel.json: /c/ and /e/ rewrite to their handlers, old rewrites kept',
   for (const [s, d] of [['/i/:path*', '/api/itinerary'], ['/place/:path*', '/api/place'], ['/city/:path*', '/city.html'], ['/trip/:path*', '/trip.html']]) assert.equal(map[s], d);
 });
 
-await t('/c/: events within 800 m only, when there are any', async () => {
+await t('/c/: events within 800 m only, when there are any (Ops W6: Near <venue>, a 10-minute walk)', async () => {
   state.events = [ev(U(1), 0.0045), ev(U(2), 0.018), ev(U(3), 0.09)];
   const r = await render(venue, '/c/worq-ttdi');
   assert.equal(r.status, 200);
-  assert.match(r.body, /<h1>What&#39;s on near WORQ TTDI<\/h1>/);
-  assert.match(r.body, /Today, a short walk away/);
-  assert.match(r.body, new RegExp(`href="/e/${U(1)}"`));
+  assert.match(r.body, /<h1 class="venue-h1">Near WORQ TTDI<\/h1>/);
+  assert.match(r.body, /<p class="sub">Within a 10-minute walk<\/p>/);
+  assert.match(r.body, /· Card from WORQ TTDI/);
+  assert.match(r.body, new RegExp(`<a class="row" href="/e/${U(1)}">`));
   assert.doesNotMatch(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
 });
 await t('/c/: widens to 3 km, then to the city', async () => {
   state.events = [ev(U(2), 0.018), ev(U(3), 0.09)];
   let r = await render(venue, '/c/worq-ttdi');
-  assert.match(r.body, /Today, within 3 km/);
+  assert.match(r.body, /Within 3 km/);
   assert.match(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
   state.events = [ev(U(3), 0.09)];
   r = await render(venue, '/c/worq-ttdi');
-  assert.match(r.body, /Today in Kuala Lumpur/);
+  assert.match(r.body, /Around Kuala Lumpur/);
   assert.match(r.body, new RegExp(U(3)));
 });
-await t('/c/: the query is approved rows, today only, a box around the venue', async () => {
+await t('/c/: the query is approved rows, the next 7 days, a box around the venue', async () => {
   calls.length = 0;
   await render(venue, '/c/worq-ttdi');
   const q = calls.find((c) => c.includes('/rest/v1/world_events'));
@@ -99,13 +103,45 @@ await t('/c/: the query is approved rows, today only, a box around the venue', a
   assert.match(q, /start_time=lte\./);
   assert.match(q, /latitude=gte\..*latitude=lte\..*longitude=gte\..*longitude=lte\./);
   const until = Date.parse(decodeURIComponent(q.match(/start_time=lte\.([^&]+)/)[1]));
-  assert(until > now && until - now <= 24 * H, 'ends at the venue\'s midnight');
+  assert(until > now + 6 * 24 * H && until - now <= 7 * 24 * H + 60000, 'a week ahead');
 });
-await t('/c/: nothing today anywhere → a link to the city\'s /events, still 200', async () => {
+await t('/c/: On tonight and This week split at the venue\'s midnight; rows have no buttons', async () => {
+  const later = now + 3 * 24 * H;
+  state.events = [ev(U(1), 0.0045), ev(U(2), 0.004, { start_time: iso(later), end_time: iso(later + 2 * H) })];
+  const r = await render(venue, '/c/worq-ttdi');
+  const tonight = r.body.indexOf('<h2>On tonight</h2>');
+  const week = r.body.indexOf('<h2>This week</h2>');
+  assert(tonight > 0 && week > tonight);
+  assert(r.body.indexOf(U(1)) > tonight && r.body.indexOf(U(1)) < week);
+  assert(r.body.indexOf(U(2)) > week);
+  assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"|ev-maps/);
+  assert.match(r.body, /<span class="row-meta">From RM35 · Taman Tun Park · 500 m<\/span>/);
+  const s2 = splitTonight([{ start_time: iso(now + H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
+  assert.deepEqual([s2.tonight.length, s2.week.length], [1, 1]);
+});
+await t('/c/: Worth a walk: the two nearest places within 800 m, never lodging or filler, linked to /place/', async () => {
+  const desc = 'A neighbourhood cafe with good coffee, long tables and a garden at the back worth sitting in.';
+  const pl = (id, dLat, extra = {}) => ({ id, name: `Place ${id}`, category: 'Cafe & Workspace', description: desc,
+    cover_image_url: null, latitude: VENUE.lat + dLat, longitude: VENUE.lng, ...extra });
+  state.events = [ev(U(1), 0.0045)];
+  state.places = [pl('p3', 0.006), pl('p1', 0.002), pl('hotel', 0.001, { name: 'Grand Hotel' }),
+    pl('filler', 0.001, { description: 'Highly rated Pub nearby.' }), pl('p2', 0.004), pl('far', 0.02)];
+  calls.length = 0;
+  const r = await render(venue, '/c/worq-ttdi');
+  assert.match(r.body, /<h2>Worth a walk<\/h2>/);
+  assert.match(r.body, /<a class="row row-place" href="\/place\/p1">/);
+  assert.match(r.body, /<a class="row row-place" href="\/place\/p2">/);
+  assert.doesNotMatch(r.body, /\/place\/(p3|hotel|filler|far)"/);
+  assert.match(r.body, /Cafe &amp; Workspace · 3 min walk/);
+  assert.match(calls.find((c) => c.includes('/rest/v1/landmarks')), /is_hidden=eq\.false/);
+  state.places = [];
+  assert.doesNotMatch((await render(venue, '/c/worq-ttdi')).body, /Worth a walk/);
+});
+await t('/c/: nothing this week anywhere → a link to the city\'s /events, still 200', async () => {
   state.events = [];
   const r = await render(venue, '/c/worq-ttdi');
   assert.equal(r.status, 200);
-  assert.match(r.body, /Nothing listed near WORQ TTDI today/);
+  assert.match(r.body, /Nothing listed nearby this week/);
   assert.match(r.body, /href="https:\/\/unaryx\.com\/events\/kuala-lumpur"/);
 });
 await t('/c/: Get Suna carries the venue\'s ct; Clip meta and og: tags present', async () => {
@@ -118,12 +154,10 @@ await t('/c/: Get Suna carries the venue\'s ct; Clip meta and og: tags present',
 await t('/c/: unknown slug, empty slug, and an unreachable venue list → plain page, 200', async () => {
   for (const [url, ok] of [['/c/nope', true], ['/c/', true], ['/c/worq-ttdi', false]]) {
     state.venuesOk = ok;
-    // The handler caches the list for ten minutes; a fresh import isn't needed
-    // for 'nope', and the failing case is covered by the empty slug path below.
     const r = await render(venue, url);
     assert.equal(r.status, 200, url);
     if (url !== '/c/worq-ttdi') {
-      assert.match(r.body, /<h1>What&#39;s on near you<\/h1>/, url);
+      assert.match(r.body, /<h1 class="venue-h1">What's on near you<\/h1>/, url);
       assert(r.body.includes(`href="${STORE('web-c').replace(/&/g, '&amp;')}"`), url);
       assert.match(r.body, /href="https:\/\/unaryx\.com\/events"/, url);
     }
@@ -134,7 +168,8 @@ await t('/c/: a database failure still renders the venue, 200', async () => {
   state.restFails = true;
   const r = await render(venue, '/c/worq-ttdi');
   assert.equal(r.status, 200);
-  assert.match(r.body, /Nothing listed near WORQ TTDI today/);
+  assert.match(r.body, /Near WORQ TTDI/);
+  assert.match(r.body, /Nothing listed nearby this week/);
   state.restFails = false;
 });
 await t('/c/: a hostile event name is escaped', async () => {
@@ -143,17 +178,21 @@ await t('/c/: a hostile event name is escaped', async () => {
   assert.doesNotMatch(r.body, /<script>alert/);
   assert.match(r.body, /&lt;script&gt;/);
 });
-await t('/c/: on now says "until" only when it closes today', async () => {
+await t('eyebrow: on now until (closes today), on now, tonight, a later day, a run', async () => {
+  const { eyebrow } = await import('./api/_clip.js');
   const tz = 'Asia/Kuala_Lumpur';
-  const n = new Date();
-  assert.match(onNowLine({ end_time: iso(n.getTime() + 60000) }, tz, n), /^On now · until \d/);
-  assert.equal(onNowLine({ end_time: iso(n.getTime() + 40 * 24 * H), daily_start_time: '11:00', daily_end_time: '19:00' }, tz, n), 'On now · 11:00–19:00');
-  assert.equal(onNowLine({ end_time: iso(n.getTime() + 40 * 24 * H) }, tz, n), 'On now');
+  const n = new Date('2027-03-05T04:00:00Z'); // 12:00 in KL
+  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now · until 7:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-01T01:00:00Z', end_time: '2027-04-05T11:00:00Z', recurrence_type: 'period' }, tz, n), 'On now');
+  assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight · 7:30pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today · 2:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar · 8:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-06T02:00:00Z', end_time: '2027-03-20T10:00:00Z', recurrence_type: 'period' }, tz, n), 'From Sat 6 Mar');
 });
 await t('pickStep: 800 m beats 3 km beats the city; nothing → null', async () => {
   const at = (km) => ({ km, latitude: VENUE.lat, longitude: VENUE.lng });
   assert.equal(pickStep([at(0.5), at(2)], null).events.length, 1);
-  assert.equal(pickStep([at(2.9)], null).label, 'Today, within 3 km');
+  assert.equal(pickStep([at(2.9)], null).label, 'Within 3 km');
   assert.equal(pickStep([at(10)], null), null);
 });
 
@@ -164,18 +203,27 @@ await t('/e/: id forms (bare, e-<uuid>, query) and junk', async () => {
   assert.equal(eventId('/e/nope'), null);
   assert.equal(eventId("/e/1' or 1=1"), null);
 });
-await t('/e/: an event renders name, local time, venue, tickets, maps, JSON-LD', async () => {
+await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna; facts; JSON-LD', async () => {
   // 19:30–22:00 in Kuala Lumpur (UTC+8) on a fixed future date.
   state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  state.events = [];
   const r = await render(event, `/e/${U(4)}`);
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1>Event 4444<\/h1>/);
-  assert.match(r.body, /Fri 5 Mar 2027 · 7:30pm–10:00pm/);
-  assert.match(r.body, /Taman Tun Park, Kuala Lumpur/);
-  assert.match(r.body, new RegExp(`href="https://unaryx\\.com/go/e-${U(4)}" rel="nofollow noopener">Get tickets ↗`));
-  assert.match(r.body, /<a class="btn maps-apple" href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;dirflg=w">Apple Maps<\/a>/);
-  assert.match(r.body, /<a class="btn maps-google" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.14231\d*,101\.6295679&amp;travelmode=walking">Google Maps<\/a>/);
-  assert(r.body.includes(`data-scheme="suna://event?id=${U(4)}"`));
+  assert.match(r.body, /<p class="hero-sub">Taman Tun Park<\/p>/);
+  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar · 7:30pm<\/span><span class="pill">Paid<\/span>/);
+  assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027 · 7:30pm–10:00pm<\/dd>/);
+  assert.match(r.body, /<dt>Where<\/dt><dd>Taman Tun Park, Kuala Lumpur<\/dd>/);
+  assert.match(r.body, /<dt>Price<\/dt><dd>From RM35<\/dd>/);
+  const actions = r.body.match(/<div class="actions">([\s\S]*?)<\/div><\/div><\/div><\/div>|<div class="actions">([\s\S]*?)<\/div>\n/)[0];
+  const order = ['>Get tickets ↗<', '>Directions<', '>Save in Suna<'].map((x) => actions.indexOf(x));
+  assert(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `order ${order}`);
+  assert.equal((r.body.match(/class="btn"/g) || []).length, 1, 'one sand button');
+  assert.match(r.body, new RegExp(`<a class="btn" href="https://unaryx\\.com/go/e-${U(4)}" rel="nofollow noopener">Get tickets ↗</a><a class="btn btn-outline half" id="directions"`));
+  assert.match(r.body, /<a class="btn btn-outline half save-suna" data-scheme="suna:\/\/event\?id=4444/);
+  assert.doesNotMatch(r.body, /Get tickets ↗<\/a><p/, 'no line under Get tickets');
+  assert.match(r.body, /Suna may earn a commission on some ticket links/);
+  assert.doesNotMatch(r.body, /Open in Suna|Get Suna|class="bar"/);
   assert(r.body.includes(CLIP_META));
   assert(r.body.includes(`href="${STORE('web-e').replace(/&/g, '&amp;')}"`));
   const ld = JSON.parse(r.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
@@ -187,7 +235,34 @@ await t('/e/: an event renders name, local time, venue, tickets, maps, JSON-LD',
   assert.equal(ld.url, `https://unaryx.com/events/kuala-lumpur/event-4444-${U(4).slice(0, 8)}`);
   assert(r.body.includes(`<link rel="canonical" href="https://unaryx.com/events/kuala-lumpur/event-4444-${U(4).slice(0, 8)}">`));
   assert(r.body.includes(`<meta property="og:url" content="https://app.unaryx.com/e/${U(4)}">`));
-  assert.doesNotMatch(r.body, /<p class="over-pill">/);
+  assert.doesNotMatch(r.body, /noindex/);
+  assert.match(r.body, /<a class="mark" href="https:\/\/unaryx\.com\/events">/);
+});
+await t('/e/: Directions is Google Maps in the HTML, with the Apple/Google sheet for iPhone', async () => {
+  state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  const r = await render(event, `/e/${U(4)}`);
+  assert.match(r.body, /id="directions" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.14231\d*,101\.6295679&amp;travelmode=walking">Directions<\/a>/);
+  assert.match(r.body, /<div class="sheet-dim" id="dir-sheet" hidden>/);
+  assert.match(r.body, /<p class="sheet-title" id="dir-title">Directions to Taman Tun Park<\/p>/);
+  assert.match(r.body, /<a class="sheet-opt" href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;dirflg=w">Apple Maps<\/a>/);
+  assert.match(r.body, />Cancel<\/button>/);
+  state.eventRow = ev(U(4), 0, { latitude: 0, longitude: 0, start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  assert.doesNotMatch((await render(event, `/e/${U(4)}`)).body, /id="directions"/, 'no pin, no Directions');
+});
+await t('/e/: More on this week: 3 nearest in 5 km, never this one, rows link to /e/', async () => {
+  state.eventRow = ev(U(4), 0, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  state.events = [ev(U(4), 0), ev(U(1), 0.001), ev(U(2), 0.002), ev(U(3), 0.003), ev(U(5), 0.004), ev(U(6), 0.2)];
+  const r = await render(event, `/e/${U(4)}`);
+  assert.match(r.body, /<h2>More on this week<\/h2>/);
+  const rows = [...r.body.matchAll(/<a class="row" href="\/e\/([0-9a-f-]+)">/g)].map((m) => m[1][0]);
+  assert.deepEqual(rows.sort(), ['1', '2', '3']);
+  state.events = [ev(U(6), 0.2)];
+  assert.match((await render(event, `/e/${U(4)}`)).body, new RegExp(`href="/e/${U(6)}"`), 'else the city');
+  // Another date of the same show is this one too; a second listing shows once.
+  state.events = [ev(U(1), 0.001, { name: 'Event 4444' }), ev(U(2), 0.002), ev(U(3), 0.003, { name: 'Event 2222' })];
+  const ids = [...(await render(event, `/e/${U(4)}`)).body.matchAll(/<a class="row" href="\/e\/([0-9a-f-]+)">/g)].map((m) => m[1][0]);
+  assert.deepEqual(ids, ['2']);
+  state.events = [];
 });
 await t('/e/: the query is one approved row by id', async () => {
   calls.length = 0;
@@ -195,25 +270,35 @@ await t('/e/: the query is one approved row by id', async () => {
   const q = calls.find((c) => c.includes('/rest/v1/world_events'));
   assert.match(q, new RegExp(`id=eq\\.${U(4)}&status=eq\\.approved&`));
 });
-await t('/e/: an ended event is greyed, with no tickets or maps', async () => {
+await t('/e/: an ended event (Ops W4): Ended pill, the state card, on this week instead, noindex, no buttons', async () => {
   state.eventRow = ev(U(5), 0, { start_time: iso(now - 5 * H), end_time: iso(now - H) });
+  state.events = [ev(U(1), 0.001)];
   const r = await render(event, `/e/${U(5)}`);
   assert.match(r.body, /<main class="over">/);
-  assert.match(r.body, /<p class="over-pill">Ended<\/p>/);
-  assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"/);
-  assert.match(r.body, /href="https:\/\/unaryx\.com\/events\/kuala-lumpur"/);
+  assert.match(r.body, /<span class="pill pill-over">Ended<\/span>/);
+  assert.match(r.body, /<p class="state-lead">This ended on [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}\.<\/p>/);
+  assert.match(r.body, /Here’s what’s on near Taman Tun Park this week\./);
+  assert.match(r.body, /<h2>On this week instead<\/h2>/);
+  assert.match(r.body, new RegExp(`href="/e/${U(1)}"`));
+  assert.match(r.body, /<a class="btn btn-outline" href="https:\/\/unaryx\.com\/events\/kuala-lumpur">See what’s on in Kuala Lumpur<\/a>/);
+  assert.match(r.body, /<meta name="robots" content="noindex">/);
+  assert.doesNotMatch(r.body.split('<script>(function(){')[0], /Get tickets|id="directions"|save-suna|commission/);
+  state.events = [];
 });
-await t('/e/: no price → no offers; free → Sign up and price 0', async () => {
+await t('/e/: no price → no offers, Save in Suna; free → price 0, More from the organiser', async () => {
   state.eventRow = ev(U(6), 0, { price_type: null, price_amount: null, start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   let r = await render(event, `/e/${U(6)}`);
   let ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers, undefined);
+  assert.match(r.body, /<a class="btn save-suna"/);
+  assert.doesNotMatch(r.body, /Get tickets|<dt>Price|no ticket needed|class="pill">/);
   state.eventRow = ev(U(6), 0, { price_type: 'free', price_amount: null, start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   r = await render(event, `/e/${U(6)}`);
   ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers.price, 0);
-  assert.match(r.body, />More info ↗</);   // W-48: a free event's link is information, not a ticket
-  assert.doesNotMatch(r.body, /no ticket needed/);
+  assert.match(r.body, new RegExp(`<a class="link" href="https://unaryx\\.com/go/e-${U(6)}" rel="nofollow noopener">More from the organiser ↗</a>`));
+  assert.match(r.body, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"/);
+  assert.doesNotMatch(r.body, /Get tickets|commission/);
 });
 await t('/e/: unknown, junk and database failure → 200 with a link to /events', async () => {
   state.eventRow = null;
@@ -259,26 +344,27 @@ await t('W-47 the split runs in the browser, so one cached page serves every dev
   // un-hides Apple Maps, and the CSS hides it otherwise.
   assert(maps.MAPS_HEAD.includes(String(maps.APPLE_UA)));
   assert.equal(maps.MAPS_CSS, 'html:not(.apple-maps) .maps-apple{display:none !important}');
-  assert(maps.OPEN_SCRIPT.includes(String(maps.IOS_UA)));
-  assert.match(maps.OPEN_SCRIPT, /setTimeout\(function\(\)\{if\(document\.hidden\|\|Date\.now\(\)-t>2000\)return;window\.location\.href=store\},1500\)/);
+  // W-48 (2): the Directions sheet and Save in Suna's hand-off, iPhone and iPad (iPadOS says Macintosh, with touch).
+  assert(maps.PAGE_SCRIPT.includes(String(maps.IOS_UA)) && maps.PAGE_SCRIPT.includes('maxTouchPoints>1'));
+  assert.match(maps.PAGE_SCRIPT, /setTimeout\(function\(\)\{if\(document\.hidden\|\|Date\.now\(\)-t>2000\)return;window\.location\.href=store\},1500\)/);
 });
 await t('W-47 maps links: walking directions, and nothing for a missing or 0,0 pin', async () => {
   assert.equal(maps.googleMapsURL(3.1, 101.6), 'https://www.google.com/maps/dir/?api=1&destination=3.1,101.6&travelmode=walking');
   assert.equal(maps.appleMapsURL(3.1, 101.6), 'https://maps.apple.com/?daddr=3.1,101.6&dirflg=w');
   for (const [a, b] of [[null, null], [0, 0], [NaN, 1], [91, 0], ['x', 'y']]) assert.equal(maps.mapsLinks(a, b), '', `${a},${b}`);
 });
-await t('W-47 Open in Suna: hidden, store href with the page ct, scheme for the app', async () => {
+await t('W-48 (2) Save in Suna: store href with the page ct everywhere, the app scheme for iPhone; See it all in Suna on /c/', async () => {
   state.eventRow = ev(U(4), 0, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   let r = await render(event, `/e/${U(4)}`);
-  assert.match(r.body, new RegExp(`<a class="btn open-suna" id="open-suna" hidden data-scheme="suna://event\\?id=${U(4)}" href="${STORE('web-e').replace(/[?.]/g, '\\$&').replace(/&/g, '&amp;')}">Open in Suna</a>`));
-  assert(r.body.includes(maps.OPEN_SCRIPT) && r.body.includes(maps.MAPS_HEAD));
+  assert(r.body.includes(`data-scheme="suna://event?id=${U(4)}" href="${STORE('web-e').replace(/&/g, '&amp;')}">Save in Suna</a>`));
+  assert(r.body.includes(maps.PAGE_SCRIPT));
   state.events = [ev(U(1), 0.0045)];
   r = await render(venue, '/c/worq-ttdi');
-  assert(r.body.includes('data-scheme="suna://venue?slug=worq-ttdi"'));
-  assert(r.body.includes(`id="open-suna" hidden data-scheme="suna://venue?slug=worq-ttdi" href="${STORE('partner-worq-ttdi').replace(/&/g, '&amp;')}"`));
-  assert.match(r.body, /<div class="ev-maps"><a class="btn maps-apple"[^>]*>Apple Maps<\/a><a class="btn maps-google"[^>]*>Google Maps<\/a><\/div>/);
+  assert(r.body.includes(`<a class="btn save-suna" data-scheme="suna://venue?slug=worq-ttdi" href="${STORE('partner-worq-ttdi').replace(/&/g, '&amp;')}">See it all in Suna</a>`));
+  assert.match(r.body, /<body class="has-bar">/);
+  assert.equal((r.body.match(/class="btn[ "]/g) || []).length, 1, 'one sand button');
   r = await render(venue, '/c/nope');
-  assert.doesNotMatch(r.body, /id="open-suna"/, 'an unknown venue has nowhere in the app to open');
+  assert.doesNotMatch(r.body, /class="btn save-suna"/, 'an unknown venue has nowhere in the app to open');
 });
 
 // ---- W-48: what people need, from Brian's own test of /e/ ----
@@ -287,53 +373,63 @@ const RR = {
   daily_start_time: '11:00', daily_end_time: '19:00', price_type: 'free', price_amount: null, source_url: null,
   description: "M+ and ILHAM survey of Rauschenberg's projects in Asia on Level 5; free entry, Tue-Sat 11am-7pm, Sun 11am-5pm, closes 1 Nov.",
 };
-await t('W-48 the description\'s days and hours beat "daily"', async () => {
+await t('W-48 the description\'s days and hours beat "daily" (now under Hours, Ops W2)', async () => {
   const m = await import('./api/_clip.js');
   assert.equal(m.hoursFromDescription(RR.description), 'Tue–Sat 11am–7pm, Sun 11am–5pm');
   assert.equal(m.hoursFromDescription('Open daily 10am to 6pm'), 'Daily 10am to 6pm');
   assert.equal(m.hoursFromDescription('Doors at 7pm. A daily dose of jazz.'), null);
   state.eventRow = ev(U(9), 0, RR);
   const r = await render(event, `/e/${U(9)}`);
-  assert.match(r.body, /<li><b>When<\/b>16 Jun(e)? 2026 – 1 Nov 2027 · Tue–Sat 11am–7pm, Sun 11am–5pm<\/li>/);
-  assert.doesNotMatch(r.body, /11:00–19:00 daily/);
+  assert.match(r.body, /<dt>When<\/dt><dd>Until Mon 1 Nov 2027<\/dd>/);
+  assert.match(r.body, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm, Sun 11am–5pm<\/dd>/);
+  assert.doesNotMatch(r.body, /daily/);
   // No hours in the description: the stored daily times, as before.
   state.eventRow = ev(U(9), 0, { ...RR, description: 'A survey of his work.' });
-  assert.match((await render(event, `/e/${U(9)}`)).body, /11:00–19:00 daily/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00–19:00 daily<\/dd>/);
+  // I-100's hours_text, when Ops has written it, beats both.
+  assert.equal(m.hoursFact({ ...RR, hours_text: 'Tue–Sat 11 AM – 7 PM\nSun 11 AM – 5 PM · closed Mon' }, 'Asia/Kuala_Lumpur'), 'Tue–Sat 11 AM – 7 PM\nSun 11 AM – 5 PM · closed Mon');
+  // A one-day event's times are in When; no Hours row.
+  assert.equal(m.hoursFact({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z', daily_start_time: '19:30', daily_end_time: '22:00' }, 'Asia/Kuala_Lumpur'), null);
 });
-await t('W-48 the description comes before the buttons', async () => {
+await t('W-48 the description sits under About, after the facts', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
-  assert(b.indexOf('<p class="desc">') > 0 && b.indexOf('<p class="desc">') < b.indexOf('<div class="actions">'));
+  assert(b.indexOf('<dl class="facts">') < b.indexOf('<h2>About</h2>') && b.indexOf('<h2>About</h2>') < b.indexOf('<p class="desc">'));
 });
-await t('W-48 free with no link: "Free entry · no ticket needed", no ticket button', async () => {
+await t('W-48 free with no link: "Free entry · no ticket needed" above Save in Suna, no organiser link', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
-  assert.match(b, /<li><b>Price<\/b>Free<span class="fact-sub">Free entry · no ticket needed<\/span><\/li>/);
-  assert.doesNotMatch(b, /unaryx\.com\/go\//);
+  assert.match(b, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"[^>]*>Save in Suna<\/a><p class="caption">Opens Suna, or the App Store if you don’t have it<\/p>/);
+  assert.match(b, /<dt>Price<\/dt><dd>Free<\/dd>/);
+  assert.doesNotMatch(b, /unaryx\.com\/go\/|More from the organiser/);
 });
-await t('W-48 paid with a link: Get tickets; free with a link: More info, both via /go/', async () => {
+await t('W-48 paid with a link: Get tickets; free with a link: Save in Suna plus the organiser link, both via /go/', async () => {
   state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example' });
-  assert.match((await render(event, `/e/${U(9)}`)).body, new RegExp(`href="https://unaryx\\.com/go/e-${U(9)}" rel="nofollow noopener">More info ↗`));
+  let b = (await render(event, `/e/${U(9)}`)).body;
+  assert.match(b, new RegExp(`href="https://unaryx\\.com/go/e-${U(9)}" rel="nofollow noopener">More from the organiser ↗`));
+  assert.doesNotMatch(b, /Get tickets/);
   state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example', price_type: 'paid', price_amount: 20 });
-  assert.match((await render(event, `/e/${U(9)}`)).body, />Get tickets ↗</);
+  b = (await render(event, `/e/${U(9)}`)).body;
+  assert.match(b, />Get tickets ↗</);
+  // Paid but no seller link: nothing to buy here, so Save in Suna is the sand button.
+  state.eventRow = ev(U(9), 0, { ...RR, source_url: null, price_type: 'paid', price_amount: 20 });
+  b = (await render(event, `/e/${U(9)}`)).body;
+  assert.doesNotMatch(b, /Get tickets/);
+  assert.match(b, /<a class="btn save-suna"/);
 });
 await t('W-48 WHERE is the venue, else the linked place\'s name; never just the city when either exists', async () => {
   state.eventRow = ev(U(9), 0, { ...RR, venue: 'ILHAM Gallery' });
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>ILHAM Gallery, Kuala Lumpur<\/li>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Where<\/dt><dd>ILHAM Gallery, Kuala Lumpur<\/dd>/);
   state.eventRow = ev(U(9), 0, { ...RR, venue: '  ', venue_landmark_id: 'aaaaaaaa-1111-4111-8111-111111111111' });
   state.landmark = { name: 'Menara Public Bank 2' };
   calls.length = 0;
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>Menara Public Bank 2, Kuala Lumpur<\/li>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Where<\/dt><dd>Menara Public Bank 2, Kuala Lumpur<\/dd>/);
   assert.match(calls.find((c) => c.includes('/landmarks')), /id=eq\.aaaaaaaa-1111-4111-8111-111111111111&is_hidden=eq\.false&select=name/);
   state.landmark = null;
   state.eventRow = ev(U(9), 0, { ...RR, venue: null, venue_landmark_id: null });
   calls.length = 0;
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<li><b>Where<\/b>Kuala Lumpur<\/li>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Where<\/dt><dd>Kuala Lumpur<\/dd>/);
   assert(!calls.some((c) => c.includes('/landmarks')), 'no lookup without a linked place');
-});
-await t('W-48 /c/ cards: on now with the description\'s hours', async () => {
-  const n2 = new Date();
-  assert.equal(onNowLine({ ...RR, end_time: iso(n2.getTime() + 40 * 24 * H) }, 'Asia/Kuala_Lumpur', n2), 'On now · Tue–Sat 11am–7pm, Sun 11am–5pm');
 });
 await t('W-45 an ended event keeps its own canonical (the unaryx page redirects away)', async () => {
   state.eventRow = ev(U(5), 0, { start_time: iso(now - 5 * H), end_time: iso(now - H) });

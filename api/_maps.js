@@ -11,10 +11,10 @@
 // works everywhere (it opens the Google Maps app when installed).
 //
 // OPEN IN SUNA. A universal link never fires from a page already on its own
-// domain, and Chrome on iOS never shows Safari's banner, so iPhones get a
-// visible button to the app's custom scheme, falling back to the App Store
-// (with the page's ct) if the app didn't take the tap. Hidden elsewhere.
-// Same pattern as place.html and i.html.
+// domain, and Chrome on iOS never shows Safari's banner, so iPhones go to the
+// app's custom scheme, falling back to the App Store (with the page's ct) if
+// the app didn't take the tap. Same pattern as place.html and i.html; on /e/
+// and /c/ it's the Save in Suna button below (W-48 (2)).
 
 /** iPhone, iPad, iPod, or a Mac (iPadOS Safari also says Macintosh). */
 export const APPLE_UA = /iPhone|iPad|iPod|Macintosh/;
@@ -46,18 +46,46 @@ export function mapsLinks(lat, lng, cls = 'btn') {
 /** Hides the Apple link off Apple devices; otherwise the button styles stay the page's own. */
 export const MAPS_CSS = 'html:not(.apple-maps) .maps-apple{display:none !important}';
 
-/**
- * Open in Suna: rendered hidden with the App Store as its href, so without
- * JavaScript, or off iOS, it's never seen. `scheme` is a suna:// URL built on
- * the server from a value it has already validated.
- */
-export function openInSuna(scheme, store, cls = 'btn') {
-  return `<a class="${cls} open-suna" id="open-suna" hidden data-scheme="${scheme.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
-    + ` href="${store.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">Open in Suna</a>`;
+// ---- W-48 (2): one Directions button, one Save in Suna (Ops's W1–W3) ----
+//
+// Brian, 14 Oct: "too many buttons". /e/ and /c/ now carry one Directions
+// button and one Save in Suna. Directions is a plain link to Google Maps, so
+// it works with no JavaScript and on Android and desktop; on iPhone and iPad
+// a tap opens Ops's W3 sheet (Apple Maps / Google Maps / Cancel) instead,
+// because either app may be the one that's installed. Same edge-cache reason
+// as above for deciding it in the browser.
+
+/** iPadOS Safari says Macintosh; a touch screen tells it apart from a Mac. */
+const TOUCH_APPLE = `(${IOS_UA}.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1))`;
+
+/** The Directions button and its sheet, or '' without a pin. `label` names the destination in the sheet. */
+export function directions(lat, lng, label, cls = 'btn btn-outline') {
+  if (!hasPin(lat, lng)) return '';
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<a class="${cls}" id="directions" href="${esc(googleMapsURL(lat, lng))}">Directions</a>`
+    + '<div class="sheet-dim" id="dir-sheet" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dir-title">'
+    + `<div class="sheet-group"><p class="sheet-title" id="dir-title">${esc(label ? `Directions to ${label}` : 'Directions')}</p>`
+    + `<a class="sheet-opt" href="${esc(appleMapsURL(lat, lng))}">Apple Maps</a>`
+    + `<a class="sheet-opt" href="${esc(googleMapsURL(lat, lng))}">Google Maps</a></div>`
+    + '<button class="sheet-group sheet-cancel" type="button" id="dir-cancel">Cancel</button></div></div>';
 }
 
-/** At the end of <body>: shows the button on iOS and falls back to the store after ~1.5 s. */
-export const OPEN_SCRIPT = `<script>(function(){var b=document.getElementById('open-suna');`
-  + `if(!b||!${IOS_UA}.test(navigator.userAgent))return;var store=b.href;b.href=b.getAttribute('data-scheme');b.hidden=false;`
-  + `b.addEventListener('click',function(){var t=Date.now();setTimeout(function(){`
-  + `if(document.hidden||Date.now()-t>2000)return;window.location.href=store},1500)})})()</script>`;
+/**
+ * Save in Suna: the App Store link (with the page's ct) everywhere, and on
+ * iPhone/iPad the app's own scheme first, falling back to the store if the
+ * app didn't take the tap. Replaces both Open in Suna and Get Suna.
+ */
+export function saveInSuna(scheme, store, cls = 'btn', text = 'Save in Suna') {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<a class="${cls} save-suna" data-scheme="${esc(scheme)}" href="${esc(store)}">${text}</a>`;
+}
+
+/** At the end of <body>: the Directions sheet and the Save in Suna hand-off, iPhone and iPad only. */
+export const PAGE_SCRIPT = `<script>(function(){if(!${TOUCH_APPLE})return;`
+  + `var d=document.getElementById('directions'),s=document.getElementById('dir-sheet');`
+  + `if(d&&s){var close=function(){s.hidden=true};d.addEventListener('click',function(ev){ev.preventDefault();s.hidden=false;s.querySelector('.sheet-opt').focus()});`
+  + `s.addEventListener('click',function(ev){if(ev.target===s)close()});document.getElementById('dir-cancel').addEventListener('click',close);`
+  + `document.addEventListener('keydown',function(ev){if(ev.key==='Escape')close()})}`
+  + `Array.prototype.forEach.call(document.querySelectorAll('a.save-suna[data-scheme]'),function(b){var store=b.href;`
+  + `b.addEventListener('click',function(ev){ev.preventDefault();var t=Date.now();window.location.href=b.getAttribute('data-scheme');`
+  + `setTimeout(function(){if(document.hidden||Date.now()-t>2000)return;window.location.href=store},1500)})})})()</script>`;

@@ -1,22 +1,26 @@
-// app.unaryx.com/e/<event id>: one event (W-42).
+// app.unaryx.com/e/<event id>: one event (W-42; laid out to Ops's W1–W4 in W-48 (2)).
 //
 // What a shared event link shows anyone the app or the Clip doesn't open
-// for: the name, when (in the venue's own time), where, the photo, Get
-// tickets ↗ through unaryx.com/go (the one place an outbound link is checked
-// and attributed), Take me there (Google Maps, plus Apple Maps on Apple
-// devices: W-47), Open in Suna on iPhone, and the Event JSON-LD the
-// /events pages emit.
+// for. Brian, 14 Oct: "too many buttons". So one sand button per page:
+//   paid, with a seller link  → Get tickets ↗ through unaryx.com/go (the one
+//                                place an outbound link is checked and
+//                                attributed), then Directions | Save in Suna;
+//   anything else             → Save in Suna, then Directions, with "Free
+//                                entry · no ticket needed" above when it's free.
+// No line under Get tickets (Brian, 21:50): the price is in the facts card and
+// the commission note is in the footer.
 //
-// An event that has ended is greyed the way W-28 greys an itinerary stop.
-// A cancelled one can't be told apart from a missing one: the public policy
-// returns approved rows only. Both get the same honest page with a 200 and a
-// way on to /events, never a 404.
+// An event that has ended keeps its page (200, noindex) so a shared link
+// never dead-ends: Ops's W4, with what's on this week instead. A cancelled
+// one can't be told apart from a missing one: the public policy returns
+// approved rows only, so W5 waits for a read path Brian hasn't approved.
 
 import {
-  EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenText, eventState, priceLine, ourImage,
-  eventLD, eventPageURL, eventsPage, storeURL, page, send, segment,
+  EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenText, whenFact, hoursFact, eventState, priceShort,
+  ourImage, eventLD, eventPageURL, eventsPage, storeURL, page, send, segment, eyebrow, eventRow,
+  eventsAround, footer, MARK,
 } from './_clip.js';
-import { mapsLinks, openInSuna } from './_maps.js';
+import { directions, saveInSuna } from './_maps.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,57 +45,105 @@ async function loadEvent(id) {
   return e;
 }
 
-export function eventBody(e, now = new Date()) {
+// Ops's notes: 3 events from the next 7 days nearest the pin, within 5 km,
+// else the city; never ended, never this one.
+const MORE_KM = 5;
+const MORE_SHOWN = 3;
+
+async function moreThisWeek(e, now) {
+  const city = cityFor(e.latitude, e.longitude);
+  const reach = Math.max(MORE_KM, city ? city.radius_km : 0);
+  // Never this one: another date of the same show is this one too, and so is
+  // a second listing of anything already in the rail.
+  const key = (r) => String(r.name || '').trim().toLowerCase();
+  const seen = new Set([key(e)]);
+  const rows = (await eventsAround(e.latitude, e.longitude, { km: reach, now }))
+    .filter((r) => r.id !== e.id && !seen.has(key(r)) && seen.add(key(r)));
+  const near = rows.filter((r) => r.km <= MORE_KM);
+  const pick = (near.length ? near : rows).slice(0, MORE_SHOWN);
+  return pick.sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time));
+}
+
+const fmtDay = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(d).replace(',', '');
+
+export function eventBody(e, now = new Date(), more = []) {
   const tz = zoneFor(e.latitude, e.longitude);
   const city = cityFor(e.latitude, e.longitude);
   const over = eventState(e, now.getTime());
   const img = ourImage(e.image_url);
   const venue = (e.venue && String(e.venue).trim()) || null;
-  const price = priceLine(e);
-  // A free event with nowhere to sign up needs saying so (W-48): people
-  // otherwise go looking for a ticket that doesn't exist.
-  const noTicket = e.price_type === 'free' && !e.source_url;
+  const where = [venue, city && city.name].filter(Boolean).join(', ');
+  const price = priceShort(e);
+  const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
+  const store = storeURL('web-e', 'web-e');
+  const save = (cls) => saveInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, store, cls);
+  const dir = (cls) => directions(e.latitude, e.longitude, venue || e.name, cls);
+  const tickets = !over && e.price_type === 'paid' && e.source_url;
+  const go = `https://unaryx.com/go/e-${escapeHtml(e.id)}`;
+
+  const hero = `<header class="hero">
+    ${img ? `<img src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
+    <div class="hero-top">${MARK}</div>
+    <div>
+      <div class="pills">${over
+        ? '<span class="pill pill-over">Ended</span>'
+        : `<span class="pill pill-now">${escapeHtml(eyebrow(e, tz, now))}</span>${pricePill ? `<span class="pill">${pricePill}</span>` : ''}`}</div>
+      <h1>${escapeHtml(e.name)}</h1>
+      ${venue ? `<p class="hero-sub">${escapeHtml(venue)}</p>` : ''}
+    </div>
+  </header>`;
+
+  const rows = more.length
+    ? `<ul class="rows">${more.map((r) => eventRow(r, { timeZone: tz, now, km: r.km })).join('')}</ul>` : '';
+
+  if (over) {
+    const near = venue ? `near ${venue}` : city ? `in ${city.name}` : 'nearby';
+    return `<main class="over">
+  ${hero}
+  <div class="state"><p class="state-lead">This ended on ${escapeHtml(fmtDay(new Date(e.end_time), tz))}.</p>
+    <p class="state-sub">Here’s what’s on ${escapeHtml(near)} this week.</p></div>
+  ${rows ? `<h2>On this week instead</h2>${rows}` : ''}
+  <a class="btn btn-outline" href="${escapeHtml(eventsPage(city))}">See what’s on ${city ? `in ${escapeHtml(city.name)}` : 'this week'}</a>
+  ${footer()}
+</main>`;
+  }
+
+  let actions;
+  if (tickets) {
+    actions = `<a class="btn" href="${go}" rel="nofollow noopener">Get tickets ↗</a>`
+      + dir('btn btn-outline half') + save('btn btn-outline half');
+  } else {
+    actions = (e.price_type === 'free' ? '<p class="note">Free entry · no ticket needed</p>' : '')
+      + save('btn') + '<p class="caption">Opens Suna, or the App Store if you don’t have it</p>'
+      + dir('btn btn-outline');
+  }
+  const hours = hoursFact(e, tz);
   const facts = [
-    ['When', whenText(e, tz, now)],
-    ['Where', [venue, city && city.name].filter(Boolean).join(', ')],
-    price && ['Price', price, noTicket ? 'Free entry · no ticket needed' : null],
-  ].filter((f) => f && f[1]);
+    ['When', whenFact(e, tz, now)],
+    ['Hours', hours],
+    ['Where', where],
+    ['Price', price],
+  ].filter((f) => f[1]);
   const desc = String(e.description || '').trim();
-  const actions = [
-    // Not once it's over: there is nothing left to buy.
-    !over && e.source_url
-      // Tickets only when there are tickets; otherwise the organiser's page is "More info".
-      ? `<a class="btn" href="https://unaryx.com/go/e-${escapeHtml(e.id)}" rel="nofollow noopener">${e.price_type === 'paid' ? 'Get tickets ↗' : 'More info ↗'}</a>`
-      : '',
-    // Take me there: Google Maps for everyone, Apple Maps beside it on Apple devices.
-    !over ? mapsLinks(e.latitude, e.longitude) : '',
-  ].filter(Boolean).join('');
-  const open = openInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, storeURL('web-e', 'web-e'));
-  return `<main class="${over ? 'over' : ''}">
-  ${img ? `<img class="hero" src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
-  ${over ? '<p class="over-pill">Ended</p>' : ''}
-  <h1>${escapeHtml(e.name)}</h1>
-  <ul class="facts">${facts.map(([k, v, sub]) => `<li><b>${k}</b>${escapeHtml(v)}${sub ? `<span class="fact-sub">${escapeHtml(sub)}</span>` : ''}</li>`).join('')}</ul>
-  ${desc ? `<p class="desc">${escapeHtml(desc)}</p>` : ''}
-  <div class="actions">${open}${actions}</div>
-  ${over ? `<p class="empty"><a class="link" href="${escapeHtml(eventsPage(city))}">See what's on this week</a></p>` : ''}
-</main>
-<div class="bar">
-  <a class="cta" href="${escapeHtml(storeURL('web-e', 'web-e'))}">Get Suna</a>
-  <p class="bar-sub">Free on the App Store. Events and places within a short walk.</p>
-</div>`;
+  const organiser = e.source_url ? `<a class="link" href="${go}" rel="nofollow noopener">More from the organiser ↗</a>` : '';
+  return `<main>
+  ${hero}
+  <div class="actions">${actions}</div>
+  <dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
+  ${desc || organiser ? `<section class="about">${desc ? `<h2>About</h2><p class="desc">${escapeHtml(desc)}</p>` : ''}${organiser}</section>` : ''}
+  ${rows ? `<h2>More on this week</h2>${rows}` : ''}
+  ${footer({ tickets: Boolean(tickets) })}
+</main>`;
 }
 
 export function missingBody() {
   return `<main>
-  <h1>This event isn't listed</h1>
-  <p class="empty">It may have finished, been cancelled, or the link may be incomplete.
-  <a class="link" href="https://unaryx.com/events">See what's on this week</a>.</p>
-</main>
-<div class="bar">
-  <a class="cta" href="${escapeHtml(storeURL('web-e', 'web-e'))}">Get Suna</a>
-  <p class="bar-sub">Free on the App Store. Events and places within a short walk.</p>
-</div>`;
+  <div class="clipbar">${MARK}</div>
+  <h1 class="venue-h1">This event isn't listed</h1>
+  <p class="empty">It may have finished, been cancelled, or the link may be incomplete.</p>
+  <div class="actions"><a class="btn btn-outline" href="https://unaryx.com/events">See what’s on this week</a></div>
+  ${footer()}
+</main>`;
 }
 
 export default async function handler(req, res) {
@@ -107,6 +159,9 @@ export default async function handler(req, res) {
     }), 300);
     return;
   }
+  const now = new Date();
+  let more = [];
+  try { more = await moreThisWeek(e, now); } catch { /* the page without the rail */ }
   const tz = zoneFor(e.latitude, e.longitude);
   const city = cityFor(e.latitude, e.longitude);
   const own = `${ORIGIN}/e/${e.id}`;
@@ -122,7 +177,9 @@ export default async function handler(req, res) {
     canonical,
     ogUrl: own,
     image: ourImage(e.image_url),
-    body: eventBody(e),
+    body: eventBody(e, now, more),
     ld: eventLD(e, canonical),
+    // Ended: still a page for anyone holding the link, but not one to index.
+    noindex: Boolean(eventState(e, now.getTime())),
   }));
 }
