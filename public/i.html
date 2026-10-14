@@ -152,6 +152,17 @@
       margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--sand);
       font-size: 15px; line-height: 21px; color: var(--body); white-space: pre-line;
     }
+    /* W-28, Ops's E2: an event stop that has ended or been cancelled. The
+       pill stays at full strength; the photo is desaturated, and it and the
+       text are at 50%; the timeline dot is grey. */
+    .stop-over::before { background: #5a5a5a; opacity: .4; }
+    .stop-over .card { border-color: #3a3a3a; }
+    .stop-over .stop-pic { filter: grayscale(1); opacity: .5; }
+    .stop-over .stop-text > :not(.over-pill) { opacity: .5; }
+    .over-pill {
+      align-self: flex-start; margin: 0 0 2px; padding: 3px 8px; border-radius: 999px;
+      background: #3a3a3a; color: #d6d6d6; font-size: 11px; font-weight: 600; line-height: 13px;
+    }
     .day-label { margin: 8px 0 12px; font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
     /* A stock image is the app's designed backdrop: the dealt photo under its
        dealt tint (PlaceStockDealer), never a credit. */
