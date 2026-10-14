@@ -122,6 +122,8 @@
       font-size: 11px; font-weight: 500; line-height: 1.2; vertical-align: 2px;
       background: #FF8C18; color: #fff;
     }
+    /* "Creator" (W-27, Ops's CR2): the same pill in the app's creator purple. */
+    .pick.creator { background: #6E4BD8; }
     .by-mark { display: flex; align-items: center; justify-content: center; }
     .tag {
       display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
@@ -386,7 +388,7 @@
 
       var url = SUPABASE_URL + '/rest/v1/public_itineraries'
         + '?share_slug=eq.' + encodeURIComponent(slug)
-        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url,partner_slug,partner_name'
+        + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,creator_avatar_url,partner_slug,partner_name,is_creator'
         + '&limit=1';
 
       fetch(url, { headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY } })
@@ -421,6 +423,13 @@
             document.getElementById('byline').hidden = false;
           } else if (it.creator_username) {
             document.getElementById('creator').textContent = '@' + it.creator_username;
+            // W-27: the purple Creator pill, same rule as the server's byline.
+            if (it.is_creator === true) {
+              var pill = document.createElement('span');
+              pill.className = 'pick creator';
+              pill.textContent = 'Creator';
+              document.getElementById('creator').after(pill);
+            }
             if (it.creator_avatar_url) document.getElementById('avatar').src = it.creator_avatar_url;
             document.getElementById('byline').hidden = false;
           }

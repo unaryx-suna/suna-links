@@ -132,7 +132,7 @@ export async function loadItinerary(slug, coverURL) {
   if (!slug) return null;
   const rows = await rest(`public_itineraries?share_slug=eq.${encodeURIComponent(slug)}`
     + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,'
-    + 'creator_avatar_url,partner_slug,partner_name,cover_media_path&limit=1');
+    + 'creator_avatar_url,partner_slug,partner_name,cover_media_path,is_creator&limit=1');
   const it = Array.isArray(rows) ? rows[0] : null;
   if (!it) return null;
   const all = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
@@ -319,7 +319,11 @@ export function previewBody(data, cover, variants, mascot) {
     const avatar = it.creator_avatar_url
       ? `<img class="by-avatar" src="${escapeHtml(it.creator_avatar_url)}" alt="" width="40" height="40" decoding="async" onerror="this.style.visibility='hidden'">`
       : `<span class="by-avatar by-initial" aria-hidden="true">${initial}</span>`;
-    byline = `<div class="by">${avatar}<div class="by-text"><p class="by-name">@${escapeHtml(it.creator_username)}</p>`
+    // W-27: the purple Creator pill for a paid creator (I-60). The view
+    // already reads false for partner rows and banned or shadowbanned
+    // profiles, and a partner's byline above never reaches this branch.
+    const creator = it.is_creator === true ? '<span class="pick creator">Creator</span>' : '';
+    byline = `<div class="by">${avatar}<div class="by-text"><p class="by-name">@${escapeHtml(it.creator_username)}${creator}</p>`
       + '<p class="by-sub">Their itinerary</p></div>'
       + `<a class="follow" data-open-suna href="${STORE_WEB_I}" aria-label="Follow @${escapeHtml(it.creator_username)} in Suna">Follow</a></div>`;
   }

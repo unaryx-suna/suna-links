@@ -12,6 +12,9 @@ const rows = {
   suna: { partner_slug: 'suna', partner_name: 'Suna' },
   worq: { partner_slug: 'worq', partner_name: 'WORQ' },
   creator: { partner_slug: null, partner_name: null },
+  tagged: { partner_slug: null, partner_name: null, is_creator: true },
+  worqTagged: { partner_slug: 'worq', partner_name: 'WORQ', is_creator: true },
+  sunaTagged: { partner_slug: 'suna', partner_name: 'Suna', is_creator: true },
 };
 let current = 'suna';
 const stops = [0, 1, 2, 3].map((i) => ({
@@ -86,6 +89,26 @@ await t('creator: <title> still "by @username"', async () => {
 await t('creator: unchanged — @username, avatar, Follow', async () => {
   assert.match(creator, new RegExp(`<p class="by-name">@${OWNER}</p>`));
   assert(creator.includes(AVATAR)); assert(/class="follow"/.test(creator)); assert(!/class="pick"/.test(creator));
+});
+
+// W-27: the purple Creator pill (I-60's public_itineraries.is_creator).
+await t('W-27 creator: the select asks for is_creator; the pill sits right of @username', async () => {
+  let asked = '';
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => { if (String(url).includes('/rest/v1/public_itineraries')) asked = String(url); return real(url); };
+  const h = await render('tagged');
+  globalThis.fetch = real;
+  assert.match(asked, /is_creator/);
+  assert.match(h, new RegExp(`<p class="by-name">@${OWNER}<span class="pick creator">Creator</span></p>`));
+  assert(/class="follow"/.test(h), 'Follow stays');
+  assert.match(readFileSync(new URL('./public/i.html', import.meta.url), 'utf8'), /\.pick\.creator \{ background: #6E4BD8; \}/);
+});
+await t('W-27 creator: no pill when is_creator is false or missing, never with By WORQ or By Suna', async () => {
+  assert(!/pick creator/.test(about(creator)));
+  const worq = about(await render('worqTagged'));
+  assert.match(worq, /By WORQ/); assert(!/pick creator|>Creator</.test(worq));
+  const suna2 = about(await render('sunaTagged'));
+  assert.match(suna2, /By Suna/); assert(!/pick creator|>Creator</.test(suna2));
 });
 
 await t('the mark is a plain SVG (no script, no href)', async () => {
