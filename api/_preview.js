@@ -136,7 +136,8 @@ export async function loadItinerary(slug, coverURL) {
   if (!it) return null;
   const all = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
     + '&select=order_index,place_name,city_name,suggested_time,duration_label,creator_note,'
-    + 'latitude,longitude,landmark_id,category,country_code,place_image_url,moment_path,moment_bucket'
+    + 'latitude,longitude,landmark_id,category,country_code,place_image_url,moment_path,moment_bucket,'
+    + 'event_id,event_state,event_ends_at'
     + '&order=order_index.asc');
 
   // The whole itinerary is counted; only the first stops are kept.
@@ -214,17 +215,34 @@ function stopImage(image, name) {
   return `<div class="stop-pic">${img}</div>`;
 }
 
+/**
+ * An event stop that is over (W-28, Brian 13 Oct; the app half is I-63):
+ * 'cancelled', 'ended' or null. The view decides with the app's rule
+ * (I-86); `event_ends_at` is checked here too, because this page is cached
+ * and an event can end while a render is still being served.
+ */
+export function eventState(s, now = Date.now()) {
+  if (!s || !s.event_id) return null;
+  if (s.event_state === 'cancelled' || s.event_state === 'ended') return s.event_state;
+  const ends = Date.parse(s.event_ends_at || '');
+  return Number.isFinite(ends) && ends <= now ? 'ended' : null;
+}
+
 function stopBlock(s, n, image) {
   const { time } = splitTime(s.suggested_time);
+  // Ops's E2: a grey pill first, the photo desaturated, the rest at 50%.
+  // A viewer can't delete a stop on the web, so E2's Delete has no place here.
+  const state = eventState(s);
+  const pill = state ? `<p class="over-pill">${state === 'cancelled' ? 'Cancelled' : 'Ended'}</p>` : '';
   const meta = [String(n).padStart(2, '0'), time, readableDuration(s.duration_label)].filter(Boolean).join(' · ');
   const note = String(s.creator_note || '').trim();
   const area = String(s.city_name || '').trim();
   const name = s.place_name || 'Stop';
-  return `<li class="stop">
+  return `<li class="stop${state ? ' stop-over' : ''}">
       <article class="card">
         ${stopImage(image, name)}
         <div class="stop-text">
-          <p class="stop-meta">${escapeHtml(meta)}</p>
+          ${pill}<p class="stop-meta">${escapeHtml(meta)}</p>
           <h3 class="stop-name">${escapeHtml(name)}</h3>
           ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
           ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
