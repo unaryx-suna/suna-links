@@ -23,3 +23,10 @@ change took hours to become visible (observed: `age: 27016` — 7.5h stale) even
 to Apple's own fetcher. Apple caches the result separately at its CDN, so allow
 time after deploying, or enable associated-domains developer mode on a test
 device to bypass it.
+
+## The App Clip's own pages (W-42)
+
+`/c/<venue>` (`api/venue.js`) and `/e/<event id>` (`api/event.js`) are both
+registered Clip experiences, so both carry `app-clip-bundle-id`, unlike
+`/city/`. They read only what is already public (approved `world_events`, and
+`unaryx.com/clip/venues.json`) and answer 200 for an unknown slug or id.

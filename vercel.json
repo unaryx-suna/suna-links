@@ -42,6 +42,14 @@
     {
       "source": "/city/:path*",
       "destination": "/city.html"
+    },
+    {
+      "source": "/c/:path*",
+      "destination": "/api/venue"
+    },
+    {
+      "source": "/e/:path*",
+      "destination": "/api/event"
     }
   ],
   "functions": {
