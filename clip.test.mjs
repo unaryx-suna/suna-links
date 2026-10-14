@@ -183,7 +183,10 @@ await t('/e/: an event renders name, local time, venue, tickets, maps, JSON-LD',
   assert.equal(ld.startDate, '2027-03-05T19:30:00+08:00');
   assert.equal(ld.location.name, 'Taman Tun Park');
   assert.deepEqual(ld.offers && [ld.offers.price, ld.offers.priceCurrency], [35, 'MYR']);
-  assert.equal(ld.url, `https://app.unaryx.com/e/${U(4)}`);
+  // W-45: the indexable copy is the event's page on unaryx.com.
+  assert.equal(ld.url, `https://unaryx.com/events/kuala-lumpur/event-4444-${U(4).slice(0, 8)}`);
+  assert(r.body.includes(`<link rel="canonical" href="https://unaryx.com/events/kuala-lumpur/event-4444-${U(4).slice(0, 8)}">`));
+  assert(r.body.includes(`<meta property="og:url" content="https://app.unaryx.com/e/${U(4)}">`));
   assert.doesNotMatch(r.body, /<p class="over-pill">/);
 });
 await t('/e/: the query is one approved row by id', async () => {
@@ -331,6 +334,25 @@ await t('W-48 WHERE is the venue, else the linked place\'s name; never just the 
 await t('W-48 /c/ cards: on now with the description\'s hours', async () => {
   const n2 = new Date();
   assert.equal(onNowLine({ ...RR, end_time: iso(n2.getTime() + 40 * 24 * H) }, 'Asia/Kuala_Lumpur', n2), 'On now · Tue–Sat 11am–7pm, Sun 11am–5pm');
+});
+await t('W-45 an ended event keeps its own canonical (the unaryx page redirects away)', async () => {
+  state.eventRow = ev(U(5), 0, { start_time: iso(now - 5 * H), end_time: iso(now - H) });
+  const r = await render(event, `/e/${U(5)}`);
+  assert(r.body.includes(`<link rel="canonical" href="https://app.unaryx.com/e/${U(5)}">`));
+});
+await t('W-45 eventSlug matches unaryx-site\'s paths.js for the same fixtures', async () => {
+  const { eventSlug } = await import('./api/_clip.js');
+  const FIX = [
+    [{ name: 'Carl Barron: Just Wondering Why', id: '3F9A1C2E-1111' }, 'carl-barron-just-wondering-why-3f9a1c2e'],
+    [{ name: '吉隆坡 夜市', id: 'abcdef12-0000' }, 'abcdef12'],
+    [{ name: 'Café Fête — Été!', id: '00000000-0' }, 'cafe-fete-ete-00000000'],
+    [{ name: 'x'.repeat(59) + ' y', id: '12345678-9' }, 'x'.repeat(59) + '-12345678'],
+  ];
+  for (const [e, want] of FIX) assert.equal(eventSlug(e), want, e.name);
+  // When the site repo is checked out beside this one, compare with it directly.
+  let site = null;
+  try { site = (await import('node:module')).createRequire(import.meta.url)('../../unaryx-site/api/_lib/paths.js'); } catch { /* not beside us */ }
+  if (site && typeof site.eventSlug === 'function') for (const [e] of FIX) assert.equal(eventSlug(e), site.eventSlug(e), `parity: ${e.name}`);
 });
 
 console.log(bad ? `\n${bad} failed` : '\nall passed');

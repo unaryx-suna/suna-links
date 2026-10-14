@@ -94,6 +94,24 @@ export function zoneFor(lat, lng) {
   return CITIES.slice().sort((a, b) => distanceKm(lat, lng, a.lat, a.lng) - distanceKm(lat, lng, b.lat, b.lng))[0].timezone;
 }
 
+/**
+ * The event's own page on unaryx.com (W-45): /events/<city>/<name>-<id8>.
+ * Mirrors unaryx-site api/_lib/paths.js `eventSlug`; clip.test.mjs checks
+ * the two produce the same address for the same fixtures.
+ */
+export function eventSlug(event) {
+  const name = String(event.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    .slice(0, 60).replace(/-+$/, '');
+  const id8 = String(event.id || '').toLowerCase().slice(0, 8);
+  return name ? `${name}-${id8}` : id8;
+}
+
+export function eventPageURL(event) {
+  const city = cityFor(event.latitude, event.longitude);
+  return city && CITY_PATH[city.slug] ? `https://unaryx.com/events/${CITY_PATH[city.slug]}/${eventSlug(event)}` : null;
+}
+
 /** unaryx.com's events page for a city, or the all-cities page. */
 export function eventsPage(city) {
   return city && CITY_PATH[city.slug] ? `https://unaryx.com/events/${CITY_PATH[city.slug]}` : 'https://unaryx.com/events';
@@ -277,7 +295,7 @@ export function eventLD(event, url) {
  * The page around a body. Same palette and font as /i/. The meta tag is what
  * surfaces the Clip card in Safari: both routes are registered experiences.
  */
-export function page({ title, description, canonical, image, body, ld }) {
+export function page({ title, description, canonical, ogUrl, image, body, ld }) {
   const tags = [
     `<title>${escapeHtml(title)}</title>`,
     `<link rel="canonical" href="${escapeHtml(canonical)}">`,
@@ -285,7 +303,7 @@ export function page({ title, description, canonical, image, body, ld }) {
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:type" content="website">`,
-    `<meta property="og:url" content="${escapeHtml(canonical)}">`,
+    `<meta property="og:url" content="${escapeHtml(ogUrl || canonical)}">`,
     `<meta property="og:site_name" content="Suna">`,
     image ? `<meta property="og:image" content="${escapeHtml(image)}">` : '',
     `<meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}">`,
