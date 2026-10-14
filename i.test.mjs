@@ -102,5 +102,12 @@ if (chromium) {
   });
   await browser.close();
 }
+// W-50: the stops' maps links open a new tab; our own links don't.
+const { badLinkTargets } = await import('./link-targets.mjs');
+await t('W-50 outbound links open a new tab, internal ones never', async () => {
+  assert.deepEqual(badLinkTargets(html), []);
+  assert((html.replace(/<script[\s\S]*?<\/script>/g, '').match(/maps-google" href="[^"]+" target="_blank" rel="noopener"/g) || []).length > 0);
+});
+
 console.log(bad ? `\ni: ${bad} FAILED` : '\ni: all passed');
 process.exit(bad ? 1 : 0);

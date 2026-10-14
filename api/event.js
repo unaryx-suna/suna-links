@@ -110,7 +110,7 @@ export function eventBody(e, now = new Date(), more = []) {
 
   let actions;
   if (tickets) {
-    actions = `<a class="btn" href="${go}" rel="nofollow noopener">Get tickets ↗</a>`
+    actions = `<a class="btn" href="${go}" target="_blank" rel="nofollow noopener">Get tickets ↗</a>`
       + dir('btn btn-outline half') + save('btn btn-outline half');
   } else {
     actions = (e.price_type === 'free' ? '<p class="note">Free entry · no ticket needed</p>' : '')
@@ -125,7 +125,7 @@ export function eventBody(e, now = new Date(), more = []) {
     ['Price', price],
   ].filter((f) => f[1]);
   const desc = String(e.description || '').trim();
-  const organiser = e.source_url ? `<a class="link" href="${go}" rel="nofollow noopener">More from the organiser ↗</a>` : '';
+  const organiser = e.source_url ? `<a class="link" href="${go}" target="_blank" rel="nofollow noopener">More from the organiser ↗</a>` : '';
   return `<main>
   ${hero}
   <div class="actions">${actions}</div>

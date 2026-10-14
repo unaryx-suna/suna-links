@@ -76,8 +76,8 @@ await t('the link markup: sponsored, new tab, commission line, hidden by default
 await t('W-47 a place with a pin gets Apple Maps and Google Maps; the Apple one shows only on Apple devices', async () => {
   pin = { latitude: 3.1537, longitude: 101.7134 };
   const r = await render(`/place/${PLAIN}`);
-  assert(r.body.includes('<p id="maps"><a class="map-btn maps-apple" href="https://maps.apple.com/?daddr=3.1537,101.7134&amp;dirflg=w">Apple Maps</a>'
-    + '<a class="map-btn maps-google" href="https://www.google.com/maps/dir/?api=1&amp;destination=3.1537,101.7134&amp;travelmode=walking">Google Maps</a></p>'));
+  assert(r.body.includes('<p id="maps"><a class="map-btn maps-apple" href="https://maps.apple.com/?daddr=3.1537,101.7134&amp;dirflg=w" target="_blank" rel="noopener">Apple Maps</a>'
+    + '<a class="map-btn maps-google" href="https://www.google.com/maps/dir/?api=1&amp;destination=3.1537,101.7134&amp;travelmode=walking" target="_blank" rel="noopener">Google Maps</a></p>'));
   assert.match(r.body, /classList\.add\('apple-maps'\)/);
   assert(r.body.includes('html:not(.apple-maps) .maps-apple{display:none !important}'));
   assert(!r.body.includes('<!--MAPS-->'));
@@ -94,6 +94,14 @@ await t('W-47 no pin, or 0,0: no maps buttons, and the slot is removed', async (
 await t('W-47 Open in Suna on iPhone is unchanged (the existing suna://place hand-off)', async () => {
   assert.match(SHELL, /btn\.href = 'suna:\/\/place\?id=' \+ encodeURIComponent\(placeID\)/);
   assert.match(SHELL, /btn\.textContent = 'Open in Suna'/);
+});
+
+// W-50: Take me there and Book tickets open a new tab; our own links don't.
+const { badLinkTargets } = await import('./link-targets.mjs');
+await t('W-50 outbound links open a new tab, internal ones never', async () => {
+  const r = await render(`/place/${LINKED}`);
+  assert.deepEqual(badLinkTargets(r.body), []);
+  assert.match(r.body, /<a id="book-link" target="_blank" rel="sponsored noopener">/, 'Book tickets keeps sponsored');
 });
 
 console.log(bad ? `\nplace: ${bad} FAILED` : '\nplace: all passed');

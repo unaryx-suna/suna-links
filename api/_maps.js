@@ -39,8 +39,9 @@ export const MAPS_HEAD = `<script>if(${APPLE_UA}.test(navigator.userAgent))docum
 /** The two links. `cls` is the page's button class, so they match its other buttons. */
 export function mapsLinks(lat, lng, cls = 'btn') {
   if (!hasPin(lat, lng)) return '';
-  return `<a class="${cls} maps-apple" href="${appleMapsURL(lat, lng).replace(/&/g, '&amp;')}">Apple Maps</a>`
-    + `<a class="${cls} maps-google" href="${googleMapsURL(lat, lng).replace(/&/g, '&amp;')}">Google Maps</a>`;
+  // Off our site, so a new tab (W-50, Brian 15 Oct).
+  return `<a class="${cls} maps-apple" href="${appleMapsURL(lat, lng).replace(/&/g, '&amp;')}" target="_blank" rel="noopener">Apple Maps</a>`
+    + `<a class="${cls} maps-google" href="${googleMapsURL(lat, lng).replace(/&/g, '&amp;')}" target="_blank" rel="noopener">Google Maps</a>`;
 }
 
 /** Hides the Apple link off Apple devices; otherwise the button styles stay the page's own. */
@@ -62,11 +63,12 @@ const TOUCH_APPLE = `(${IOS_UA}.test(navigator.userAgent)||(/Macintosh/.test(nav
 export function directions(lat, lng, label, cls = 'btn btn-outline') {
   if (!hasPin(lat, lng)) return '';
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<a class="${cls}" id="directions" href="${esc(googleMapsURL(lat, lng))}">Directions</a>`
+  // Every way out opens a new tab (W-50); on iPhone the sheet takes the tap first.
+  return `<a class="${cls}" id="directions" href="${esc(googleMapsURL(lat, lng))}" target="_blank" rel="noopener">Directions</a>`
     + '<div class="sheet-dim" id="dir-sheet" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dir-title">'
     + `<div class="sheet-group"><p class="sheet-title" id="dir-title">${esc(label ? `Directions to ${label}` : 'Directions')}</p>`
-    + `<a class="sheet-opt" href="${esc(appleMapsURL(lat, lng))}">Apple Maps</a>`
-    + `<a class="sheet-opt" href="${esc(googleMapsURL(lat, lng))}">Google Maps</a></div>`
+    + `<a class="sheet-opt" href="${esc(appleMapsURL(lat, lng))}" target="_blank" rel="noopener">Apple Maps</a>`
+    + `<a class="sheet-opt" href="${esc(googleMapsURL(lat, lng))}" target="_blank" rel="noopener">Google Maps</a></div>`
     + '<button class="sheet-group sheet-cancel" type="button" id="dir-cancel">Cancel</button></div></div>';
 }
 

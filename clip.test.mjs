@@ -107,7 +107,10 @@ await t('/c/: the query is approved rows, the next 7 days, a box around the venu
 });
 await t('/c/: On tonight and This week split at the venue\'s midnight; rows have no buttons', async () => {
   const later = now + 3 * 24 * H;
-  state.events = [ev(U(1), 0.0045), ev(U(2), 0.004, { start_time: iso(later), end_time: iso(later + 2 * H) })];
+  // On now (started an hour ago), so it's "tonight" at any hour the suite runs;
+  // now + 1 h crosses the venue's midnight after 11pm.
+  state.events = [ev(U(1), 0.0045, { start_time: iso(now - H), end_time: iso(now + 30 * 60000) }),
+    ev(U(2), 0.004, { start_time: iso(later), end_time: iso(later + 2 * H) })];
   const r = await render(venue, '/c/worq-ttdi');
   const tonight = r.body.indexOf('<h2>On tonight</h2>');
   const week = r.body.indexOf('<h2>This week</h2>');
@@ -116,7 +119,7 @@ await t('/c/: On tonight and This week split at the venue\'s midnight; rows have
   assert(r.body.indexOf(U(2)) > week);
   assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"|ev-maps/);
   assert.match(r.body, /<span class="row-meta">From RM35 · Taman Tun Park · 500 m<\/span>/);
-  const s2 = splitTonight([{ start_time: iso(now + H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
+  const s2 = splitTonight([{ start_time: iso(now - H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
   assert.deepEqual([s2.tonight.length, s2.week.length], [1, 1]);
 });
 await t('/c/: Worth a walk: the two nearest places within 800 m, never lodging or filler, linked to /place/', async () => {
@@ -219,7 +222,7 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   const order = ['>Get tickets ↗<', '>Directions<', '>Save in Suna<'].map((x) => actions.indexOf(x));
   assert(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `order ${order}`);
   assert.equal((r.body.match(/class="btn"/g) || []).length, 1, 'one sand button');
-  assert.match(r.body, new RegExp(`<a class="btn" href="https://unaryx\\.com/go/e-${U(4)}" rel="nofollow noopener">Get tickets ↗</a><a class="btn btn-outline half" id="directions"`));
+  assert.match(r.body, new RegExp(`<a class="btn" href="https://unaryx\\.com/go/e-${U(4)}" target="_blank" rel="nofollow noopener">Get tickets ↗</a><a class="btn btn-outline half" id="directions"`));
   assert.match(r.body, /<a class="btn btn-outline half save-suna" data-scheme="suna:\/\/event\?id=4444/);
   assert.doesNotMatch(r.body, /Get tickets ↗<\/a><p/, 'no line under Get tickets');
   assert.match(r.body, /Suna may earn a commission on some ticket links/);
@@ -241,10 +244,10 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
 await t('/e/: Directions is Google Maps in the HTML, with the Apple/Google sheet for iPhone', async () => {
   state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   const r = await render(event, `/e/${U(4)}`);
-  assert.match(r.body, /id="directions" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.14231\d*,101\.6295679&amp;travelmode=walking">Directions<\/a>/);
+  assert.match(r.body, /id="directions" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.14231\d*,101\.6295679&amp;travelmode=walking" target="_blank" rel="noopener">Directions<\/a>/);
   assert.match(r.body, /<div class="sheet-dim" id="dir-sheet" hidden>/);
   assert.match(r.body, /<p class="sheet-title" id="dir-title">Directions to Taman Tun Park<\/p>/);
-  assert.match(r.body, /<a class="sheet-opt" href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;dirflg=w">Apple Maps<\/a>/);
+  assert.match(r.body, /<a class="sheet-opt" href="https:\/\/maps\.apple\.com\/\?daddr=3\.14231\d*,101\.6295679&amp;dirflg=w" target="_blank" rel="noopener">Apple Maps<\/a>/);
   assert.match(r.body, />Cancel<\/button>/);
   state.eventRow = ev(U(4), 0, { latitude: 0, longitude: 0, start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   assert.doesNotMatch((await render(event, `/e/${U(4)}`)).body, /id="directions"/, 'no pin, no Directions');
@@ -296,7 +299,7 @@ await t('/e/: no price → no offers, Save in Suna; free → price 0, More from 
   r = await render(event, `/e/${U(6)}`);
   ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers.price, 0);
-  assert.match(r.body, new RegExp(`<a class="link" href="https://unaryx\\.com/go/e-${U(6)}" rel="nofollow noopener">More from the organiser ↗</a>`));
+  assert.match(r.body, new RegExp(`<a class="link" href="https://unaryx\\.com/go/e-${U(6)}" target="_blank" rel="nofollow noopener">More from the organiser ↗</a>`));
   assert.match(r.body, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"/);
   assert.doesNotMatch(r.body, /Get tickets|commission/);
 });
@@ -406,7 +409,7 @@ await t('W-48 free with no link: "Free entry · no ticket needed" above Save in 
 await t('W-48 paid with a link: Get tickets; free with a link: Save in Suna plus the organiser link, both via /go/', async () => {
   state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example' });
   let b = (await render(event, `/e/${U(9)}`)).body;
-  assert.match(b, new RegExp(`href="https://unaryx\\.com/go/e-${U(9)}" rel="nofollow noopener">More from the organiser ↗`));
+  assert.match(b, new RegExp(`href="https://unaryx\\.com/go/e-${U(9)}" target="_blank" rel="nofollow noopener">More from the organiser ↗`));
   assert.doesNotMatch(b, /Get tickets/);
   state.eventRow = ev(U(9), 0, { ...RR, source_url: 'https://x.example', price_type: 'paid', price_amount: 20 });
   b = (await render(event, `/e/${U(9)}`)).body;
@@ -449,6 +452,30 @@ await t('W-45 eventSlug matches unaryx-site\'s paths.js for the same fixtures', 
   let site = null;
   try { site = (await import('node:module')).createRequire(import.meta.url)('../../unaryx-site/api/_lib/paths.js'); } catch { /* not beside us */ }
   if (site && typeof site.eventSlug === 'function') for (const [e] of FIX) assert.equal(eventSlug(e), site.eventSlug(e), `parity: ${e.name}`);
+});
+
+// ---- W-50: what leaves our sites opens a new tab; our own pages don't ----
+const { badLinkTargets } = await import('./link-targets.mjs');
+await t('W-50 /e/ (paid, free with a link, ended) and /c/: outbound links open a new tab, internal ones never', async () => {
+  const fixed = { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' };
+  state.events = [ev(U(1), 0.001), ev(U(2), 0.002)];
+  for (const row of [ev(U(4), 0.0045, fixed), ev(U(6), 0, { ...fixed, price_type: 'free', price_amount: null }),
+    ev(U(5), 0, { start_time: iso(now - 5 * H), end_time: iso(now - H) })]) {
+    state.eventRow = row;
+    const body = (await render(event, `/e/${row.id}`)).body;
+    assert.deepEqual(badLinkTargets(body), [], row.id);
+  }
+  state.eventRow = ev(U(4), 0.0045, fixed);
+  const paid = (await render(event, `/e/${U(4)}`)).body.replace(/<script[\s\S]*?<\/script>/g, '');
+  assert.equal((paid.match(/target="_blank"/g) || []).length, 5, 'Get tickets, organiser, Directions and its two sheet options');
+  assert.match(paid, /<a class="row" href="\/e\/[^"]+">/, 'rows stay in the tab');
+  assert.match(paid, /save-suna" data-scheme="[^"]+" href="https:\/\/apps\.apple\.com[^"]+">Save in Suna/, 'Save in Suna stays in the tab');
+  state.places = [{ id: 'p1', name: 'Place p1', category: 'Cafe', description: 'A neighbourhood cafe with good coffee, long tables and a garden at the back.', cover_image_url: null, latitude: VENUE.lat + 0.002, longitude: VENUE.lng }];
+  assert.deepEqual(badLinkTargets((await render(venue, '/c/worq-ttdi')).body), []);
+  assert.deepEqual(badLinkTargets((await render(venue, '/c/nope')).body), []);
+  state.places = []; state.events = [];
+  // And the check itself bites.
+  assert.equal(badLinkTargets('<a href="/go/e-1" rel="nofollow noopener">x</a><a href="/e/1" target="_blank" rel="noopener">y</a>').length, 2);
 });
 
 console.log(bad ? `\n${bad} failed` : '\nall passed');
