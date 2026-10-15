@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Suna Panel's "Add from Maps link" (W-56), against fixtures: no live call.
+// Suna Panel's "Add from Google Maps link" (W-56), against fixtures: no live call.
 //
 // The logic sits between two markers in public/field.html; this file runs that
 // block on its own. The fixtures are the response shapes in admin-add-place
@@ -136,6 +136,11 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
   assert.equal(build, 'field-v36');
+});
+await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
+  assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
+  assert.match(html, /id="menu-addplace" hidden>Add from Google Maps link</);
+  assert(!/>Add from Maps link/.test(html));
 });
 await t('no secret in the page, and no other function or endpoint', () => {
   assert(!/sb_secret_|service_role|SERVICE_ROLE/.test(block));
