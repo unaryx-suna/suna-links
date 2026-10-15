@@ -42,13 +42,14 @@ const CITY_PATH = { 'kuala-lumpur': 'kuala-lumpur', melbourne: 'melbourne', sydn
 const CURRENCY = { AU: 'AUD', MY: 'MYR', SG: 'SGD' };
 
 // The columns /events reads, plus venue_landmark_id (W-48: the place's name
-// when the venue text is empty). Same table, same approved-only policy.
+// when the venue text is empty) and hours_text (I-100, W-51: the hours as Ops
+// writes them). Same table, same approved-only policy.
 export const EVENT_SELECT = [
   'id', 'name', 'description', 'category', 'latitude', 'longitude', 'image_url',
   'start_time', 'end_time', 'daily_start_time', 'daily_end_time',
   'recurrence_type', 'recurrence_days', 'recurrence_until',
   'price_type', 'price_amount', 'price_currency', 'source_url', 'venue',
-  'organizer_name', 'performer_names', 'on_sale_from', 'venue_landmark_id',
+  'organizer_name', 'performer_names', 'on_sale_from', 'venue_landmark_id', 'hours_text',
 ].join(',');
 
 const STORE = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765';
@@ -212,11 +213,12 @@ export function hoursFromDescription(text) {
 }
 
 /**
- * whenLine, except where the description's own hours contradict "daily":
- * then the dates, then the description's hours line.
+ * whenLine, except where Ops's hours_text or the description's own hours
+ * contradict "daily": then the dates, then that hours line.
  */
 export function whenText(event, timeZone, now = new Date()) {
-  const hours = event.daily_start_time && event.daily_end_time ? hoursFromDescription(event.description) : null;
+  const hours = ownHours(event, ', ')
+    || (event.daily_start_time && event.daily_end_time ? hoursFromDescription(event.description) : null);
   if (!hours) return whenLine(event, timeZone, now);
   const base = whenLine({ ...event, daily_start_time: null, daily_end_time: null }, timeZone, now);
   // A one-day event's line already carries its times; only a run gets the hours.
@@ -243,13 +245,23 @@ export function whenFact(event, timeZone, now = new Date()) {
  * Never "daily" when the description says otherwise (W-48).
  */
 export function hoursFact(event, timeZone) {
-  const own = typeof event.hours_text === 'string' && event.hours_text.trim();
+  const own = ownHours(event);
   if (own) return own;
   const start = new Date(event.start_time);
   const end = new Date(event.end_time);
   const run = event.recurrence_type === 'period' || event.recurrence_type === 'weekly' || !sameLocalDay(start, end, timeZone);
   if (!run || !event.daily_start_time || !event.daily_end_time) return null;
   return hoursFromDescription(event.description) || `${event.daily_start_time}–${event.daily_end_time} daily`;
+}
+
+/**
+ * Ops's hours_text (I-100: ≤ 120 chars, may run over lines), or null. `join`
+ * folds its lines into one for a single-line place like the meta description.
+ */
+export function ownHours(event, join = null) {
+  const own = typeof event.hours_text === 'string' ? event.hours_text.trim() : '';
+  if (!own) return null;
+  return join ? own.split(/\s*\n+\s*/).join(join) : own;
 }
 
 /** 'ended' once its end time has passed, else null. (Cancelled rows aren't readable; see the top.) */
