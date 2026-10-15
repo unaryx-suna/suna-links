@@ -245,6 +245,14 @@
   .crrow small { color: var(--dim); font-size: 12px; }
   .crtag { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
     background: #6E4BD8; color: #fff; font-size: 11px; font-weight: 600; vertical-align: 1px; }
+  /* W-56: Add from Maps link. The pin is OpenStreetMap's own embed, the
+     same provider the place search already asks. */
+  .ammap { display: block; width: 100%; height: 180px; border: 0; border-radius: 12px; margin: 10px 0 4px;
+    background: rgba(255,255,255,.06); }
+  .amfacts { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  .amfacts li { padding: 3px 0; }
+  .amfacts .k { color: var(--muted); display: inline-block; min-width: 82px; }
+  .amlane { font-size: 12px; color: var(--dim); margin: 10px 0 0; }
   .switch { flex: none; position: relative; width: 51px; height: 31px; padding: 0; border-radius: 999px;
     background: rgba(255,255,255,.16); transition: background .2s; }
   .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px;
@@ -637,6 +645,46 @@
     <p class="sub" id="cr-results-note" hidden></p>
   </div>
 
+  <!-- ════ Add from Maps link (W-56) ═════════════════════════════════════
+       Ops, 15 Oct: adding a tipped place without anyone pasting code. Both
+       buttons call `admin-add-place` (I-124) with this page's own session; the
+       function checks is_admin itself, and this screen is only in an admin's
+       menu as well. -->
+  <div class="wrap" id="pane-addplace" hidden>
+    <h1>Add from Maps link</h1>
+    <p class="sub">Paste a Google Maps link to one place. Preview is free. Add
+      asks Google once, and there are 20 of those a day.</p>
+    <label for="am-link">Google Maps link or place id</label>
+    <input id="am-link" type="search" placeholder="https://maps.app.goo.gl/…" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+    <label>Who goes there (optional)</label>
+    <div class="chips" id="am-mix">
+      <button class="chip" type="button" data-v="local" aria-pressed="false">Local</button>
+      <button class="chip" type="button" data-v="mixed" aria-pressed="false">Mixed</button>
+      <button class="chip" type="button" data-v="visitor_heavy" aria-pressed="false">Visitor-heavy</button>
+    </div>
+    <label>How big a draw (optional)</label>
+    <div class="chips" id="am-draw">
+      <button class="chip" type="button" data-v="everyday" aria-pressed="false">Everyday</button>
+      <button class="chip" type="button" data-v="notable" aria-pressed="false">Notable</button>
+      <button class="chip" type="button" data-v="landmark" aria-pressed="false">Landmark</button>
+    </div>
+
+    <label for="am-fill">Fill an existing place instead (optional)</label>
+    <div class="opt" id="am-fill-chosen" hidden style="cursor:default">
+      <strong id="am-fill-name"></strong>
+      <small>Keeps its name and pin; gains Google's place id, hours, photo references and rating.</small>
+      <button class="linkish" type="button" id="am-fill-clear">Add as a new place instead</button>
+    </div>
+    <input id="am-fill" type="search" placeholder="Search Suna's places by name" autocomplete="off" spellcheck="false">
+    <div id="am-fill-results" style="margin-top:8px"></div>
+
+    <button class="primary" id="am-preview" style="margin-top:18px">Preview</button>
+    <div id="am-out" style="margin-top:14px"></div>
+    <button class="primary" id="am-add" hidden style="margin-top:12px">Add</button>
+    <p class="amlane" id="am-lane" hidden></p>
+  </div>
+
   <div class="wrap" id="pane-country" hidden>
     <h1>Welcome to …</h1>
     <p class="sub">229 countries are selectable. Two have a hero image, two have
@@ -781,6 +829,7 @@
     <button class="opt" id="menu-country" hidden>Country<small>Hero image, subtitle, foods and apps</small></button>
     <button class="opt" id="menu-events" hidden>Event photos<small>Upcoming events, missing photos first</small></button>
     <button class="opt" id="menu-creators" hidden>Creators<small>Who gets the purple Creator tag</small></button>
+    <button class="opt" id="menu-addplace" hidden>Add from Maps link<small>A tipped place, straight from Google Maps</small></button>
     <button class="opt" id="menu-signout">Sign out</button>
     <p class="note" style="margin-top:14px">
       Build <span id="build-stamp" class="build">…</span>
@@ -865,7 +914,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v35';
+const BUILD = 'field-v36';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -4771,6 +4820,7 @@ function openMenu() {
   $('menu-country').hidden = !(profile && profile.is_admin);
   $('menu-events').hidden = !(profile && profile.is_admin);
   $('menu-creators').hidden = !(profile && profile.is_admin);
+  $('menu-addplace').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
     $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
@@ -4790,11 +4840,12 @@ $('menu-queue').onclick   = () => { closeMenu(); switchTab('queue'); };
 $('menu-country').onclick = () => { closeMenu(); switchTab('country'); };
 $('menu-events').onclick = () => { closeMenu(); switchTab('events'); };
 $('menu-creators').onclick = () => { closeMenu(); switchTab('creators'); };
+$('menu-addplace').onclick = () => { closeMenu(); switchTab('addplace'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators']) {
+  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
@@ -7181,6 +7232,282 @@ async function toggleCreator(p, sw, note) {
   await loadCreators();
 }
 
+/* ── Add from Maps link (W-56) ──────────────────────────────────────────────
+
+   Ops pastes a Google Maps link; `admin-add-place` (I-124, the iOS session's)
+   does the rest. Nothing here is new server surface: the function checks
+   is_admin against the caller's JWT, claims the Google call on its own lane
+   (20 a UTC day) and runs the duplicate and ledger checks.
+
+   **What Preview can show is what the link says.** The function's dry run
+   reads the link (following a maps.app.goo.gl redirect, which is free) and
+   returns the place id, or the name and pin in the URL. It asks Google nothing,
+   so address, category and hours only exist after Add. The duplicate warning
+   on Preview is this page's own read of `landmarks` (the public select, so
+   hidden rows are out of it); the function checks again on Add, hidden rows
+   included, and refuses with the match named.
+
+   The lane count comes back only from a call that claimed: an add says
+   "n of 20 today", a refusal says they are used. A fill, a dry run and a
+   duplicate claim nothing visible, so the line stays as it was.
+   Analytics: none (invariant 24; no web events until after 3.2). */
+
+// W-56 logic begin: pure, tested in add-place.test.mjs against fixtures.
+const AM_FN = '/functions/v1/admin-add-place';
+
+/** One call to the function. `token` is the session's access token. Never
+ *  throws: a network failure or a non-JSON body becomes `{ status: 0 }` or
+ *  an `error` the describer can word. */
+async function amCall(fetchFn, base, apikey, token, body) {
+  try {
+    const r = await fetchFn(base + AM_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey, Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body),
+    });
+    let json = null;
+    try { json = await r.json(); } catch { json = null; }
+    return { status: r.status, body: json || { error: 'The function answered ' + r.status + ' with no details.' } };
+  } catch (e) {
+    return { status: 0, body: { error: 'Could not reach the function. ' + ((e && e.message) || '') } };
+  }
+}
+
+/** The request body. Optional fields are left out rather than sent empty. */
+function amBody(link, opts, dryRun) {
+  const b = { link: String(link || '').trim() };
+  if (opts.visitor_mix) b.visitor_mix = opts.visitor_mix;
+  if (opts.draw) b.draw = opts.draw;
+  if (opts.landmark_id) b.landmark_id = opts.landmark_id;
+  if (dryRun) b.dry_run = true;
+  return b;
+}
+
+/** Metres between two points: the function's own rule (link.ts), so the
+ *  Preview warning and the Add refusal agree. */
+function amMetres(aLat, aLng, bLat, bLng) {
+  const r = 6371000, toRad = Math.PI / 180;
+  const dLat = (bLat - aLat) * toRad, dLng = (bLng - aLng) * toRad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(h));
+}
+
+/** The same two rules as the function: the same place id, or the same name
+ *  (case and spaces aside) within 50 m. `rows` are landmarks near the pin, or
+ *  the ones carrying the place id. A row being filled is never its own dupe. */
+function amDupe(target, rows, fillId) {
+  for (const r of rows || []) {
+    if (r.id === fillId) continue;
+    if (target.placeId && r.google_place_id === target.placeId) return { id: r.id, name: r.name, by: 'place id' };
+    if (target.name && target.lat != null && r.latitude != null
+        && String(r.name || '').trim().toLowerCase() === target.name.trim().toLowerCase()
+        && amMetres(target.lat, target.lng, r.latitude, r.longitude) <= 50) {
+      return { id: r.id, name: r.name, by: 'name within 50 m' };
+    }
+  }
+  return null;
+}
+
+/** "n of 20 today" from a claim; null when the call claimed nothing. */
+function amLane(claim, status) {
+  if (!claim || typeof claim !== 'object') return null;
+  if (claim.ok === true && claim.calls_made != null && claim.limit != null) return claim.calls_made + ' of ' + claim.limit + ' today';
+  if (status === 429) return (claim.limit != null ? 'All ' + claim.limit : 'All') + ' of today’s adds are used';
+  return null;
+}
+
+/** What to show for one answer. `tone` is ok | warn | bad; `facts` are
+ *  [label, value] pairs; `place` is the Suna place to link to, if any. */
+function amDescribe(status, body) {
+  body = body || {};
+  const placeUrl = (id) => 'https://app.unaryx.com/place/' + id;
+  if (status === 200 && body.dry_run) {
+    const t = body.target || {};
+    const facts = [];
+    if (t.name) facts.push(['Name', t.name]);
+    if (t.placeId) facts.push(['Place id', t.placeId]);
+    if (t.lat != null && t.lng != null) facts.push(['Pin', t.lat.toFixed(5) + ', ' + t.lng.toFixed(5)]);
+    return { tone: 'ok', title: 'The link names this place', facts, pin: t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null,
+      note: 'Address, category and hours come from Google when you tap Add.', canAdd: true };
+  }
+  if (status === 200 && body.added) {
+    return { tone: 'ok', title: 'Added: ' + body.added.name,
+      facts: [['Category', body.added.category || 'Other'], ['City', body.city || 'None nearby: the place has no city yet']],
+      place: { id: body.added.id, url: placeUrl(body.added.id) }, lane: amLane(body.claim, status) };
+  }
+  if (status === 200 && body.filled) {
+    const f = body.filled;
+    return { tone: 'ok', title: 'Filled: ' + f.name,
+      facts: [['From Google', (body.from && body.from.name) || '…'], ['Pin', 'kept where it was']],
+      place: { id: f.id, url: placeUrl(f.id) }, lane: null };
+  }
+  if (status === 409 && body.refused === 'duplicate' && body.match) {
+    return { tone: 'warn', title: 'Already in Suna: ' + body.match.name, facts: [['Matched by', body.by || 'duplicate']],
+      place: { id: body.match.id, url: placeUrl(body.match.id) } };
+  }
+  if (status === 409 && body.refused) {
+    return { tone: 'warn', title: 'Not added', facts: [], note: 'An admin hid or rejected this place before, so it stays out.' };
+  }
+  if (status === 429) {
+    return { tone: 'bad', title: 'Today’s Google adds are used', facts: [], note: 'They reset at 08:00 Malaysia time (midnight UTC).', lane: amLane(body.claim, status) };
+  }
+  const why = status === 401 ? 'Sign in again: the session has run out.'
+    : status === 403 ? 'Only admins can add places here.'
+    : status === 404 ? 'Google found no place for that link.'
+    : status === 400 && /not a Google Maps/.test(body.error || '') ? 'That is not a Google Maps link to a place. Open the place in Google Maps, tap Share, and paste that link.'
+    : (body.error || 'Something went wrong (' + status + ').');
+  return { tone: 'bad', title: 'Not added', facts: [], note: why };
+}
+// W-56 logic end
+
+let amFillPick = null;        // { id, name } when filling an existing place
+let amPreviewed = null;       // the body Preview ran with; Add sends the same
+let amFillSeq = 0, amFillTimer = null;
+
+function amChips(id) {
+  const box = $(id);
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    for (const c of box.querySelectorAll('.chip')) c.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-pressed', String(on));   // tap again to clear: both are optional
+    amReset();
+  });
+}
+amChips('am-mix'); amChips('am-draw');
+const amPicked = (id) => { const b = $(id).querySelector('.chip[aria-pressed="true"]'); return b ? b.dataset.v : null; };
+
+function amOpts() {
+  return { visitor_mix: amPicked('am-mix'), draw: amPicked('am-draw'), landmark_id: amFillPick ? amFillPick.id : null };
+}
+
+/** Any edit after a Preview means Add would send something unpreviewed. */
+function amReset() { amPreviewed = null; $('am-add').hidden = true; }
+$('am-link').addEventListener('input', () => { amReset(); $('am-out').innerHTML = ''; });
+
+async function amToken() {
+  // The same check every upload makes: a token about to lapse is refreshed first.
+  if (!(await sessionIsLive())) { try { await db.auth.refreshSession(); } catch {} }
+  const { data } = await db.auth.getSession();
+  return (data && data.session && data.session.access_token) || '';
+}
+
+function amRender(view, dupe) {
+  const out = $('am-out');
+  out.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'opt' + (view.tone === 'ok' ? '' : view.tone === 'warn' ? ' known' : ' warn');
+  card.style.cursor = 'default';
+  const h = document.createElement('strong'); h.textContent = view.title; card.appendChild(h);
+  if (view.facts.length) {
+    const ul = document.createElement('ul'); ul.className = 'amfacts';
+    for (const [k, v] of view.facts) {
+      const li = document.createElement('li');
+      const ks = document.createElement('span'); ks.className = 'k'; ks.textContent = k;
+      li.append(ks, document.createTextNode(v)); ul.appendChild(li);
+    }
+    card.appendChild(ul);
+  }
+  if (view.pin) {
+    const d = 0.003, { lat, lng } = view.pin;
+    const f = document.createElement('iframe');
+    f.className = 'ammap'; f.loading = 'lazy'; f.title = 'Where the link puts the pin';
+    f.referrerPolicy = 'no-referrer';
+    f.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + [lng - d, lat - d, lng + d, lat + d].map((x) => x.toFixed(5)).join(',')
+      + '&layer=mapnik&marker=' + lat.toFixed(5) + ',' + lng.toFixed(5);
+    card.appendChild(f);
+  }
+  if (dupe) {
+    const w = document.createElement('small'); w.style.color = 'var(--danger)';
+    w.textContent = 'Already in Suna as “' + dupe.name + '” (same ' + dupe.by + '). Add would spend a Google call and then refuse it.';
+    card.appendChild(w);
+  }
+  if (view.note) { const n = document.createElement('small'); n.textContent = view.note; card.appendChild(n); }
+  const place = dupe ? { url: 'https://app.unaryx.com/place/' + dupe.id } : view.place;
+  if (place) {
+    const a = document.createElement('a'); a.href = place.url; a.target = '_blank'; a.rel = 'noopener';
+    a.className = 'linkish'; a.style.display = 'inline-block'; a.textContent = 'Open it in Suna';
+    card.appendChild(a);
+  }
+  out.appendChild(card);
+  if (view.lane) { $('am-lane').hidden = false; $('am-lane').textContent = 'Google adds: ' + view.lane; }
+}
+
+/** Preview's own duplicate read: the public `landmarks` select only. */
+async function amFindDupe(target) {
+  const fillId = amFillPick ? amFillPick.id : null;
+  if (target.placeId) {
+    const { data } = await db.from('landmarks').select('id,name,google_place_id').eq('google_place_id', target.placeId).limit(2);
+    return amDupe(target, data, fillId);
+  }
+  if (target.name && target.lat != null && target.lng != null) {
+    const box = 0.001;
+    const { data } = await db.from('landmarks').select('id,name,latitude,longitude')
+      .gte('latitude', target.lat - box).lte('latitude', target.lat + box)
+      .gte('longitude', target.lng - box).lte('longitude', target.lng + box).limit(200);
+    return amDupe(target, data, fillId);
+  }
+  return null;
+}
+
+$('am-preview').onclick = async () => {
+  const link = $('am-link').value.trim();
+  if (!link) { amRender({ tone: 'bad', title: 'Paste a link first', facts: [] }); return; }
+  const btn = $('am-preview'); btn.disabled = true; btn.textContent = 'Reading the link…';
+  amReset();
+  const body = amBody(link, amOpts(), true);
+  const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), body);
+  const view = amDescribe(res.status, res.body);
+  let dupe = null;
+  if (view.canAdd) { try { dupe = await amFindDupe(res.body.target || {}); } catch { dupe = null; } }
+  btn.disabled = false; btn.textContent = 'Preview';
+  amRender(view, dupe);
+  if (view.canAdd && !dupe) {
+    amPreviewed = amBody(link, amOpts(), false);
+    $('am-add').textContent = amFillPick ? 'Fill “' + amFillPick.name + '”' : 'Add';
+    $('am-add').hidden = false;
+  }
+};
+
+$('am-add').onclick = async () => {
+  if (!amPreviewed) return;
+  const btn = $('am-add'); btn.disabled = true; btn.textContent = 'Asking Google…';
+  const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), amPreviewed);
+  btn.disabled = false; btn.hidden = true;
+  amPreviewed = null;               // one Add per Preview: a second tap would spend another call
+  amRender(amDescribe(res.status, res.body), null);
+};
+
+async function amSearchFill() {
+  const q = ($('am-fill').value || '').trim();
+  const seq = ++amFillSeq;
+  const box = $('am-fill-results');
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  const { data, error } = await db.from('landmarks').select('id,name,address,google_place_id')
+    .ilike('name', crLike(q)).order('name').limit(8);
+  if (seq !== amFillSeq) return;
+  box.innerHTML = '';
+  if (error) { box.textContent = 'Could not search. ' + error.message; return; }
+  if (!data || !data.length) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = 'No place matches “' + q + '”.'; box.appendChild(p); return; }
+  for (const r of data) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
+    const s = document.createElement('strong'); s.textContent = r.name;
+    const sm = document.createElement('small'); sm.textContent = (r.address || 'No address') + (r.google_place_id ? ' · already has a place id' : '');
+    b.append(s, sm);
+    b.onclick = () => {
+      amFillPick = { id: r.id, name: r.name };
+      $('am-fill-name').textContent = r.name;
+      $('am-fill-chosen').hidden = false; $('am-fill').hidden = true;
+      box.innerHTML = ''; amReset();
+    };
+    box.appendChild(b);
+  }
+}
+$('am-fill').addEventListener('input', () => { clearTimeout(amFillTimer); amFillTimer = setTimeout(amSearchFill, 250); });
+$('am-fill-clear').onclick = () => {
+  amFillPick = null; $('am-fill-chosen').hidden = true; $('am-fill').hidden = false; $('am-fill').value = ''; amReset();
+};
+
 async function queueCountryWork(item, label, id) {
   await idbPut('queue', {
     id: id || crypto.randomUUID(),
@@ -7402,6 +7729,7 @@ async function loadProfile() {
   // entry could only produce errors. It is a menu row now, not a tab.
   $('menu-country').hidden = !profile.is_admin;
   $('menu-events').hidden = !profile.is_admin;
+  $('menu-addplace').hidden = !profile.is_admin;
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
