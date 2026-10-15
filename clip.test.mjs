@@ -394,6 +394,21 @@ await t('W-48 the description\'s days and hours beat "daily" (now under Hours, O
   // A one-day event's times are in When; no Hours row.
   assert.equal(m.hoursFact({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z', daily_start_time: '19:30', daily_end_time: '22:00' }, 'Asia/Kuala_Lumpur'), null);
 });
+await t('W-51 hours_text is read, and beats the description and the daily times on /e/', async () => {
+  calls.length = 0;
+  state.eventRow = ev(U(9), 0, { ...RR, hours_text: 'Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon' });
+  const b = (await render(event, `/e/${U(9)}`)).body;
+  assert(calls.some((u) => u.includes('/rest/v1/world_events') && u.includes('id=eq.') && /select=[^&]*hours_text/.test(u)), 'EVENT_SELECT reads hours_text');
+  assert.match(b, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon<\/dd>/);
+  // The meta description is one line: its lines fold with commas.
+  assert.match(b, /<meta name="description" content="[^"]*· Tue–Sat 11am–7pm, Sun 11am–5pm · closed Mon/);
+  assert.doesNotMatch(b, /11:00–19:00/);
+  // Blank hours_text is no hours_text: the description's hours, as before.
+  state.eventRow = ev(U(9), 0, { ...RR, hours_text: '  ' });
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm, Sun 11am–5pm<\/dd>/);
+  state.eventRow = ev(U(9), 0, { ...RR, description: 'A survey of his work.', hours_text: null });
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00–19:00 daily<\/dd>/);
+});
 await t('W-48 the description sits under About, after the facts', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
