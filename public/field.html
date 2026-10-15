@@ -251,7 +251,9 @@
     background: rgba(255,255,255,.06); }
   .amfacts { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
   .amfacts li { padding: 3px 0; }
-  .amfacts .k { color: var(--muted); display: inline-block; min-width: 82px; }
+  .amfacts li { display: flex; gap: 8px; }
+  .amfacts .k { color: var(--muted); flex: 0 0 82px; }
+  .amfacts .v { white-space: pre-line; min-width: 0; overflow-wrap: anywhere; }
   .amlane { font-size: 12px; color: var(--dim); margin: 10px 0 0; }
   .switch { flex: none; position: relative; width: 51px; height: 31px; padding: 0; border-radius: 999px;
     background: rgba(255,255,255,.16); transition: background .2s; }
@@ -652,8 +654,9 @@
        menu as well. -->
   <div class="wrap" id="pane-addplace" hidden>
     <h1>Add from Maps link</h1>
-    <p class="sub">Paste a Google Maps link to one place. Preview is free. Add
-      asks Google once, and there are 20 of those a day.</p>
+    <p class="sub">Paste a Google Maps link to one place. Preview asks Google
+      once, and Add uses that answer for 15 minutes, so a place costs one of
+      today's 20.</p>
     <label for="am-link">Google Maps link or place id</label>
     <input id="am-link" type="search" placeholder="https://maps.app.goo.gl/…" autocomplete="off" autocapitalize="off" spellcheck="false">
 
@@ -7239,17 +7242,15 @@ async function toggleCreator(p, sw, note) {
    is_admin against the caller's JWT, claims the Google call on its own lane
    (20 a UTC day) and runs the duplicate and ledger checks.
 
-   **What Preview can show is what the link says.** The function's dry run
-   reads the link (following a maps.app.goo.gl redirect, which is free) and
-   returns the place id, or the name and pin in the URL. It asks Google nothing,
-   so address, category and hours only exist after Add. The duplicate warning
-   on Preview is this page's own read of `landmarks` (the public select, so
-   hidden rows are out of it); the function checks again on Add, hidden rows
-   included, and refuses with the match named.
+   **Preview is the real place** (I-131, function version 2). The dry run makes
+   the one Google call and returns name, address, pin, category, hours, rating
+   and the function's own duplicate check (hidden rows included). The function
+   keeps that answer 15 minutes per admin and link, and the Add that follows
+   uses it instead of asking again (`from_preview`). So a place costs one call
+   whether or not it was previewed, and a Preview alone also costs one.
 
-   The lane count comes back only from a call that claimed: an add says
-   "n of 20 today", a refusal says they are used. A fill, a dry run and a
-   duplicate claim nothing visible, so the line stays as it was.
+   Every answer after the call carries `lane` ("n of 20"); the line under the
+   buttons shows it. A refusal at the cap carries the claim instead.
    Analytics: none (invariant 24; no web events until after 3.2). */
 
 // W-56 logic begin: pure, tested in add-place.test.mjs against fixtures.
@@ -7283,36 +7284,11 @@ function amBody(link, opts, dryRun) {
   return b;
 }
 
-/** Metres between two points: the function's own rule (link.ts), so the
- *  Preview warning and the Add refusal agree. */
-function amMetres(aLat, aLng, bLat, bLng) {
-  const r = 6371000, toRad = Math.PI / 180;
-  const dLat = (bLat - aLat) * toRad, dLng = (bLng - aLng) * toRad;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) ** 2;
-  return 2 * r * Math.asin(Math.sqrt(h));
-}
-
-/** The same two rules as the function: the same place id, or the same name
- *  (case and spaces aside) within 50 m. `rows` are landmarks near the pin, or
- *  the ones carrying the place id. A row being filled is never its own dupe. */
-function amDupe(target, rows, fillId) {
-  for (const r of rows || []) {
-    if (r.id === fillId) continue;
-    if (target.placeId && r.google_place_id === target.placeId) return { id: r.id, name: r.name, by: 'place id' };
-    if (target.name && target.lat != null && r.latitude != null
-        && String(r.name || '').trim().toLowerCase() === target.name.trim().toLowerCase()
-        && amMetres(target.lat, target.lng, r.latitude, r.longitude) <= 50) {
-      return { id: r.id, name: r.name, by: 'name within 50 m' };
-    }
-  }
-  return null;
-}
-
-/** "n of 20 today" from a claim; null when the call claimed nothing. */
-function amLane(claim, status) {
-  if (!claim || typeof claim !== 'object') return null;
-  if (claim.ok === true && claim.calls_made != null && claim.limit != null) return claim.calls_made + ' of ' + claim.limit + ' today';
-  if (status === 429) return (claim.limit != null ? 'All ' + claim.limit : 'All') + ' of today’s adds are used';
+/** "n of 20 today" from the answer's `lane`; at the cap, from its claim. */
+function amLane(body, status) {
+  if (body && typeof body.lane === 'string' && /^\d+ of \d+$/.test(body.lane)) return body.lane + ' today';
+  const claim = body && body.claim;
+  if (status === 429) return (claim && claim.limit != null ? 'All ' + claim.limit : 'All') + ' of today’s Google calls are used';
   return null;
 }
 
@@ -7321,35 +7297,45 @@ function amLane(claim, status) {
 function amDescribe(status, body) {
   body = body || {};
   const placeUrl = (id) => 'https://app.unaryx.com/place/' + id;
+  const lane = amLane(body, status);
+  const again = body.from_preview === false ? 'The preview was over 15 minutes old, so Google was asked again.' : null;
   if (status === 200 && body.dry_run) {
-    const t = body.target || {};
+    const hasPin = Number.isFinite(body.lat) && Number.isFinite(body.lng);
     const facts = [];
-    if (t.name) facts.push(['Name', t.name]);
-    if (t.placeId) facts.push(['Place id', t.placeId]);
-    if (t.lat != null && t.lng != null) facts.push(['Pin', t.lat.toFixed(5) + ', ' + t.lng.toFixed(5)]);
-    return { tone: 'ok', title: 'The link names this place', facts, pin: t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null,
-      note: 'Address, category and hours come from Google when you tap Add.', canAdd: true };
+    if (body.address) facts.push(['Address', body.address]);
+    facts.push(['Category', body.category || 'Other']);
+    if (Array.isArray(body.hours) && body.hours.length) facts.push(['Hours', body.hours.join('\n')]);
+    else facts.push(['Hours', 'Google has none']);
+    if (typeof body.rating === 'number') facts.push(['Rating', body.rating.toFixed(1) + (body.reviews != null ? ' (' + body.reviews + ' reviews)' : '')]);
+    const d = body.duplicate && body.duplicate.match;
+    if (d) {
+      return { tone: 'warn', title: 'Already in Suna: ' + d.name, facts: [['Google says', body.name || '…'], ['Matched by', body.duplicate.by || 'duplicate'], ...facts],
+        pin: hasPin ? { lat: body.lat, lng: body.lng } : null, place: { id: d.id, url: placeUrl(d.id) },
+        note: 'Nothing to add: open the existing place instead.', canAdd: false, lane };
+    }
+    return { tone: 'ok', title: body.name || 'Google found a place with no name', facts,
+      pin: hasPin ? { lat: body.lat, lng: body.lng } : null, canAdd: true, lane };
   }
   if (status === 200 && body.added) {
     return { tone: 'ok', title: 'Added: ' + body.added.name,
       facts: [['Category', body.added.category || 'Other'], ['City', body.city || 'None nearby: the place has no city yet']],
-      place: { id: body.added.id, url: placeUrl(body.added.id) }, lane: amLane(body.claim, status) };
+      place: { id: body.added.id, url: placeUrl(body.added.id) }, note: again, lane };
   }
   if (status === 200 && body.filled) {
     const f = body.filled;
     return { tone: 'ok', title: 'Filled: ' + f.name,
       facts: [['From Google', (body.from && body.from.name) || '…'], ['Pin', 'kept where it was']],
-      place: { id: f.id, url: placeUrl(f.id) }, lane: null };
+      place: { id: f.id, url: placeUrl(f.id) }, note: again, lane };
   }
   if (status === 409 && body.refused === 'duplicate' && body.match) {
     return { tone: 'warn', title: 'Already in Suna: ' + body.match.name, facts: [['Matched by', body.by || 'duplicate']],
-      place: { id: body.match.id, url: placeUrl(body.match.id) } };
+      place: { id: body.match.id, url: placeUrl(body.match.id) }, lane };
   }
   if (status === 409 && body.refused) {
     return { tone: 'warn', title: 'Not added', facts: [], note: 'An admin hid or rejected this place before, so it stays out.' };
   }
   if (status === 429) {
-    return { tone: 'bad', title: 'Today’s Google adds are used', facts: [], note: 'They reset at 08:00 Malaysia time (midnight UTC).', lane: amLane(body.claim, status) };
+    return { tone: 'bad', title: 'Today’s 20 Google calls are used', facts: [], note: 'They reset at 08:00 Malaysia time (midnight UTC).', lane };
   }
   const why = status === 401 ? 'Sign in again: the session has run out.'
     : status === 403 ? 'Only admins can add places here.'
@@ -7392,7 +7378,7 @@ async function amToken() {
   return (data && data.session && data.session.access_token) || '';
 }
 
-function amRender(view, dupe) {
+function amRender(view) {
   const out = $('am-out');
   out.innerHTML = '';
   const card = document.createElement('div');
@@ -7404,65 +7390,42 @@ function amRender(view, dupe) {
     for (const [k, v] of view.facts) {
       const li = document.createElement('li');
       const ks = document.createElement('span'); ks.className = 'k'; ks.textContent = k;
-      li.append(ks, document.createTextNode(v)); ul.appendChild(li);
+      const vs = document.createElement('span'); vs.className = 'v'; vs.textContent = v;
+      li.append(ks, vs); ul.appendChild(li);
     }
     card.appendChild(ul);
   }
   if (view.pin) {
     const d = 0.003, { lat, lng } = view.pin;
     const f = document.createElement('iframe');
-    f.className = 'ammap'; f.loading = 'lazy'; f.title = 'Where the link puts the pin';
+    f.className = 'ammap'; f.loading = 'lazy'; f.title = 'Where Google puts the pin';
     f.referrerPolicy = 'no-referrer';
     f.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + [lng - d, lat - d, lng + d, lat + d].map((x) => x.toFixed(5)).join(',')
       + '&layer=mapnik&marker=' + lat.toFixed(5) + ',' + lng.toFixed(5);
     card.appendChild(f);
   }
-  if (dupe) {
-    const w = document.createElement('small'); w.style.color = 'var(--danger)';
-    w.textContent = 'Already in Suna as “' + dupe.name + '” (same ' + dupe.by + '). Add would spend a Google call and then refuse it.';
-    card.appendChild(w);
-  }
   if (view.note) { const n = document.createElement('small'); n.textContent = view.note; card.appendChild(n); }
-  const place = dupe ? { url: 'https://app.unaryx.com/place/' + dupe.id } : view.place;
+  const place = view.place;
   if (place) {
     const a = document.createElement('a'); a.href = place.url; a.target = '_blank'; a.rel = 'noopener';
     a.className = 'linkish'; a.style.display = 'inline-block'; a.textContent = 'Open it in Suna';
     card.appendChild(a);
   }
   out.appendChild(card);
-  if (view.lane) { $('am-lane').hidden = false; $('am-lane').textContent = 'Google adds: ' + view.lane; }
-}
-
-/** Preview's own duplicate read: the public `landmarks` select only. */
-async function amFindDupe(target) {
-  const fillId = amFillPick ? amFillPick.id : null;
-  if (target.placeId) {
-    const { data } = await db.from('landmarks').select('id,name,google_place_id').eq('google_place_id', target.placeId).limit(2);
-    return amDupe(target, data, fillId);
-  }
-  if (target.name && target.lat != null && target.lng != null) {
-    const box = 0.001;
-    const { data } = await db.from('landmarks').select('id,name,latitude,longitude')
-      .gte('latitude', target.lat - box).lte('latitude', target.lat + box)
-      .gte('longitude', target.lng - box).lte('longitude', target.lng + box).limit(200);
-    return amDupe(target, data, fillId);
-  }
-  return null;
+  if (view.lane) { $('am-lane').hidden = false; $('am-lane').textContent = 'Google calls: ' + view.lane; }
 }
 
 $('am-preview').onclick = async () => {
   const link = $('am-link').value.trim();
   if (!link) { amRender({ tone: 'bad', title: 'Paste a link first', facts: [] }); return; }
-  const btn = $('am-preview'); btn.disabled = true; btn.textContent = 'Reading the link…';
+  const btn = $('am-preview'); btn.disabled = true; btn.textContent = 'Asking Google…';
   amReset();
   const body = amBody(link, amOpts(), true);
   const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), body);
   const view = amDescribe(res.status, res.body);
-  let dupe = null;
-  if (view.canAdd) { try { dupe = await amFindDupe(res.body.target || {}); } catch { dupe = null; } }
   btn.disabled = false; btn.textContent = 'Preview';
-  amRender(view, dupe);
-  if (view.canAdd && !dupe) {
+  amRender(view);
+  if (view.canAdd) {
     amPreviewed = amBody(link, amOpts(), false);
     $('am-add').textContent = amFillPick ? 'Fill “' + amFillPick.name + '”' : 'Add';
     $('am-add').hidden = false;
@@ -7471,11 +7434,11 @@ $('am-preview').onclick = async () => {
 
 $('am-add').onclick = async () => {
   if (!amPreviewed) return;
-  const btn = $('am-add'); btn.disabled = true; btn.textContent = 'Asking Google…';
+  const btn = $('am-add'); btn.disabled = true; btn.textContent = 'Adding…';
   const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), amPreviewed);
   btn.disabled = false; btn.hidden = true;
-  amPreviewed = null;               // one Add per Preview: a second tap would spend another call
-  amRender(amDescribe(res.status, res.body), null);
+  amPreviewed = null;               // one Add per Preview: the cached answer is for one place
+  amRender(amDescribe(res.status, res.body));
 };
 
 async function amSearchFill() {

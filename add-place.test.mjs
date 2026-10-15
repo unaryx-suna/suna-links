@@ -3,7 +3,7 @@
 //
 // The logic sits between two markers in public/field.html; this file runs that
 // block on its own. The fixtures are the response shapes in admin-add-place
-// (I-124, deployed version 1) and claim_api_calls. Plain node, no runner:
+// (I-124 + I-131, deployed version 2) and claim_api_calls. Plain node, no runner:
 //
 //     node add-place.test.mjs
 
@@ -13,8 +13,8 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
 const block = html.match(/\/\/ W-56 logic begin[^\n]*\n([\s\S]*?)\/\/ W-56 logic end/)[1];
-const { amCall, amBody, amDupe, amLane, amDescribe, amMetres } =
-  new Function(block + '\nreturn { amCall, amBody, amDupe, amLane, amDescribe, amMetres };')();
+const { amCall, amBody, amLane, amDescribe } =
+  new Function(block + '\nreturn { amCall, amBody, amLane, amDescribe };')();
 
 let failed = 0;
 async function t(name, fn) {
@@ -29,18 +29,22 @@ const fakeFetch = (status, body, seen) => async (url, init) => {
 };
 
 // Fixtures: what the function returns.
-const DRY_PLACE_ID = { dry_run: true, target: { placeId: 'ChIJ0123456789abcdef', name: null, lat: null, lng: null } };
-const DRY_NAMED = { dry_run: true, target: { placeId: null, name: 'Kedai Kopi Lai Foong', lat: 3.1446, lng: 101.6984 } };
+const HOURS = ['Monday: 7:00 AM – 3:00 PM', 'Tuesday: Closed'];
+const DRY = { dry_run: true, name: 'Kedai Kopi Lai Foong', address: '138, Jalan Tun H S Lee, 50000 Kuala Lumpur', lat: 3.1446, lng: 101.6984,
+  category: 'Culinary Spot', hours: HOURS, rating: 4.2, reviews: 3120, google_place_id: 'ChIJ0123456789abcdef', duplicate: null, lane: '2 of 20' };
+const DRY_DUPE = { ...DRY, duplicate: { match: { id: 'd1', name: 'Lai Foong' }, by: 'place id' }, lane: '2 of 20' };
+const DRY_BARE = { ...DRY, address: '', category: 'Other', hours: null, rating: null, reviews: null, lane: '2 of 20' };
 const ADDED = { added: { id: 'a1b2c3d4-0000-4000-8000-000000000001', name: 'Kedai Kopi Lai Foong', category: 'Culinary Spot', city_id: 'c1' },
-  city: 'Kuala Lumpur', claim: { ok: true, provider: 'google_places', surface: 'admin_add_place', calls_made: 3, limit: 20, remaining: 17, base_limit: 20, override_until: null } };
-const FILLED = { filled: { id: 'f1', name: 'Lai Foong', latitude: 3.1, longitude: 101.6 }, from: { name: 'Kedai Kopi Lai Foong', lat: 3.1446, lng: 101.6984 }, moved_pin: false };
-const DUPE = { refused: 'duplicate', match: { id: 'd1', name: 'Kedai Kopi Lai Foong' }, by: 'place id' };
+  city: 'Kuala Lumpur', claim: null, from_preview: true, lane: '3 of 20' };
+const FILLED = { filled: { id: 'f1', name: 'Lai Foong', latitude: 3.1, longitude: 101.6 }, from: { name: 'Kedai Kopi Lai Foong', lat: 3.1446, lng: 101.6984 },
+  moved_pin: false, from_preview: false, lane: '4 of 20' };
+const DUPE = { refused: 'duplicate', match: { id: 'd1', name: 'Kedai Kopi Lai Foong' }, by: 'place id', lane: '5 of 20' };
 const LEDGER = { refused: 'the admin ledger hid or rejected this place', verdict: {} };
 const USED = { error: "today's 20 adds are used", claim: { ok: false, reason: 'daily budget exceeded', provider: 'google_places', surface: 'admin_add_place', limit: 20, requested: 1 } };
 
 await t('the request: POST to admin-add-place with the session token and the publishable key, nothing else', async () => {
   const seen = [];
-  const res = await amCall(fakeFetch(200, DRY_NAMED, seen), BASE, KEY, 'jwt-abc', amBody(' https://maps.app.goo.gl/x ', {}, true));
+  const res = await amCall(fakeFetch(200, DRY, seen), BASE, KEY, 'jwt-abc', amBody(' https://maps.app.goo.gl/x ', {}, true));
   assert.equal(seen[0].url, BASE + '/functions/v1/admin-add-place');
   assert.equal(seen[0].init.method, 'POST');
   assert.equal(seen[0].init.headers.Authorization, 'Bearer jwt-abc');
@@ -60,16 +64,26 @@ await t('a network failure or a non-JSON answer never throws', async () => {
   assert.equal(bare.status, 502); assert.match(bare.body.error, /502/);
 });
 
-await t('Preview, place id link: says what the link names, no pin, Add offered', () => {
-  const v = amDescribe(200, DRY_PLACE_ID);
-  assert.equal(v.canAdd, true); assert.equal(v.pin, null);
-  assert.deepEqual(v.facts, [['Place id', 'ChIJ0123456789abcdef']]);
-  assert.match(v.note, /Address, category and hours come from Google when you tap Add/);
-});
-await t('Preview, named link: name and pin, map pin set', () => {
-  const v = amDescribe(200, DRY_NAMED);
+await t('Preview: the real place from Google, its pin, the lane, Add offered', () => {
+  const v = amDescribe(200, DRY);
+  assert.equal(v.tone, 'ok'); assert.equal(v.title, 'Kedai Kopi Lai Foong'); assert.equal(v.canAdd, true);
   assert.deepEqual(v.pin, { lat: 3.1446, lng: 101.6984 });
-  assert.deepEqual(v.facts, [['Name', 'Kedai Kopi Lai Foong'], ['Pin', '3.14460, 101.69840']]);
+  assert.deepEqual(v.facts, [['Address', '138, Jalan Tun H S Lee, 50000 Kuala Lumpur'], ['Category', 'Culinary Spot'],
+    ['Hours', 'Monday: 7:00 AM – 3:00 PM\nTuesday: Closed'], ['Rating', '4.2 (3120 reviews)']]);
+  assert.equal(v.lane, '2 of 20 today');
+});
+await t('Preview, nothing but a name and pin from Google: no empty rows, hours said plainly', () => {
+  const v = amDescribe(200, DRY_BARE);
+  assert.deepEqual(v.facts, [['Category', 'Other'], ['Hours', 'Google has none']]);
+  assert.equal(v.canAdd, true);
+});
+await t('Preview of a duplicate: the match named and linked, no Add', () => {
+  const v = amDescribe(200, DRY_DUPE);
+  assert.equal(v.tone, 'warn'); assert.equal(v.canAdd, false);
+  assert.equal(v.title, 'Already in Suna: Lai Foong');
+  assert.equal(v.place.url, 'https://app.unaryx.com/place/d1');
+  assert.deepEqual(v.facts.slice(0, 2), [['Google says', 'Kedai Kopi Lai Foong'], ['Matched by', 'place id']]);
+  assert.equal(v.lane, '2 of 20 today');
 });
 await t('Add: the new place, its link, and the lane as n of 20', () => {
   const v = amDescribe(200, ADDED);
@@ -77,21 +91,24 @@ await t('Add: the new place, its link, and the lane as n of 20', () => {
   assert.equal(v.place.url, 'https://app.unaryx.com/place/a1b2c3d4-0000-4000-8000-000000000001');
   assert.deepEqual(v.facts, [['Category', 'Culinary Spot'], ['City', 'Kuala Lumpur']]);
   assert.equal(v.lane, '3 of 20 today');
+  assert.equal(v.note, null, 'from the preview: nothing to explain');
 });
-await t('Fill: the filled place and its link; no lane (the answer carries no claim)', () => {
+await t('Fill: the filled place, its link and the lane; says when the preview had expired', () => {
   const v = amDescribe(200, FILLED);
   assert.equal(v.title, 'Filled: Lai Foong'); assert.equal(v.place.url, 'https://app.unaryx.com/place/f1');
-  assert.equal(v.lane, null);
+  assert.equal(v.lane, '4 of 20 today');
+  assert.match(v.note, /over 15 minutes old/);
 });
 await t('Duplicate: names the match and links to it', () => {
   const v = amDescribe(409, DUPE);
   assert.equal(v.tone, 'warn'); assert.equal(v.title, 'Already in Suna: Kedai Kopi Lai Foong');
   assert.equal(v.place.url, 'https://app.unaryx.com/place/d1');
+  assert.equal(v.lane, '5 of 20 today');
 });
 await t('Ledger refusal and the daily cap', () => {
   assert.match(amDescribe(409, LEDGER).note, /hid or rejected/);
   const v = amDescribe(429, USED);
-  assert.equal(v.lane, 'All 20 of today’s adds are used');
+  assert.equal(v.lane, 'All 20 of today’s Google calls are used');
   assert.match(v.note, /08:00 Malaysia time/);
 });
 await t('errors are worded for Ops', () => {
@@ -102,14 +119,13 @@ await t('errors are worded for Ops', () => {
   assert.match(amDescribe(0, { error: 'Could not reach the function. Load failed' }).note, /Could not reach/);
 });
 
-await t('duplicates: the function\'s two rules, and a filled row is never its own dupe', () => {
-  const near = [{ id: 'x', name: ' kedai kopi lai foong ', latitude: 3.14462, longitude: 101.69842 }];
-  assert.deepEqual(amDupe(DRY_NAMED.target, near, null), { id: 'x', name: ' kedai kopi lai foong ', by: 'name within 50 m' });
-  assert.equal(amDupe(DRY_NAMED.target, near, 'x'), null);
-  assert.equal(amDupe(DRY_NAMED.target, [{ ...near[0], latitude: 3.1452 }], null), null, '~65 m away is not a dupe');
-  assert.equal(amDupe(DRY_NAMED.target, [{ ...near[0], name: 'Lai Foong' }], null), null, 'another name is not a dupe');
-  assert.deepEqual(amDupe(DRY_PLACE_ID.target, [{ id: 'p', name: 'P', google_place_id: 'ChIJ0123456789abcdef' }], null), { id: 'p', name: 'P', by: 'place id' });
-  assert(Math.abs(amMetres(0, 0, 0, 0.001) - 111.19) < 0.1);
+await t('the lane: only a well-formed "n of m" is shown', () => {
+  assert.equal(amLane({ lane: '0 of 20' }, 200), '0 of 20 today');
+  assert.equal(amLane({ lane: '<b>x</b>' }, 200), null);
+  assert.equal(amLane({}, 200), null);
+});
+await t('Preview makes no read of its own: the page no longer queries landmarks for duplicates', () => {
+  assert(!/amFindDupe|amDupe/.test(html));
 });
 
 await t('the page: admin-only menu row (both gates), one pane, build and worker bumped together', () => {
