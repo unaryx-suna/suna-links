@@ -46,6 +46,29 @@ await t('W-47 each shown stop has Apple Maps and Google Maps; the locked ones ha
   assert(html.indexOf("classList.add('apple-maps')") < html.indexOf('</head>'), 'decided before first paint');
 });
 
+await t('W-53 a stop with only a Google photo gets its stock image; no stock image twice on the page', async () => {
+  const { stockFor } = await import('./api/_stock.js');
+  const deal = (id) => stockFor({ landmarkId: id, category: 'Food', countryCode: 'MY' }).path;
+  const A = 'aaaaaaaa-1111-4111-8111-111111111111';
+  let B = null;
+  for (let i = 0; !B && i < 5000; i++) {
+    const id = `${String(i).padStart(8, '0')}-2222-4222-8222-222222222222`;
+    if (deal(id) === deal(A)) B = id;
+  }
+  const saved = stops.map((x) => ({ ...x }));
+  Object.assign(stops[0], { landmark_id: A, place_image_url: 'https://places.googleapis.com/v1/places/x/photos/y/media?maxWidthPx=800' });
+  Object.assign(stops[1], { landmark_id: B });
+  let page = '';
+  await handler({ url: `/i/${SLUG}`, headers: { host: 'app.unaryx.com' } },
+    { setHeader() { return this; }, status() { return this; }, send(b) { page = b; return this; }, end() {} });
+  stops.forEach((x, i) => Object.assign(x, saved[i]));
+  assert(!/places\.googleapis|googleusercontent/.test(page), 'no Google photo, not even as og:image');
+  const pics = [...page.matchAll(/<div class="stop-pic stock"><img class="stop-img" src="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(pics.length, 2);
+  assert.notEqual(pics[0], pics[1]);
+  assert(pics[0].includes(deal(A).split('/').pop()), 'the first keeps its own deal');
+});
+
 let chromium;
 try { ({ chromium } = await import('playwright')); } catch { console.log('  (playwright not installed: browser checks skipped)'); }
 if (chromium) {

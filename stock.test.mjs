@@ -8,7 +8,7 @@
 //
 //     node stock.test.mjs
 
-import { stockHash, stockFor, regionFromCountry, poolKey } from './api/_stock.js';
+import { stockHash, stockFor, regionFromCountry, poolKey, isGooglePhoto } from './api/_stock.js';
 
 const CASES = [
   // id, category, country, hash, pool key, first image, tint index, opacity
@@ -52,6 +52,24 @@ check('Sacred Space gets no stock', stockFor({ landmarkId: '238e4fba-bec9-4891-a
 check('legacy Temple gets no stock', stockFor({ landmarkId: '238e4fba-bec9-4891-abdc-63428fcbf1c6', category: 'Temple', countryCode: 'TH' }), null);
 check('sacred, any region', stockFor({ landmarkId: '3F2504E0-4F89-41D3-9A0C-0305E82C3301', category: 'Sacred Space', countryCode: 'JP' }), null);
 check('a museum still gets its stock', stockFor({ landmarkId: '3F2504E0-4F89-41D3-9A0C-0305E82C3301', category: 'Museum', countryCode: 'JP' }).path, 'museum/east-asia/20593434.jpg');
+
+// W-53 / I-112: never the same stock image twice on one page.
+{
+  const id = '3F2504E0-4F89-41D3-9A0C-0305E82C3301';
+  const place = { landmarkId: id, category: 'Museum', countryCode: 'JP' };
+  const taken = new Set();
+  const first = stockFor(place, taken);
+  check('taken: the first pick is the plain deal', first.path, 'museum/east-asia/20593434.jpg');
+  const second = stockFor(place, taken);
+  check('taken: the same deal again moves to the next in the pool', second.path !== first.path && second.path.startsWith('museum/east-asia/'), true);
+  check('taken: the tint is still the place\'s own', second.tint, first.tint);
+  check('taken: both are recorded', taken.size, 2);
+  check('no set, no change', stockFor(place).path, first.path);
+}
+check('Google photos are spotted', ['https://lh3.googleusercontent.com/p/x=s800', 'https://places.googleapis.com/v1/places/a/photos/b/media',
+  'https://maps.googleapis.com/maps/api/place/photo?photo_reference=x', 'https://lh5.ggpht.com/x'].every(isGooglePhoto), true);
+check('ours and stock are not', ['https://voogrbonwmvfwtgzzrxc.supabase.co/storage/v1/object/public/landmark-covers/x.jpg',
+  'https://images.pexels.com/photos/1/pexels-photo-1.jpeg', '', null].some(isGooglePhoto), false);
 
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log(`all ${CASES.length} Swift fixtures match`);

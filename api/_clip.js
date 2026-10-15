@@ -480,6 +480,9 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .row img, .row .ph { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #3b332b; flex: none; }
     .row-place { min-height: 72px; }
     .row-place img, .row-place .ph { width: 52px; height: 52px; }
+    .row .thumb { position: relative; flex: none; width: 52px; height: 52px; border-radius: 14px; overflow: hidden; }
+    .row .thumb img { display: block; border-radius: 0; }
+    .row .stock-tint { position: absolute; inset: 0; }
     .row-text { display: grid; gap: 3px; min-width: 0; }
     .row-eyebrow { color: var(--now); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
     .row-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

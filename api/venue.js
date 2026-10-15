@@ -19,6 +19,8 @@ import {
 } from './_clip.js';
 import { saveInSuna } from './_maps.js';
 import { isLodging, hasRealContent } from './sitemap.js';
+import { stockFor } from './_stock.js';
+import { sized } from './_preview.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 export const STEPS_KM = [0.8, 3];
@@ -81,7 +83,7 @@ async function placesNear(venue) {
   const rows = await rest('landmarks?is_hidden=eq.false&name=not.is.null'
     + `&latitude=gte.${venue.lat - dLat}&latitude=lte.${venue.lat + dLat}`
     + `&longitude=gte.${venue.lng - dLng}&longitude=lte.${venue.lng + dLng}`
-    + '&select=id,name,category,description,cover_image_url,latitude,longitude&limit=200');
+    + '&select=id,name,category,description,cover_image_url,latitude,longitude,city:cities(country_code)&limit=200');
   return rows
     .filter((p) => p.id && !isLodging(p) && hasRealContent(p))
     .map((p) => ({ ...p, km: distanceKm(venue.lat, venue.lng, p.latitude, p.longitude) }))
@@ -90,12 +92,28 @@ async function placesNear(venue) {
     .slice(0, MAX_PLACES);
 }
 
-export function placeRow(p) {
-  const img = ourImage(p.cover_image_url);
+/**
+ * The row's picture (I-112, W-53): our own photo, else the stock image the
+ * app deals that place (under its dealt tint, as on /i/), else the no-photo
+ * tile. Never a Google photo. `taken` keeps one stock image off the page twice.
+ */
+function placeThumb(p, taken) {
+  const own = ourImage(p.cover_image_url);
+  if (own) return `<img src="${escapeHtml(own)}" alt="" loading="lazy" decoding="async">`;
+  const stock = stockFor({
+    landmarkId: p.id, category: p.category, countryCode: p.city && p.city.country_code,
+    latitude: p.latitude, longitude: p.longitude,
+  }, taken);
+  if (!stock) return '<span class="ph" aria-hidden="true"></span>';
+  return `<span class="thumb stock"><img src="${escapeHtml(sized(stock.url, 640) || stock.url)}" alt="" loading="lazy" decoding="async">`
+    + `<span class="stock-tint" style="background:${stock.tint};opacity:${stock.tintOpacity}"></span></span>`;
+}
+
+export function placeRow(p, taken = new Set()) {
   const mins = Math.max(1, Math.round(p.km / WALK_KM_PER_MIN));
   const meta = [p.category, `${mins} min walk`].filter(Boolean).join(' · ');
   return `<li><a class="row row-place" href="/place/${escapeHtml(p.id)}">`
-    + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
+    + placeThumb(p, taken)
     + `<span class="row-text"><span class="row-name">${escapeHtml(p.name)}</span><span class="row-meta">${escapeHtml(meta)}</span></span>`
     + '<span class="chev" aria-hidden="true">›</span></a></li>';
 }
@@ -113,11 +131,12 @@ export function venueBody(venue, found, now, places = []) {
     const step = found && found.step;
     const { tonight, week } = step ? splitTonight(step.events, found.tz, now) : { tonight: [], week: [] };
     const rows = (list) => `<ul class="rows">${list.map((e) => eventRow(e, { timeZone: found.tz, now, km: e.km })).join('')}</ul>`;
+    const taken = new Set(); // one stock image at most once on the page
     content = `<h1 class="venue-h1">Near ${escapeHtml(name)}</h1>
   <p class="sub">${escapeHtml(step ? step.label : 'Nothing listed nearby this week')}</p>
   ${tonight.length ? `<h2>On tonight</h2>${rows(tonight)}` : ''}
   ${week.length ? `<h2>This week</h2>${rows(week)}` : ''}
-  ${places.length ? `<h2>Worth a walk</h2><ul class="rows">${places.map(placeRow).join('')}</ul>` : ''}
+  ${places.length ? `<h2>Worth a walk</h2><ul class="rows">${places.map((p) => placeRow(p, taken)).join('')}</ul>` : ''}
   ${!step ? `<p class="empty"><a class="link" href="${escapeHtml(eventsPage(found && found.city))}">See what's on this week</a></p>` : ''}`;
   }
   // Only a known venue has somewhere in the app to open to; the rest get the store.

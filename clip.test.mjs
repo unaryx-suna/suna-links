@@ -394,6 +394,43 @@ await t('W-48 the description\'s days and hours beat "daily" (now under Hours, O
   // A one-day event's times are in When; no Hours row.
   assert.equal(m.hoursFact({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z', daily_start_time: '19:30', daily_end_time: '22:00' }, 'Asia/Kuala_Lumpur'), null);
 });
+await t('W-53 /c/ Worth a walk: own photo, else the stock image, never Google; no stock image twice', async () => {
+  const { stockFor } = await import('./api/_stock.js');
+  const desc = 'A neighbourhood cafe with good coffee, long tables and a garden at the back worth sitting in.';
+  const pl = (id, dLat, extra = {}) => ({ id, name: `Place ${id}`, category: 'Cafe & Workspace', description: desc,
+    cover_image_url: null, latitude: VENUE.lat + dLat, longitude: VENUE.lng, city: { country_code: 'MY' }, ...extra });
+  const A = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const deal = (id) => stockFor({ landmarkId: id, category: 'Cafe & Workspace', countryCode: 'MY' }).path;
+  // A second place the dealer gives the same image as A.
+  let B = null;
+  for (let i = 0; !B && i < 5000; i++) {
+    const id = `${String(i).padStart(8, '0')}-2222-4222-8222-222222222222`;
+    if (deal(id) === deal(A)) B = id;
+  }
+  assert(B, 'found a colliding id');
+  state.events = [ev(U(1), 0.0045)];
+  state.places = [pl(A, 0.002, { cover_image_url: 'https://lh3.googleusercontent.com/p/AF1Qip-x=s1600' }), pl(B, 0.004)];
+  calls.length = 0;
+  let b = (await render(venue, '/c/worq-ttdi')).body;
+  assert(calls.some((c) => c.includes('/rest/v1/landmarks') && c.includes('city:cities(country_code)')), 'reads the country for the region');
+  assert(!/googleusercontent|googleapis\.com\/(maps|v1)/.test(b), 'no Google photo on the page');
+  assert(!calls.some((c) => /googleusercontent|googleapis/.test(c)), 'nothing fetched from Google');
+  const pics = [...b.matchAll(/<span class="thumb stock"><img src="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(pics.length, 2);
+  assert.notEqual(pics[0], pics[1], 'the same stock image twice');
+  assert(pics[0].includes(`/place-stock/${deal(A).replace(/\/([^/]+)$/, '/_w/640/$1')}`), 'A keeps its own deal');
+  assert.match(b, /<span class="stock-tint" style="background:#[0-9A-F]{6};opacity:0\.\d+"><\/span>/);
+  // Our own photo wins.
+  const own = 'https://voogrbonwmvfwtgzzrxc.supabase.co/storage/v1/object/public/landmark-covers/a/cover.jpg';
+  state.places = [pl(A, 0.002, { cover_image_url: own })];
+  b = (await render(venue, '/c/worq-ttdi')).body;
+  assert(b.includes(`<img src="${own}"`));
+  assert.doesNotMatch(b, /thumb stock/);
+  // No pool (Sacred Space gets no stock): the no-photo tile.
+  state.places = [pl(A, 0.002, { category: 'Sacred Space' })];
+  assert.match((await render(venue, '/c/worq-ttdi')).body, /<a class="row row-place" href="\/place\/aaaaaaaa[^"]*"><span class="ph"/);
+  state.places = [];
+});
 await t('W-48 the description sits under About, after the facts', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;

@@ -11,6 +11,8 @@ const SHELL = readFileSync(new URL('./public/place.html', import.meta.url), 'utf
 let placesList = { places: [LINKED] };
 let placesFails = false;
 let pin = { latitude: 3.1537, longitude: 101.7134 };
+let cover = null;
+const heads = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, text: async () => body, json: async () => body });
@@ -19,7 +21,8 @@ globalThis.fetch = async (url, opts = {}) => {
     if (placesFails) throw new Error('timeout');
     return ok(placesList);
   }
-  if (u.includes('/rest/v1/landmarks')) return ok([{ name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: null, city_id: null, ...pin }]);
+  if (u.includes('/rest/v1/landmarks')) return ok([{ name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: cover, city_id: null, city: { country_code: 'MY' }, ...pin }]);
+  if (opts.method === 'HEAD') { heads.push(u); return { ok: true }; }
   if (u.includes('/rpc/listing_public')) return ok([]);
   return { ok: false, json: async () => [] };
 };
@@ -38,6 +41,29 @@ let bad = 0;
 async function t(name, fn) {
   try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); }
 }
+
+await t('W-53 og:image: own cover, else the stock image, never a Google photo', async () => {
+  const og = (html) => (html.match(/<meta property="og:image" content="([^"]*)">/) || [])[1] || null;
+  const { stockFor } = await import('./api/_stock.js');
+  const stock = stockFor({ landmarkId: PLAIN, category: 'Attraction', countryCode: 'MY' }).url;
+  assert.match(stock, /\/storage\/v1\/object\/public\/place-stock\//);
+  // Only Google references: the stock image, and Google is never even asked.
+  for (const g of ['https://lh3.googleusercontent.com/p/AF1Qip-x=s1600', 'https://places.googleapis.com/v1/places/abc/photos/def/media?maxWidthPx=800',
+    'https://maps.googleapis.com/maps/api/place/photo?photo_reference=abc&maxwidth=800']) {
+    cover = g; heads.length = 0;
+    const b = (await render(`/place/${PLAIN}`)).body;
+    assert.equal(og(b), stock, g);
+    assert(!/google(apis|usercontent)\.com/.test(b), 'no Google URL anywhere on the page');
+    assert.equal(heads.length, 0, 'no request to Google');
+  }
+  // No cover: the stock image too.
+  cover = null;
+  assert.equal(og((await render(`/place/${PLAIN}`)).body), stock);
+  // Our own cover wins.
+  cover = 'https://voogrbonwmvfwtgzzrxc.supabase.co/storage/v1/object/public/landmark-covers/x/cover.jpg';
+  assert.equal(og((await render(`/place/${PLAIN}`)).body), cover);
+  cover = null;
+});
 
 await t('a linked place gets our own /go link, from web-place', async () => {
   const r = await render(`/place/${LINKED}`);

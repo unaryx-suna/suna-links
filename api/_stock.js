@@ -112,8 +112,13 @@ const TINTS = ['#406543', '#111111', '#F6CB94', '#F6CB94'];
  * The place's stock image: the first of the app's deal (`pool[start]`), with
  * the tint and its opacity dealt from the same hash. Null when the place has
  * no id or its pool is empty.
+ *
+ * `taken` (a Set of paths, one per page) keeps one image off a screen twice
+ * (I-112, W-53): when the deal lands on a path already shown, the next one in
+ * the pool, wrapping; when the pool is used up, the deal as it was. The pick
+ * is added to the set.
  */
-export function stockFor({ landmarkId, category, countryCode, latitude, longitude }) {
+export function stockFor({ landmarkId, category, countryCode, latitude, longitude }, taken = null) {
   if (!landmarkId) return null;
   const region = countryCode
     ? regionFromCountry(countryCode)
@@ -124,7 +129,15 @@ export function stockFor({ landmarkId, category, countryCode, latitude, longitud
   const pool = STOCK_POOLS[key];
   if (!pool || !pool.length) return null;
   const h = stockHash(landmarkId);
-  const path = pool[Number(h % BigInt(pool.length))];
+  const start = Number(h % BigInt(pool.length));
+  let path = pool[start];
+  if (taken) {
+    for (let i = 0; i < pool.length; i++) {
+      const next = pool[(start + i) % pool.length];
+      if (!taken.has(next)) { path = next; break; }
+    }
+    taken.add(path);
+  }
   return {
     key,
     path,
@@ -132,4 +145,14 @@ export function stockFor({ landmarkId, category, countryCode, latitude, longitud
     tint: TINTS[Number((h >> 32n) % 4n)],
     tintOpacity: Math.round((0.45 + Number((h >> 48n) % 5n) * 0.04) * 100) / 100,
   };
+}
+
+/**
+ * A Google photo (Places photo media, the old photo endpoint, or the CDN they
+ * redirect to). The websites never show one, even if a row ever stores one
+ * (I-112, W-53): that place gets its stock image instead.
+ */
+const GOOGLE_PHOTO = /^https?:\/\/([^/]+\.)?(googleapis\.com|googleusercontent\.com|ggpht\.com|gstatic\.com)(\/|$)|^https?:\/\/(www\.)?google\.[a-z.]+\/maps\//i;
+export function isGooglePhoto(url) {
+  return GOOGLE_PHOTO.test(String(url || '').trim());
 }

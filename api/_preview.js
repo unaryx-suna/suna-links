@@ -24,7 +24,7 @@
 // place's own photo, the stock image the app deals that place (_stock.js).
 // Never a photographer credit, never more than one.
 
-import { stockFor } from './_stock.js';
+import { stockFor, isGooglePhoto } from './_stock.js';
 import { mapsLinks } from './_maps.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
@@ -155,8 +155,10 @@ export async function loadItinerary(slug, coverURL) {
       .map((s) => s.moment_path));
   } catch { /* a moment is optional; the stop falls through to the next image */ }
 
+  // One stock image at most once per page (I-112, W-53).
   const images = new Map();
-  for (const s of shown) images.set(s, imageFor(s, signed));
+  const taken = new Set();
+  for (const s of shown) images.set(s, imageFor(s, signed, taken));
   return {
     it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked,
     signedMoments: [...images.values()].some((im) => im && im.kind === 'moment' && im.signed),
@@ -164,8 +166,8 @@ export async function loadItinerary(slug, coverURL) {
   };
 }
 
-/** One image for a shown stop: moment, else place photo, else stock. */
-function imageFor(s, signed) {
+/** One image for a shown stop: moment, else place photo, else stock. Never Google (W-53). */
+function imageFor(s, signed, taken) {
   if (s.moment_path) {
     if (s.moment_bucket === 'creator-media' && signed.get(s.moment_path)) {
       return { kind: 'moment', url: signed.get(s.moment_path), signed: true };
@@ -174,11 +176,11 @@ function imageFor(s, signed) {
       return { kind: 'moment', url: publicObject('community-post-photos', s.moment_path) };
     }
   }
-  if (s.place_image_url) return { kind: 'place', url: s.place_image_url };
+  if (s.place_image_url && !isGooglePhoto(s.place_image_url)) return { kind: 'place', url: s.place_image_url };
   const stock = stockFor({
     landmarkId: s.landmark_id, category: s.category, countryCode: s.country_code,
     latitude: s.latitude, longitude: s.longitude,
-  });
+  }, taken);
   return stock ? { kind: 'stock', url: stock.url, tint: stock.tint, tintOpacity: stock.tintOpacity } : null;
 }
 
@@ -189,7 +191,7 @@ function imageFor(s, signed) {
  */
 export function coverFor(data, coverResolves) {
   if (coverResolves) return data.cover;
-  const first = data.shown.find((s) => s.place_image_url);
+  const first = data.shown.find((s) => s.place_image_url && !isGooglePhoto(s.place_image_url));
   return first ? first.place_image_url : null;
 }
 

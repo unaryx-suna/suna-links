@@ -17,6 +17,7 @@
 // views are worth counting, they get their own decision and their own rows.
 
 import { mapsLinks, MAPS_HEAD, MAPS_CSS } from './_maps.js';
+import { stockFor, isGooglePhoto } from './_stock.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, the same one place.html already ships.
@@ -39,7 +40,7 @@ function escapeHtml(value) {
 
 /** Absolute, crawler-fetchable URL for a stored cover, or null. */
 function coverURL(path) {
-  if (!path) return null;
+  if (!path || isGooglePhoto(path)) return null;
   if (/^https?:\/\//i.test(path)) return path;
   return `${SUPABASE_URL}/storage/v1/object/public/itinerary-covers/${path
     .split('/').map(encodeURIComponent).join('/')}`;
@@ -176,7 +177,7 @@ export default async function handler(req, res) {
       const url = `${SUPABASE_URL}/rest/v1/landmarks`
         + `?id=eq.${encodeURIComponent(id)}`
         + `&is_hidden=eq.false`
-        + `&select=name,category,description,address,cover_image_url,city_id,latitude,longitude&limit=1`;
+        + `&select=name,category,description,address,cover_image_url,city_id,latitude,longitude,city:cities(country_code)&limit=1`;
       const r = await fetch(url, {
         headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
         signal: AbortSignal.timeout(2500),
@@ -217,8 +218,14 @@ export default async function handler(req, res) {
 
         maps = mapsLinks(place.latitude, place.longitude, 'map-btn');
 
+        // The preview image (I-112, W-53): the place's own cover when it
+        // resolves, else the stock image the app deals it. Never Google.
         const candidate = coverURL(place.cover_image_url);
-        image = (await imageResolves(candidate)) ? candidate : null;
+        const stock = stockFor({
+          landmarkId: id, category: place.category, countryCode: place.city && place.city.country_code,
+          latitude: place.latitude, longitude: place.longitude,
+        });
+        image = (await imageResolves(candidate)) ? candidate : (stock ? stock.url : null);
 
         // Only a page with real content of its own asks to be indexed. This
         // mirrors the sitemap's gate, and it is the half that matters: the
