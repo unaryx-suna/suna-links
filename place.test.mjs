@@ -13,6 +13,9 @@ let placesFails = false;
 let pin = { latitude: 3.1537, longitude: 101.7134 };
 let cover = null;
 const heads = [];
+// W-59: when set, answers the landmarks query from its URL.
+let landmarkRows = null;
+const landmarkURLs = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, text: async () => body, json: async () => body });
@@ -21,6 +24,7 @@ globalThis.fetch = async (url, opts = {}) => {
     if (placesFails) throw new Error('timeout');
     return ok(placesList);
   }
+  if (u.includes('/rest/v1/landmarks')) { landmarkURLs.push(u); if (landmarkRows) return ok(landmarkRows(u)); }
   if (u.includes('/rest/v1/landmarks')) return ok([{ name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: cover, city_id: null, city: { country_code: 'MY' }, ...pin }]);
   if (opts.method === 'HEAD') { heads.push(u); return { ok: true }; }
   if (u.includes('/rpc/listing_public')) return ok([]);
@@ -129,6 +133,94 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   assert.deepEqual(badLinkTargets(r.body), []);
   assert.match(r.body, /<a id="book-link" target="_blank" rel="sponsored noopener">/, 'Book tickets keeps sponsored');
 });
+
+// W-59: /place/<slug>--<8 hex> and a bare 8-hex id resolve like the UUID.
+{
+  const NOTRE = 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+  const SHORT = NOTRE.slice(0, 8);
+  const NOTRE_COVER = 'https://voogrbonwmvfwtgzzrxc.supabase.co/storage/v1/object/public/landmark-covers/notre/cover.jpg';
+  // The visible rows. The hidden one is in the table but RLS never returns it,
+  // so the stub doesn't either; the query must ask for visible rows anyway.
+  const visible = [
+    { id: NOTRE, name: 'Notre-Dame de Paris', category: 'Architecture', description: 'y'.repeat(80), address: 'Paris', cover_image_url: NOTRE_COVER, city_id: null, city: { country_code: 'FR' }, latitude: 48.853, longitude: 2.3499 },
+    { id: 'c0ffee00-1111-4222-8333-444455556666', name: 'Хиймэл нуур', category: 'Park', description: 'z'.repeat(80), address: 'Улаанбаатар', cover_image_url: null, city_id: null, city: { country_code: 'MN' }, latitude: 47.9, longitude: 106.9 },
+    { id: 'beef0000-0000-4000-8000-000000000001', name: 'Twin one', category: 'Cafe', description: 'w'.repeat(80), address: 'x', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.1, longitude: 101.6 },
+    { id: 'beef0000-ffff-4000-8000-000000000002', name: 'Twin two', category: 'Cafe', description: 'w'.repeat(80), address: 'x', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.1, longitude: 101.6 },
+  ];
+  landmarkRows = (u) => {
+    const q = new URL(u).searchParams;
+    assert.equal(q.get('is_hidden'), 'eq.false', 'visible rows only');
+    assert.equal(q.get('merged_into'), 'is.null', 'never a merged row');
+    assert(!/ilike|::text/.test(u), 'never a text match on the id');
+    const ids = q.getAll('id');
+    const eq = ids.find((v) => v.startsWith('eq.'));
+    const lo = (ids.find((v) => v.startsWith('gte.')) || '').slice(4);
+    const hi = (ids.find((v) => v.startsWith('lte.')) || '').slice(4);
+    const hit = visible.filter((r) => eq ? r.id === eq.slice(3) : (r.id >= lo && r.id <= hi));
+    return hit.slice(0, Number(q.get('limit')));
+  };
+  const og = (b, p) => (b.match(new RegExp(`<meta property="og:${p}" content="([^"]*)">`)) || [])[1] || null;
+  const canon = (b) => (b.match(/<link rel="canonical" href="([^"]*)">/) || [])[1] || null;
+  const sunaPlace = (b) => (b.match(/<meta name="suna:place" content="([^"]*)">/) || [])[1] || null;
+  const generic = (b) => {
+    assert.equal(og(b, 'title'), 'Discover this place on Suna');
+    assert.equal(og(b, 'image'), null);
+    assert.equal(sunaPlace(b), null);
+  };
+
+  await t('W-59 the full UUID: the real preview, canonical to itself', async () => {
+    const b = (await render(`/place/${NOTRE}`)).body;
+    assert.equal(og(b, 'title'), 'Notre-Dame de Paris — Architecture | Suna');
+    assert.equal(canon(b), `https://app.unaryx.com/place/${NOTRE}`);
+    assert.equal(sunaPlace(b), NOTRE);
+  });
+  await t('W-59 slug--short with ctx and via: the real preview, canonical and og:url to the UUID', async () => {
+    landmarkURLs.length = 0;
+    const r = await render(`/place/notre-dame-de-paris--${SHORT}?ctx=evening&via=share`);
+    assert.equal(r.code, 200);
+    assert.equal(og(r.body, 'title'), 'Notre-Dame de Paris — Architecture | Suna');
+    assert.equal(canon(r.body), `https://app.unaryx.com/place/${NOTRE}`);
+    assert.equal(og(r.body, 'url'), `https://app.unaryx.com/place/${NOTRE}`);
+    assert.equal(og(r.body, 'image'), NOTRE_COVER, 'our cover');
+    assert.equal(sunaPlace(r.body), NOTRE, 'Open in Suna gets the UUID');
+    assert(landmarkURLs[0].includes(`id=gte.${SHORT}-0000-0000-0000-000000000000&id=lte.${SHORT}-ffff-ffff-ffff-ffffffffffff`));
+  });
+  await t('W-59 a bare short id, and upper case, resolve too', async () => {
+    for (const p of [`/place/${SHORT}`, `/place/Notre-Dame--${SHORT.toUpperCase()}`]) {
+      assert.equal(canon((await render(p)).body), `https://app.unaryx.com/place/${NOTRE}`, p);
+    }
+  });
+  await t('W-59 a non-Latin slug, percent-encoded as a chat sends it', async () => {
+    const b = (await render(`/place/${encodeURIComponent('хиймэл-нуур')}--c0ffee00?via=share`)).body;
+    assert.equal(og(b, 'title'), 'Хиймэл нуур — Park | Suna');
+    assert.equal(sunaPlace(b), 'c0ffee00-1111-4222-8333-444455556666');
+  });
+  await t('W-59 an unknown short id: the generic card, no canonical', async () => {
+    const b = (await render('/place/nowhere--deadbeef')).body;
+    generic(b);
+    assert.equal(canon(b), null);
+  });
+  await t('W-59 a hidden or merged place (RLS returns nothing): the generic card', async () => {
+    // Hidden ids answer nothing to this key; same path as unknown, by design.
+    generic((await render('/place/hidden-place--0badf00d')).body);
+  });
+  await t('W-59 a short id two places share: the generic card, never a wrong place', async () => {
+    const b = (await render('/place/twin--beef0000')).body;
+    generic(b);
+    assert(!b.includes('Twin one') && !b.includes('Twin two'));
+  });
+  await t('W-59 junk after /place/: no query at all', async () => {
+    landmarkURLs.length = 0;
+    for (const p of ['/place/', '/place/notre-dame', '/place/x--a1b2c3', '/place/x--a1b2c3d4e5', "/place/x--a1b2c3d'", '/place/%E0%A4%A']) {
+      generic((await render(p)).body);
+    }
+    assert.equal(landmarkURLs.length, 0);
+  });
+  await t('W-59 Open in Suna prefers the server-resolved id', async () => {
+    assert.match(SHELL, /placeID = meta\('suna:place'\) \|\| placeID;/);
+  });
+  landmarkRows = null;
+}
 
 console.log(bad ? `\nplace: ${bad} FAILED` : '\nplace: all passed');
 process.exit(bad ? 1 : 0);

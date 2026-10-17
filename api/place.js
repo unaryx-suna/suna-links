@@ -23,13 +23,35 @@ const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, the same one place.html already ships.
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
 
-/** The place id from `/place/<uuid>`, tolerating a trailing segment or query. */
-function placeIDFrom(pathname) {
-  const raw = decodeURIComponent((pathname.split('/place/')[1] || '').split('/')[0].split('?')[0]);
-  // Only ever used inside an equality filter, but validated anyway: an id that
-  // is not a UUID cannot match a row, so rejecting it early saves a round trip
-  // and keeps anything odd out of the query string entirely.
-  return /^[0-9a-f-]{36}$/i.test(raw) ? raw : '';
+/**
+ * What `/place/...` names, tolerating a trailing segment or query:
+ * `{ uuid }` for `/place/<uuid>`, `{ short }` for `/place/<slug>--<8 hex>` or a
+ * bare `/place/<8 hex>` (what Discover and the place sheet's Share send, W-59),
+ * else null.
+ *
+ * Only the part after the last `--` is read, so the slug can be anything,
+ * Cyrillic included, and never reaches a query. Validated before use: an id
+ * that is neither shape cannot match a row, so it costs no round trip.
+ */
+function placeRefFrom(pathname) {
+  const segment = (pathname.split('/place/')[1] || '').split('/')[0].split('?')[0];
+  const cut = segment.lastIndexOf('--');
+  const tail = (cut < 0 ? segment : segment.slice(cut + 2)).toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tail)) return { uuid: tail };
+  if (/^[0-9a-f]{8}$/.test(tail)) return { short: tail };
+  return null;
+}
+
+/**
+ * The PostgREST filter for a place reference. A short id is the UUID range
+ * whose first 8 hex characters it is, as the app and the Clip query it
+ * (`ClipShareLink.uuidRange`): a range on the uuid column, never `ilike` on a
+ * cast, so it stays on the primary key index.
+ */
+function idFilter(ref) {
+  return ref.uuid
+    ? `id=eq.${ref.uuid}`
+    : `id=gte.${ref.short}-0000-0000-0000-000000000000&id=lte.${ref.short}-ffff-ffff-ffff-ffffffffffff`;
 }
 
 function escapeHtml(value) {
@@ -151,7 +173,9 @@ function canonicalURL(origin, id) {
 export const _bookingFor = bookingFor;
 
 export default async function handler(req, res) {
-  const id = placeIDFrom(req.url || '');
+  const ref = placeRefFrom(req.url || '');
+  // The full UUID. A short link has none until exactly one row answers it.
+  let id = ref && ref.uuid ? ref.uuid : '';
   const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
   // The static shell, fetched from this same deployment so the markup has one
@@ -172,18 +196,23 @@ export default async function handler(req, res) {
   // Take me there (W-47), when the place has a real pin.
   let maps = '';
 
-  if (id) {
+  if (ref) {
     try {
+      // Visible rows only. A merged row is always hidden, and this key can't
+      // read hidden rows (RLS), so its `merged_into` can't be followed from
+      // here: a merged place's link gets the generic card, never a wrong one.
+      // `limit=2` so a short id that two places share is seen as ambiguous.
       const url = `${SUPABASE_URL}/rest/v1/landmarks`
-        + `?id=eq.${encodeURIComponent(id)}`
-        + `&is_hidden=eq.false`
-        + `&select=name,category,description,address,cover_image_url,city_id,latitude,longitude,city:cities(country_code)&limit=1`;
+        + `?${idFilter(ref)}`
+        + `&is_hidden=eq.false&merged_into=is.null`
+        + `&select=id,name,category,description,address,cover_image_url,city_id,latitude,longitude,city:cities(country_code)&limit=2`;
       const r = await fetch(url, {
         headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
         signal: AbortSignal.timeout(2500),
       });
       const rows = r.ok ? await r.json() : [];
-      const place = Array.isArray(rows) ? rows[0] : null;
+      const place = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+      if (place && place.id) id = String(place.id).toLowerCase();
 
       if (place) {
         // City is a separate lookup rather than a PostgREST embed: the embed
@@ -277,6 +306,9 @@ export default async function handler(req, res) {
     // offer. Both are escaped: offer_text is written by the business.
     campaign ? `<meta name="suna:campaign" content="${escapeHtml(campaign)}">` : '',
     offer ? `<meta name="suna:offer" content="${escapeHtml(offer)}">` : '',
+    // Read by place.html for Open in Suna: the full id, so the app gets the
+    // UUID rather than a percent-encoded slug from the path (W-59).
+    id ? `<meta name="suna:place" content="${escapeHtml(id)}">` : '',
     // Read by place.html to show "Book tickets". Our own /go URL, built here.
     booking ? `<meta name="suna:book" content="${escapeHtml(booking)}">` : '',
   ].filter(Boolean).join('\n  ');

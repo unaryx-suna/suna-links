@@ -70,6 +70,10 @@
         return el ? el.getAttribute('content') : null;
       };
 
+      // A shared link names the place by slug and short id (W-59); the
+      // server resolved it, so hand the app the full id when there is one.
+      placeID = meta('suna:place') || placeID;
+
       var offerText = meta('suna:offer');
       if (offerText) {
         var o = document.getElementById('offer');
