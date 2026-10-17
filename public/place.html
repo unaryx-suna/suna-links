@@ -19,7 +19,10 @@
       /* The landmark (W-61). It takes the column body used to lay out
          directly, so nothing moves. */
       main { display: flex; flex-direction: column; align-items: center; }
-      h1 { font-size: 28px; margin-bottom: 8px; }
+      h1 { font-size: 28px; margin-bottom: 8px; overflow-wrap: anywhere; max-width: 20em; }
+      /* W-62: on a known place the h1 is its name, and the old line sits
+         above it as a kicker. A <p>, not a heading. */
+      p.kicker { color: #aaa; font-size: 15px; margin: 0 0 4px; }
       p  { color: #aaa; margin-bottom: 32px; }                                  
       a  {                                                                      
         background: #FFD76A; color: black; padding: 14px 32px;

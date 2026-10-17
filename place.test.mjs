@@ -272,5 +272,34 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   });
 }
 
+// W-62: the h1 is the place's name; the generic line is a kicker above it.
+{
+  const h1s = (html) => [...html.matchAll(/<h1>([\s\S]*?)<\/h1>/g)].map((m) => m[1]);
+  const row = (name) => [{ id: 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d', name, category: 'Museum', description: 'z'.repeat(80), address: 'x', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.1, longitude: 101.7 }];
+  await t('W-62 the h1 is the name, escaped, once; the old line is a kicker, not a heading', async () => {
+    for (const [name, html] of [
+      ['Petronas Twin Towers', 'Petronas Twin Towers'],
+      ['Arts & Crafts "Village"', 'Arts &amp; Crafts &quot;Village&quot;'],
+      ['Храм Великомученицы Ирины в Покровском', 'Храм Великомученицы Ирины в Покровском'],
+    ]) {
+      landmarkRows = () => row(name);
+      const b = (await render('/place/x--a1b2c3d4')).body;
+      assert.deepEqual(h1s(b), [html], name);
+      assert(b.includes('<p class="kicker">✨ Discover this place on Suna</p>'), name);
+      const ld = JSON.parse(b.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+      assert.equal(ld.name, name, 'the same name as the JSON-LD');
+    }
+    landmarkRows = () => row('<img src=x onerror=alert(1)>');
+    assert.deepEqual(h1s((await render('/place/x--a1b2c3d4')).body), ['&lt;img src=x onerror=alert(1)&gt;']);
+  });
+  await t('W-62 no place: the shell\'s own h1, and no kicker', async () => {
+    landmarkRows = () => [];
+    const b = (await render('/place/nope--00000000')).body;
+    assert.deepEqual(h1s(b), ['✨ Discover this place on Suna']);
+    assert(!b.includes('class="kicker"'));
+    landmarkRows = null;
+  });
+}
+
 console.log(bad ? `\nplace: ${bad} FAILED` : '\nplace: all passed');
 process.exit(bad ? 1 : 0);

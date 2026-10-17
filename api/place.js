@@ -245,7 +245,7 @@ export default async function handler(req, res) {
   let indexable = false;
   // Take me there (W-47), when the place has a real pin.
   let maps = '';
-  // The row and its own cover, for the JSON-LD (W-61).
+  // The row and its own cover, for the JSON-LD (W-61) and the h1 (W-62).
   let resolved = null;
 
   if (ref) {
@@ -376,7 +376,13 @@ export default async function handler(req, res) {
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description|robots)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
     .replace('</head>', `  ${tags}\n  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>`)
-    .replace('<!--MAPS-->', maps ? `<p id="maps">${maps}</p>` : '');
+    .replace('<!--MAPS-->', maps ? `<p id="maps">${maps}</p>` : '')
+    // W-62: a place we found is named in its h1 (the same name as the
+    // JSON-LD), with the generic line kept above it as a kicker. A page with
+    // no place keeps the shell's own h1, so every page has exactly one.
+    .replace(/<h1>✨ Discover this place on Suna<\/h1>/, (h1) => (resolved && resolved.place.name
+      ? `<p class="kicker">✨ Discover this place on Suna</p>\n    <h1>${escapeHtml(resolved.place.name)}</h1>`
+      : h1));
 
   res
     .status(200)
