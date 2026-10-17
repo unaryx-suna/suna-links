@@ -54,6 +54,54 @@ function idFilter(ref) {
     : `id=gte.${ref.short}-0000-0000-0000-000000000000&id=lte.${ref.short}-ffff-ffff-ffff-ffffffffffff`;
 }
 
+// W-61: the schema.org type for each of our categories. Only types that
+// describe the place honestly: "Culinary Spot" covers stalls and hawker
+// centres as well as restaurants, so it is FoodEstablishment, the parent of
+// Restaurant. Anything without a clear match is a TouristAttraction.
+const SCHEMA_TYPE = {
+  'Culinary Spot': 'FoodEstablishment',
+  'Cafe & Workspace': 'CafeOrCoffeeShop',
+  'Nature & Parks': 'Park',
+  'Museum': 'Museum',
+  'Sacred Space': 'PlaceOfWorship',
+  'Historic Site': 'LandmarksOrHistoricalBuildings',
+  'Monument & Statue': 'LandmarksOrHistoricalBuildings',
+  'Mall': 'ShoppingCenter',
+  'Travel Hub': 'Place',
+};
+
+/**
+ * The place's JSON-LD: what we know, nothing we don't. No rating, no
+ * review, no opening hours (we don't hold them in a form we'd stand by).
+ * The image is our own cover only, never the stock picture. `<` is escaped
+ * so a name can't close the script.
+ */
+function placeLD(place, canonical, cover) {
+  const lat = Number(place.latitude); const lng = Number(place.longitude);
+  const node = {
+    '@context': 'https://schema.org',
+    '@type': SCHEMA_TYPE[place.category] || 'TouristAttraction',
+    name: place.name,
+    url: canonical,
+  };
+  if (place.address) node.address = String(place.address).trim();
+  if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+    node.geo = { '@type': 'GeoCoordinates', latitude: lat, longitude: lng };
+  }
+  if (cover) node.image = cover;
+  const text = String(place.description || '').trim();
+  if (text) node.description = text;
+  return `<script type="application/ld+json">${JSON.stringify(node).replace(/</g, '\\u003c')}</script>`;
+}
+
+/** Cut to about `max` characters on a word boundary, with an ellipsis. */
+function cutWords(text, max) {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max - 1);
+  const space = head.lastIndexOf(' ');
+  return `${(space > max / 2 ? head.slice(0, space) : head).replace(/[\s,;:.–-]+$/, '')}…`;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -171,6 +219,8 @@ function canonicalURL(origin, id) {
 
 // For place.test.mjs only.
 export const _bookingFor = bookingFor;
+export const _placeLD = placeLD;
+export const _cutWords = cutWords;
 
 export default async function handler(req, res) {
   const ref = placeRefFrom(req.url || '');
@@ -195,6 +245,8 @@ export default async function handler(req, res) {
   let indexable = false;
   // Take me there (W-47), when the place has a real pin.
   let maps = '';
+  // The row and its own cover, for the JSON-LD (W-61).
+  let resolved = null;
 
   if (ref) {
     try {
@@ -239,8 +291,9 @@ export default async function handler(req, res) {
         title = [place.name, middle].filter(Boolean).join(' — ') + ' | Suna';
 
         const text = (place.description || '').trim().replace(/\s+/g, ' ');
+        // About 155 characters, on a word (W-61): what a results page shows.
         if (text) {
-          description = text.length > 200 ? `${text.slice(0, 197)}…` : text;
+          description = cutWords(text, 155);
         } else if (place.address) {
           description = `${place.name} — ${place.address}`;
         }
@@ -254,7 +307,9 @@ export default async function handler(req, res) {
           landmarkId: id, category: place.category, countryCode: place.city && place.city.country_code,
           latitude: place.latitude, longitude: place.longitude,
         });
-        image = (await imageResolves(candidate)) ? candidate : (stock ? stock.url : null);
+        const ownCover = (await imageResolves(candidate)) ? candidate : null;
+        image = ownCover || (stock ? stock.url : null);
+        resolved = { place, ownCover };
 
         // Only a page with real content of its own asks to be indexed. This
         // mirrors the sitemap's gate, and it is the half that matters: the
@@ -302,6 +357,7 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     indexable ? '' : `<meta name="robots" content="noindex,follow">`,
+    resolved && canonical ? placeLD(resolved.place, canonical, resolved.ownCover) : '',
     // Read by place.html to swap the App Store link's token and to show the
     // offer. Both are escaped: offer_text is written by the business.
     campaign ? `<meta name="suna:campaign" content="${escapeHtml(campaign)}">` : '',

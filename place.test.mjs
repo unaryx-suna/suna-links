@@ -222,5 +222,55 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   landmarkRows = null;
 }
 
+// W-61: accessibility, the description's length, the JSON-LD.
+{
+  const { _placeLD: placeLD, _cutWords: cutWords } = await import('./api/place.js');
+  const ld = (html) => { const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/); return m ? JSON.parse(m[1]) : null; };
+
+  await t('W-61 the shell: lang="en", one <main>, a favicon that exists', () => {
+    assert.match(SHELL, /<html lang="en">/);
+    assert.equal((SHELL.match(/<main>/g) || []).length, 1);
+    assert.match(SHELL, /<main>[\s\S]*<h1>[\s\S]*id="cta"[\s\S]*<!--MAPS-->\s*<\/main>/);
+    assert.match(SHELL, /<link rel="icon" type="image\/svg\+xml" href="\/icons\/suna-mark\.svg">/);
+    readFileSync(new URL('./public/icons/suna-mark.svg', import.meta.url));
+  });
+  await t('W-61 description: at most 155 characters, cut on a word', () => {
+    const long = 'The old cathedral sits above the river and its bells ring every hour, ' .repeat(4).trim();
+    const d = cutWords(long, 155);
+    assert(d.length <= 155, String(d.length));
+    assert(d.endsWith('…') && !/\s…$/.test(d));
+    assert(long.startsWith(d.slice(0, -1)), 'cut on the original words');
+    assert.equal(cutWords('Short.', 155), 'Short.');
+  });
+  await t('W-61 JSON-LD: the type follows our category, else TouristAttraction', () => {
+    const base = { name: 'X', address: 'Somewhere 1', latitude: 3.1, longitude: 101.7, description: 'A place.' };
+    for (const [cat, type] of [['Culinary Spot', 'FoodEstablishment'], ['Cafe & Workspace', 'CafeOrCoffeeShop'], ['Nature & Parks', 'Park'],
+      ['Museum', 'Museum'], ['Sacred Space', 'PlaceOfWorship'], ['Historic Site', 'LandmarksOrHistoricalBuildings'], ['Mall', 'ShoppingCenter'],
+      ['Hidden Gem', 'TouristAttraction'], ['Viewpoint', 'TouristAttraction'], [undefined, 'TouristAttraction']]) {
+      assert.equal(ld(placeLD({ ...base, category: cat }, 'https://app.unaryx.com/place/u', null))['@type'], type, String(cat));
+    }
+  });
+  await t('W-61 JSON-LD: name, address, geo, our cover only, no ratings; a name cannot close the script', () => {
+    const n = ld(placeLD({ name: 'A</script><b>', category: 'Museum', address: 'Jalan 1', latitude: 3.1, longitude: 101.7, description: 'd' }, 'https://app.unaryx.com/place/u', 'https://x/cover.jpg'));
+    assert.deepEqual(n, { '@context': 'https://schema.org', '@type': 'Museum', name: 'A</script><b>', url: 'https://app.unaryx.com/place/u',
+      address: 'Jalan 1', geo: { '@type': 'GeoCoordinates', latitude: 3.1, longitude: 101.7 }, image: 'https://x/cover.jpg', description: 'd' });
+    assert(!placeLD({ name: 'A</script>' }, 'u', null).includes('</script><'), 'escaped');
+    const none = ld(placeLD({ name: 'B', latitude: 0, longitude: 0 }, 'u', null));
+    assert(!('geo' in none) && !('image' in none) && !('aggregateRating' in none) && !('review' in none));
+  });
+  await t('W-61 the page: JSON-LD url is the canonical UUID, and the stock image is never its image', async () => {
+    cover = null;
+    landmarkRows = (u) => [{ id: 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d', name: 'Houhai', category: 'Nature & Parks', description: 'y'.repeat(80), address: 'Beijing', cover_image_url: null, city_id: null, city: { country_code: 'CN' }, latitude: 39.94, longitude: 116.38 }];
+    const b = (await render('/place/houhai--a1b2c3d4?via=share')).body;
+    const n = ld(b);
+    assert.equal(n['@type'], 'Park');
+    assert.equal(n.url, 'https://app.unaryx.com/place/a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d');
+    assert(!('image' in n), 'no own cover: no image, even with a stock og:image');
+    landmarkRows = () => [];
+    assert.equal(ld((await render('/place/nope--00000000')).body), null, 'no place, no JSON-LD');
+    landmarkRows = null;
+  });
+}
+
 console.log(bad ? `\nplace: ${bad} FAILED` : '\nplace: all passed');
 process.exit(bad ? 1 : 0);
