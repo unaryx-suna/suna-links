@@ -13,8 +13,8 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
 const block = html.match(/\/\/ W-56 logic begin[^\n]*\n([\s\S]*?)\/\/ W-56 logic end/)[1];
-const { amCall, amBody, amLane, amDescribe } =
-  new Function(block + '\nreturn { amCall, amBody, amLane, amDescribe };')();
+const { amCall, amBody, amLane, amDescribe, amCap } =
+  new Function(block + '\nreturn { amCall, amBody, amLane, amDescribe, amCap };')();
 
 let failed = 0;
 async function t(name, fn) {
@@ -109,7 +109,24 @@ await t('Ledger refusal and the daily cap', () => {
   assert.match(amDescribe(409, LEDGER).note, /hid or rejected/);
   const v = amDescribe(429, USED);
   assert.equal(v.lane, 'All 20 of today’s Google calls are used');
+  // W-67: the title's number is the answer's, never one of our own.
+  assert.equal(v.title, 'Today’s 20 Google calls are used');
+  assert.equal(amDescribe(429, { ...USED, claim: { ...USED.claim, limit: 100 } }).title, 'Today’s 100 Google calls are used');
+  assert.equal(amDescribe(429, { error: 'x' }).title, 'Today’s Google calls are used', 'no number when none came back');
   assert.match(v.note, /08:00 Malaysia time/);
+});
+await t('W-67 the cap comes from the answer: the lane, else the claim', () => {
+  assert.equal(amCap({ lane: '3 of 100' }), 100);
+  assert.equal(amCap({ lane: '2 of 20' }), 20);
+  assert.equal(amCap(USED), 20);
+  assert.equal(amCap({ error: 'x' }), null);
+  assert.equal(amCap(null), null);
+});
+await t('W-67 no 20 is hard-coded in the copy, and BUILD matches the worker', () => {
+  assert(!/today's 20|Today’s 20|of 20 today/.test(html.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')), 'a hard-coded 20');
+  assert.match(html, /<span id="am-cap">today's Google calls<\/span>/);
+  const build = html.match(/const BUILD = '([^']+)'/)[1];
+  assert.equal(build, readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)[1]);
 });
 await t('errors are worded for Ops', () => {
   assert.match(amDescribe(400, { error: 'not a Google Maps place link or place id' }).note, /tap Share/);
@@ -135,7 +152,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace'\]\) \{/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v36');
+  assert.equal(build, 'field-v37');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);

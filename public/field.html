@@ -656,7 +656,7 @@
     <h1>Add from Google Maps link</h1>
     <p class="sub">Paste a Google Maps link to one place. Preview asks Google
       once, and Add uses that answer for 15 minutes, so a place costs one of
-      today's 20.</p>
+      <span id="am-cap">today's Google calls</span>.</p>
     <label for="am-link">Google Maps link or place id</label>
     <input id="am-link" type="search" placeholder="https://maps.app.goo.gl/…" autocomplete="off" autocapitalize="off" spellcheck="false">
 
@@ -917,7 +917,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v36';
+const BUILD = 'field-v37';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -7249,7 +7249,7 @@ async function toggleCreator(p, sw, note) {
    uses it instead of asking again (`from_preview`). So a place costs one call
    whether or not it was previewed, and a Preview alone also costs one.
 
-   Every answer after the call carries `lane` ("n of 20"); the line under the
+   Every answer after the call carries `lane` ("n of N"); the line under the
    buttons shows it. A refusal at the cap carries the claim instead.
    Analytics: none (invariant 24; no web events until after 3.2). */
 
@@ -7284,7 +7284,17 @@ function amBody(link, opts, dryRun) {
   return b;
 }
 
-/** "n of 20 today" from the answer's `lane`; at the cap, from its claim. */
+/** The day's cap, from the answer: the lane's "n of N", else the 429's
+ *  claim.limit. Never a number of our own (W-67: the cap went 20 -> 100 and
+ *  the copy didn't follow). */
+function amCap(body) {
+  const m = body && typeof body.lane === 'string' && body.lane.match(/^\d+ of (\d+)$/);
+  if (m) return Number(m[1]);
+  const limit = body && body.claim && body.claim.limit;
+  return Number.isFinite(Number(limit)) && limit != null ? Number(limit) : null;
+}
+
+/** "n of N today" from the answer's `lane`; at the cap, from its claim. */
 function amLane(body, status) {
   if (body && typeof body.lane === 'string' && /^\d+ of \d+$/.test(body.lane)) return body.lane + ' today';
   const claim = body && body.claim;
@@ -7335,7 +7345,9 @@ function amDescribe(status, body) {
     return { tone: 'warn', title: 'Not added', facts: [], note: 'An admin hid or rejected this place before, so it stays out.' };
   }
   if (status === 429) {
-    return { tone: 'bad', title: 'Today’s 20 Google calls are used', facts: [], note: 'They reset at 08:00 Malaysia time (midnight UTC).', lane };
+    const cap = amCap(body);
+    return { tone: 'bad', title: cap != null ? 'Today’s ' + cap + ' Google calls are used' : 'Today’s Google calls are used',
+      facts: [], note: 'They reset at 08:00 Malaysia time (midnight UTC).', lane, cap };
   }
   const why = status === 401 ? 'Sign in again: the session has run out.'
     : status === 403 ? 'Only admins can add places here.'
@@ -7378,7 +7390,10 @@ async function amToken() {
   return (data && data.session && data.session.access_token) || '';
 }
 
-function amRender(view) {
+function amRender(view, body) {
+  // The intro's number follows the cap the answer reports (W-67).
+  const cap = view && view.cap != null ? view.cap : amCap(body);
+  if (cap != null) $('am-cap').textContent = 'today’s ' + cap;
   const out = $('am-out');
   out.innerHTML = '';
   const card = document.createElement('div');
@@ -7424,7 +7439,7 @@ $('am-preview').onclick = async () => {
   const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), body);
   const view = amDescribe(res.status, res.body);
   btn.disabled = false; btn.textContent = 'Preview';
-  amRender(view);
+  amRender(view, res.body);
   if (view.canAdd) {
     amPreviewed = amBody(link, amOpts(), false);
     $('am-add').textContent = amFillPick ? 'Fill “' + amFillPick.name + '”' : 'Add';
@@ -7438,7 +7453,7 @@ $('am-add').onclick = async () => {
   const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), amPreviewed);
   btn.disabled = false; btn.hidden = true;
   amPreviewed = null;               // one Add per Preview: the cached answer is for one place
-  amRender(amDescribe(res.status, res.body));
+  amRender(amDescribe(res.status, res.body), res.body);
 };
 
 async function amSearchFill() {
