@@ -920,7 +920,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v39';
+const BUILD = 'field-v40';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -957,6 +957,9 @@ const blank = () => ({
   locAccuracy: null,           // metres, live fix only
   locTakenAt: null,            // EXIF DateTimeOriginal, ISO
   cityId: null, cityName: null, cityDistanceKm: null,
+  /** W-91: the nearest city when it's 25-100 km away ({ name, km }): an
+   *  admin's new place saves with no city then, unless he picks one. */
+  farCity: null,
   /** ONE field. `description` is gone: both boxes wrote to
    *  `landmarks.description` and only one of them survived. */
   note: '', address: '', building: '', dishes: '',
@@ -1714,12 +1717,45 @@ function nearestCities(lat, lon, n = 5) {
  *  today, and this is one of the ways they got there. */
 const CITY_MAX_KM = 100;
 
+/* ── W-91 (Ops DEX-019 a): admin-add-place's 25 km rule, in the form ────────
+ *
+ * A hand-added pin 34 km from Seremban was filed under Seremban: the form
+ * takes any city up to 100 km. For an admin's new place it now matches the
+ * server (I-232 (2), I-241): within 25 km the nearest city, and that city is
+ * sent, so what the form shows is what's saved; from 25 to 100 km no city,
+ * with the server's sand line, unless he picks one from the chooser (sent as
+ * city_id, I-241); over 100 km the block, as before. Everyone else, and an
+ * edit, keeps the 100 km rule: a non-admin's row is filed by the database.
+ */
+// W-91 logic begin: pure, tested in add-place.test.mjs.
+const FAR_CITY_KM = 25;
+
+/** What the form files a new place under, from the nearest city (or none). */
+function cityRule(best, admin) {
+  if (!best || best.km > CITY_MAX_KM) return { cityId: null, cityName: null, km: best ? best.km : null, far: null };
+  if (admin && best.km > FAR_CITY_KM) return { cityId: null, cityName: null, km: best.km, far: { name: best.name, km: best.km } };
+  return { cityId: best.id, cityName: best.name, km: best.km, far: null };
+}
+
+/** The server's words for a far pin (admin-add-place's city_warning). */
+function farLine(far) {
+  return 'Nearest city is ' + far.name + ', ' + Math.round(far.km) + ' km away. Ask Dex for a new city.';
+}
+// W-91 logic end
+
 function pickNearestCity() {
   if (cap.lat == null || !cities.length) {
-    cap.cityId = null; cap.cityName = null; cap.cityDistanceKm = null;
+    cap.cityId = null; cap.cityName = null; cap.cityDistanceKm = null; cap.farCity = null;
     return;
   }
   const best = nearestCities(cap.lat, cap.lon, 1)[0];
+  // W-91: an admin's NEW place follows the 25 km rule; edits keep theirs.
+  if (profile && profile.is_admin && !cap.editing && best && best.km <= CITY_MAX_KM) {
+    const r = cityRule(best, true);
+    cap.cityId = r.cityId; cap.cityName = r.cityName; cap.cityDistanceKm = r.km; cap.farCity = r.far;
+    return;
+  }
+  cap.farCity = null;
   if (!best || best.km > CITY_MAX_KM) {
     cap.cityId = null; cap.cityName = null;
     // Kept so the chip can say HOW far the nearest one was, which is the
@@ -1731,7 +1767,9 @@ function pickNearestCity() {
         if (!changed || cap.lat == null || cap.cityId) return;
         const retry = nearestCities(cap.lat, cap.lon, 1)[0];
         if (retry && retry.km <= CITY_MAX_KM) {
-          cap.cityId = retry.id; cap.cityName = retry.name; cap.cityDistanceKm = retry.km;
+          // W-91: the same rule as a first look, for an admin's new place.
+          const r = cityRule(retry, Boolean(profile && profile.is_admin && !cap.editing));
+          cap.cityId = r.cityId; cap.cityName = r.cityName; cap.cityDistanceKm = r.km; cap.farCity = r.far;
           renderCity(); renderSaveState();
         }
       }).catch(() => {});
@@ -1744,6 +1782,12 @@ function pickNearestCity() {
 function renderCity() {
   const el = $('city-chip');
   if (cap.lat == null) { el.textContent = 'Waiting for a location…'; return; }
+  // W-91: 25-100 km on an admin's new place: no city, in the server's words.
+  if (!cap.cityId && cap.farCity) {
+    el.className = 'opt known';
+    el.innerHTML = 'No city yet ▾<small>' + escapeHtml(farLine(cap.farCity)) + ' · tap to choose one</small>';
+    return;
+  }
   if (!cap.cityId) {
     el.className = 'opt warn';
     el.textContent = (cap.cityDistanceKm != null)
@@ -1812,6 +1856,7 @@ function renderCityOptions(filter) {
       + ' · ' + escapeHtml(c.country_code || '') + '</small>';
     b.onclick = () => {
       cap.cityId = c.id; cap.cityName = c.name; cap.cityDistanceKm = c.km;
+      cap.farCity = null;   // W-91: his pick is the city, and it's sent
       $('city-sheet').hidden = true; renderCity(); renderSaveState();
     };
     box.appendChild(b);
@@ -3745,7 +3790,9 @@ function renderSaveState() {
   if (!cap.name.trim()) why.push('a name');
   if (cap.lat == null) why.push(liveFix ? 'a location' : 'a location (waiting for GPS)');
   if (!cap.category) why.push('a category');
-  if (!cap.cityId && cap.lat != null) {
+  if (!cap.cityId && cap.lat != null && cap.farCity) {
+    why.push('a city (none within ' + FAR_CITY_KM + ' km; Dex adds one)');
+  } else if (!cap.cityId && cap.lat != null) {
     why.push(cap.cityDistanceKm != null
       ? ('a city — the nearest is ' + Math.round(cap.cityDistanceKm) + ' km away')
       : 'a city');
@@ -3783,8 +3830,9 @@ function renderSaveState() {
   // **A city is now a save-time requirement, not only a completeness one.**
   // `landmarks_near` filters `city_id IS NOT NULL`, so a row without one is
   // invisible to everyone but its creator — saving it is not a partial success.
+  // W-91: an admin's place 25-100 km out saves with no city, by design.
   const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category
-    && (cap.cityId != null || cap.onServer);
+    && (cap.cityId != null || cap.onServer || cap.farCity != null);
   btn.disabled = !canSave;
   btn.textContent = isComplete() ? 'Save place' : 'Save as incomplete';
   $('save-why').textContent = !canSave
@@ -4374,6 +4422,9 @@ const MANUAL_KEYS = ['description', 'operating_hours', 'hours_source', 'building
 function manualBody(row, confirmDuplicate) {
   const m = { id: row.id, name: row.name, category: row.category, lat: row.latitude, lng: row.longitude };
   if (row.address) m.address = row.address;
+  // W-91 (I-241, v11): the form's city when it has one (within 25 km, or his
+  // pick); left out, the server applies the 25 km rule itself.
+  if (row.city_id) m.city_id = row.city_id;
   for (const k of MANUAL_KEYS) if (row[k] != null && row[k] !== '') m[k] = row[k];
   const b = { manual: m };
   if (confirmDuplicate) b.confirm_duplicate = true;

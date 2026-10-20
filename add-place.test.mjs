@@ -163,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace'\]\) \{/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v39');
+  assert.equal(build, 'field-v40');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
@@ -191,12 +191,13 @@ await t('W-88 the request: the capture\'s own id and buildRow\'s columns; never 
   const b = manualBody(ROW, false);
   assert.deepEqual(Object.keys(b), ['manual'], 'no confirm_duplicate unless he said so');
   assert.deepEqual(b.manual, {
-    id: ROW.id, name: ROW.name, category: ROW.category, lat: 2.7258, lng: 101.9424,
+    id: ROW.id, name: ROW.name, category: ROW.category, lat: 2.7258, lng: 101.9424, city_id: 'panel-city',
     description: 'Kopi and kaya toast.', operating_hours: ROW.operating_hours, hours_source: 'admin', photographer_name: 'ops',
     cover_image_url: ROW.cover_image_url, cover_source: 'user', last_verified_at: ROW.last_verified_at,
     approval_status: 'approved', is_hidden: false,
   });
-  for (const k of ['origin', 'submitted_by', 'city_id', 'google_place_id', 'coordinate_source']) assert(!(k in b.manual), k);
+  // W-91 (I-241, v11): the form's city goes too; origin, owner and Google never do.
+  for (const k of ['origin', 'submitted_by', 'google_place_id', 'coordinate_source']) assert(!(k in b.manual), k);
   assert.equal(manualBody(ROW, true).confirm_duplicate, true);
   assert.equal(manualBody({ ...ROW, address: '12 Jalan Dato Bandar' }, false).manual.address, '12 Jalan Dato Bandar');
 });
@@ -232,6 +233,45 @@ await t('W-88 wiring: only an admin\'s new capture goes this way; edits and othe
   assert.match(html, /if \(made && made\.cityWarning\) showCityLine\(item\.label, made\.cityWarning\);/);
   assert.match(html, /<p class="cityline" id="save-cityline" hidden><\/p>/);
   assert.match(html, /\.cityline \{ color: var\(--sand\);/);
+});
+
+// ── W-91: the 25 km rule in the form, for an admin's new place ──
+const block91 = html.match(/\/\/ W-91 logic begin[^\n]*\n([\s\S]*?)\/\/ W-91 logic end/)[1];
+const { cityRule, farLine, FAR_CITY_KM } = new Function('const CITY_MAX_KM = 100;\n' + block91 + '\nreturn { cityRule, farLine, FAR_CITY_KM };')();
+const SEREMBAN = { id: 'c-seremban', name: 'Seremban', km: 34.0 };
+
+await t('W-91 34 km: no city, and the server\'s line', () => {
+  assert.equal(FAR_CITY_KM, 25);
+  const r = cityRule(SEREMBAN, true);
+  assert.equal(r.cityId, null);
+  assert.deepEqual(r.far, { name: 'Seremban', km: 34 });
+  assert.equal(farLine(r.far), 'Nearest city is Seremban, 34 km away. Ask Dex for a new city.');
+  // and nothing is sent, so admin-add-place applies its own rule
+  assert(!('city_id' in manualBody({ ...ROW, city_id: r.cityId }, false).manual));
+});
+
+await t('W-91 20 km: that city, and it is sent', () => {
+  const r = cityRule({ ...SEREMBAN, km: 20 }, true);
+  assert.equal(r.cityId, 'c-seremban'); assert.equal(r.far, null);
+  assert.equal(manualBody({ ...ROW, city_id: r.cityId }, false).manual.city_id, 'c-seremban');
+});
+
+await t('W-91 a city he picks from the chooser is sent; the chooser clears the far line', () => {
+  assert.equal(manualBody({ ...ROW, city_id: 'c-picked' }, false).manual.city_id, 'c-picked');
+  assert.match(html, /cap\.cityId = c\.id; cap\.cityName = c\.name; cap\.cityDistanceKm = c\.km;\s*cap\.farCity = null;/);
+});
+
+await t('W-91 over 100 km: blocked as before; non-admins keep the 100 km rule', () => {
+  const far = cityRule({ ...SEREMBAN, km: 140 }, true);
+  assert.equal(far.cityId, null); assert.equal(far.far, null);
+  assert.equal(cityRule(SEREMBAN, false).cityId, 'c-seremban');
+  assert.match(html, /&& \(cap\.cityId != null \|\| cap\.onServer \|\| cap\.farCity != null\)/);
+});
+
+await t('W-91 BUILD and the worker move together', () => {
+  const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], sw.match(/const CACHE_VERSION = '([^']+)'/)[1]);
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v40');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
