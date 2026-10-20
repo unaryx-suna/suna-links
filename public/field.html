@@ -269,6 +269,8 @@
      the place he searched for, it just wants opening rather than re-capturing. */
   .opt.known { border-color: rgba(246,203,148,.45); }
   .opt.known small { color: var(--sand); }
+  /* W-88: the server's far-city line after a hand-add. */
+  .cityline { color: var(--sand); font-size: 14px; margin: 10px 0 0; }
   .note { font-size: 12px; color: var(--dim); margin: 8px 0 0; }
   .err { color: var(--danger); font-size: 13px; margin: 8px 0 0; }
   .ok { color: var(--ok); font-size: 13px; }
@@ -536,6 +538,7 @@
 
     <p class="err" id="dupe-note" hidden></p>
     <p class="err" id="save-error" hidden></p>
+    <p class="cityline" id="save-cityline" hidden></p>
   </div>
 
   <!-- finish these -->
@@ -917,7 +920,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v38';
+const BUILD = 'field-v39';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -3953,6 +3956,7 @@ $('btn-save').onclick = () => {
 
 async function doSave() {
   $('save-error').hidden = true;
+  $('save-cityline').hidden = true;
   try {
     const pending = await idbAll('queue');
     const queuedPhotos = pending.reduce((n, r) => n + (r.photos ? r.photos.length : 0), 0);
@@ -3977,6 +3981,8 @@ async function doSave() {
       // while the hint is being written — so every kind stores one, uniformly.
       label: cap.name.trim() || 'Unnamed place',
       featured: cap.featured,
+      // W-88: he already saw this page's look-alikes and said it's different.
+      confirmDuplicate: dupeDismissed === true,
       // Resolved at SAVE time from the place's coordinate, not at upload time —
       // by then `cap` has been reset for the next capture.
       countryCode: countryCodeForCapture(),
@@ -4015,6 +4021,14 @@ async function doSave() {
 }
 
 function showSaveError(msg) { $('save-error').textContent = msg; $('save-error').hidden = false; }
+
+/** W-88: a saved place the server filed under no city, in its own words. It
+ *  stays until the next save, since the upload lands after the form reset. */
+function showCityLine(label, warning) {
+  const p = $('save-cityline');
+  p.textContent = (label || 'That place') + ' is saved with no city yet. ' + warning;
+  p.hidden = false;
+}
 
 /** **Offer the next one rather than a cold form.** The search box is the way in
  *  and it is two taps down inside the location sheet; this is one tap, with the
@@ -4296,12 +4310,13 @@ async function drainQueue() {
       uploadingID = item.id;
       queueNotify(item.id, 'uploading');
       try {
-        await (item.kind === 'event_photo'
+        const made = await (item.kind === 'event_photo'
           ? withTimeout(uploadOne(item), EVENT_UPLOAD_TIMEOUT_MS,
               'No answer from the server after 90 seconds. It will try again.')
           : uploadOne(item));
         await idbDelete('queue', item.id);
         queueNotify(item.id, 'saved');
+        if (made && made.cityWarning) showCityLine(item.label, made.cityWarning);
       } catch (e) {
         const message = e.message || String(e);
         // **An auth failure costs no attempt, anywhere.** It is not a bad
@@ -4320,9 +4335,12 @@ async function drainQueue() {
         }
         item.attempts = (item.attempts || 0) + 1;
         item.lastError = message;
+        // W-88: the server's look-alike, for the queue's Add anyway.
+        item.duplicate = e.duplicate || null;
         // Five, then surface it rather than retrying forever. Never silently
-        // dropped: he stood somewhere to make it.
-        item.state = item.attempts >= 5 ? 'failed' : 'pending';
+        // dropped: he stood somewhere to make it. A look-alike or a refusal
+        // (W-88) stops at once: trying again alone can't change the answer.
+        item.state = item.attempts >= 5 || e.final ? 'failed' : 'pending';
         await idbPut('queue', item);
         queueNotify(item.id, item.state, message);
       }
@@ -4335,6 +4353,66 @@ async function drainQueue() {
     if ($('pane-queue').hidden === false) loadQueueList();
     if (drainAgain) { drainAgain = false; drainQueue(); }
   }
+}
+
+/* ── W-88 (Ops OPS-016): an admin's new place is created by the server ─────
+ *
+ * `admin-add-place`'s manual mode (I-232 (3), v10) instead of an upsert into
+ * `landmarks`. It keeps what `buildRow` keeps: `origin` user (the cron audit),
+ * the admin as `submitted_by`, and THIS capture's id, so the cover uploaded
+ * under `landmark-covers/<id>/` lines up and a retry of a save whose answer
+ * was lost gets the same row back (`existing: true`) instead of a second one.
+ * The server picks the city (its 25 km rule) and says so when there is none.
+ * Edits, and anyone who isn't an admin, write as before.
+ */
+// W-88 logic begin: pure, tested in add-place.test.mjs.
+const MANUAL_KEYS = ['description', 'operating_hours', 'hours_source', 'building_name', 'photographer_name',
+  'cover_image_url', 'cover_source', 'cover_source_ref', 'last_verified_at', 'approval_status', 'is_hidden'];
+
+/** The request for one queued capture: `buildRow`'s row in the manual shape.
+ *  Empty values are left out; the server drops anything it doesn't list. */
+function manualBody(row, confirmDuplicate) {
+  const m = { id: row.id, name: row.name, category: row.category, lat: row.latitude, lng: row.longitude };
+  if (row.address) m.address = row.address;
+  for (const k of MANUAL_KEYS) if (row[k] != null && row[k] !== '') m[k] = row[k];
+  const b = { manual: m };
+  if (confirmDuplicate) b.confirm_duplicate = true;
+  return b;
+}
+
+/** What one answer means for the queue: `{ ok, cityWarning }` when the place
+ *  is there, else `{ error, duplicate?, final }`. `final` = retrying alone
+ *  can't help (a look-alike, the admin ledger, a refusal), so the item stops
+ *  with the server's own words instead of spending five attempts. */
+function manualOutcome(status, body) {
+  body = body || {};
+  if (status === 200 && body.added) {
+    const w = typeof body.city_warning === 'string' && body.city_warning.trim() ? body.city_warning.trim() : null;
+    return { ok: true, cityWarning: w, existing: body.existing === true };
+  }
+  const d = body.duplicate && body.duplicate.match;
+  if (status === 409 && d) {
+    return { error: 'Looks like ' + d.name + ', already in Suna (' + (body.duplicate.by || 'a look-alike') + '). Tap Add anyway if it is a different place.',
+      duplicate: { id: d.id, name: d.name }, final: true };
+  }
+  if (status === 409) return { error: 'Not added: an admin hid or rejected this place before, so it stays out.', final: true };
+  // 401 keeps the word, so the queue parks as signed out and spends nothing.
+  if (status === 401) return { error: 'admin-add-place · 401 · sign in again' };
+  if (status === 403) return { error: 'Only admins can add places this way.', final: true };
+  return { error: 'admin-add-place · ' + (status || 'no answer') + ' · ' + (body.error || 'no details'), final: status === 400 };
+}
+// W-88 logic end
+
+/** One admin's new capture through the manual mode. Throws with the server's
+ *  message; a look-alike or refusal is marked so the queue stops on it. */
+async function addManualPlace(item, row) {
+  const res = await amCall(fetch, SUPABASE_URL, SUPABASE_ANON_KEY, await amToken(), manualBody(row, item.confirmDuplicate));
+  const out = manualOutcome(res.status, res.body);
+  if (out.ok) return out;
+  const e = new Error(out.error);
+  e.final = !!out.final;
+  e.duplicate = out.duplicate || null;
+  throw e;
 }
 
 async function uploadOne(item) {
@@ -4427,7 +4505,11 @@ async function uploadOne(item) {
   // So the fix is the coordinate, and the rest of the identity with it. Only
   // filled where the payload is silent, so an edit that deliberately renames or
   // moves a place still does.
-  try {
+  // W-88: an admin's new capture is created by the server, not upserted here.
+  let made = null;
+  if (profile && profile.is_admin) {
+    made = await addManualPlace(item, row);
+  } else try {
     const { data: existing } = await db.from('landmarks')
       .select('origin,name,category,latitude,longitude,city_id')
       .eq('id', row.id).maybeSingle();
@@ -4446,10 +4528,12 @@ async function uploadOne(item) {
   // INSERT ... ON CONFLICT DO UPDATE, and the two arms fail for completely
   // different reasons — so "landmarks: <pg message>" was not enough to tell
   // them apart. `existed` is what the row's own history says, not a guess.
-  const op = item.editing ? 'update-on-conflict' : 'insert';
-  const { error: rowErr } = await db.from('landmarks').upsert(row, { onConflict: 'id' });
-  if (rowErr) {
-    throw new Error('landmarks · ' + op + ' · ' + rowErr.message);
+  if (!made) {
+    const op = item.editing ? 'update-on-conflict' : 'insert';
+    const { error: rowErr } = await db.from('landmarks').upsert(row, { onConflict: 'id' });
+    if (rowErr) {
+      throw new Error('landmarks · ' + op + ' · ' + rowErr.message);
+    }
   }
 
   // The rest go to the media strip. **The uid MUST be the first path segment**
@@ -4504,6 +4588,7 @@ async function uploadOne(item) {
       AppLoggerNoop(e);
     }
   }
+  return made;   // W-88: the server's answer, for its far-city line
 }
 
 /** Photographs onto a place that already exists.
@@ -5435,6 +5520,20 @@ function renderQueueList(items) {
       acts.appendChild(retry);
     }
 
+    // W-88: the server found a look-alike; he decides.
+    if (item.duplicate && item.state === 'failed') {
+      const anyway = document.createElement('button');
+      anyway.className = 'ghost';
+      anyway.textContent = 'Add anyway';
+      anyway.onclick = () => addAnyway(item.id);
+      acts.appendChild(anyway);
+      const see = document.createElement('a');
+      see.className = 'linkish'; see.target = '_blank'; see.rel = 'noopener';
+      see.href = 'https://app.unaryx.com/place/' + encodeURIComponent(item.duplicate.id);
+      see.textContent = 'See ' + item.duplicate.name;
+      acts.appendChild(see);
+    }
+
     if (!item.kind || item.kind === 'place') {
       const open = document.createElement('button');
       open.className = 'ghost';
@@ -5452,6 +5551,17 @@ function renderQueueList(items) {
     d.appendChild(acts);
     list.appendChild(d);
   });
+}
+
+/** W-88: send it again with `confirm_duplicate`, once he has looked. */
+async function addAnyway(id) {
+  const item = await idbGet('queue', id);
+  if (!item) return;
+  item.confirmDuplicate = true; item.duplicate = null;
+  item.state = 'pending'; item.attempts = 0; item.lastError = null;
+  await idbPut('queue', item);
+  await loadQueueList();
+  drainQueue();
 }
 
 /** A manual retry also un-fails, because the reason is almost always "there was

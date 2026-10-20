@@ -163,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace'\]\) \{/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v38');
+  assert.equal(build, 'field-v39');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
@@ -174,6 +174,64 @@ await t('no secret in the page, and no other function or endpoint', () => {
   assert(!/sb_secret_|service_role|SERVICE_ROLE/.test(block));
   assert(!/sb_secret_[A-Za-z0-9]/.test(html));
   assert.deepEqual([...block.matchAll(/\/functions\/v1\/[\w-]+/g)].map((m) => m[0]), ['/functions/v1/admin-add-place']);
+});
+
+// ── W-88 (1) + (3): the hand-add through admin-add-place's manual mode (v10) ──
+const block88 = html.match(/\/\/ W-88 logic begin[^\n]*\n([\s\S]*?)\/\/ W-88 logic end/)[1];
+const { manualBody, manualOutcome } = new Function(block88 + '\nreturn { manualBody, manualOutcome };')();
+const ROW = { id: 'a1b2c3d4-0000-4000-8000-0000000000aa', name: 'Kedai Runcit Ah Seng', category: 'Culinary Spot',
+  latitude: 2.7258, longitude: 101.9424, city_id: 'panel-city', description: 'Kopi and kaya toast.', address: null,
+  operating_hours: { periods: [], weekdayDescriptions: [] }, hours_source: 'admin', building_name: null, signature_dishes: [],
+  photographer_name: 'ops', submitted_by: 'someone', coordinate_source: 'gps', coordinate_verified_at: 'x',
+  last_verified_at: '2026-10-20T09:00:00.000Z', origin: 'user', place_kind: 'place', approval_status: 'approved', is_hidden: false,
+  cover_image_url: 'https://x.supabase.co/storage/v1/object/public/landmark-covers/a1b2c3d4-0000-4000-8000-0000000000aa/cover.jpg',
+  cover_source: 'user', cover_source_ref: null };
+
+await t('W-88 the request: the capture\'s own id and buildRow\'s columns; never origin, owner, city or a Google id', () => {
+  const b = manualBody(ROW, false);
+  assert.deepEqual(Object.keys(b), ['manual'], 'no confirm_duplicate unless he said so');
+  assert.deepEqual(b.manual, {
+    id: ROW.id, name: ROW.name, category: ROW.category, lat: 2.7258, lng: 101.9424,
+    description: 'Kopi and kaya toast.', operating_hours: ROW.operating_hours, hours_source: 'admin', photographer_name: 'ops',
+    cover_image_url: ROW.cover_image_url, cover_source: 'user', last_verified_at: ROW.last_verified_at,
+    approval_status: 'approved', is_hidden: false,
+  });
+  for (const k of ['origin', 'submitted_by', 'city_id', 'google_place_id', 'coordinate_source']) assert(!(k in b.manual), k);
+  assert.equal(manualBody(ROW, true).confirm_duplicate, true);
+  assert.equal(manualBody({ ...ROW, address: '12 Jalan Dato Bandar' }, false).manual.address, '12 Jalan Dato Bandar');
+});
+await t('W-88 answers: added, a repeat of the id, and the far-city line', () => {
+  assert.deepEqual(manualOutcome(200, { added: { id: ROW.id }, city: 'Seremban', city_warning: null }), { ok: true, cityWarning: null, existing: false });
+  assert.equal(manualOutcome(200, { added: { id: ROW.id }, existing: true }).existing, true);
+  assert.equal(manualOutcome(200, { added: { id: ROW.id }, city: null, city_warning: 'Nearest city is Putrajaya, 35 km away. Ask Dex for a new city.' }).cityWarning,
+    'Nearest city is Putrajaya, 35 km away. Ask Dex for a new city.');
+});
+await t('W-88 a look-alike stops the item with the server\'s match and offers Add anyway', () => {
+  const o = manualOutcome(409, { duplicate: { match: { id: 'd9', name: 'Ah Seng Runcit' }, by: 'name within 50 m' } });
+  assert.equal(o.final, true);
+  assert.deepEqual(o.duplicate, { id: 'd9', name: 'Ah Seng Runcit' });
+  assert.match(o.error, /^Looks like Ah Seng Runcit, already in Suna \(name within 50 m\)\. Tap Add anyway/);
+  assert.match(html, /anyway\.textContent = 'Add anyway';/);
+  assert.match(html, /item\.confirmDuplicate = true; item\.duplicate = null;/);
+});
+await t('W-88 other answers: the server\'s words; only a lapsed session parks the queue', () => {
+  assert.equal(manualOutcome(409, { refused: 'the admin ledger hid or rejected this place' }).final, true);
+  assert.equal(manualOutcome(400, { error: 'a category' }).error, 'admin-add-place · 400 · a category');
+  assert.equal(manualOutcome(400, { error: 'a category' }).final, true);
+  assert.equal(manualOutcome(403, { error: 'admins only' }).final, true);
+  assert.match(manualOutcome(401, { error: 'sign in' }).error, /\b401\b/, 'looksLikeAuthFailure reads 401');
+  assert.equal(manualOutcome(500, { error: 'boom' }).final, false, 'a server error retries');
+  assert.equal(manualOutcome(0, { error: 'Could not reach the function.' }).final, false);
+});
+await t('W-88 wiring: only an admin\'s new capture goes this way; edits and others keep the upsert', () => {
+  const up = html.slice(html.indexOf('async function uploadOne(item) {'), html.indexOf('async function uploadPhotosToExistingPlace'));
+  assert(up.indexOf('if (item.editing) return uploadPhotosToExistingPlace') < up.indexOf('made = await addManualPlace(item, row);'), 'edits return first');
+  assert.match(up, /if \(profile && profile\.is_admin\) \{\n    made = await addManualPlace\(item, row\);/);
+  assert(up.indexOf("db.storage.from('landmark-covers')") < up.indexOf('addManualPlace'), 'the cover is up before the row');
+  assert.match(up, /if \(!made\) \{\n    const op/);
+  assert.match(html, /if \(made && made\.cityWarning\) showCityLine\(item\.label, made\.cityWarning\);/);
+  assert.match(html, /<p class="cityline" id="save-cityline" hidden><\/p>/);
+  assert.match(html, /\.cityline \{ color: var\(--sand\);/);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
