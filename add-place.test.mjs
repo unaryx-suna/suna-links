@@ -93,6 +93,17 @@ await t('Add: the new place, its link, and the lane as n of 20', () => {
   assert.equal(v.lane, '3 of 20 today');
   assert.equal(v.note, null, 'from the preview: nothing to explain');
 });
+await t('W-88: a pin far from any city says so, in sand, and shows "No city yet"', () => {
+  const far = { ...ADDED, added: { ...ADDED.added, city_id: null }, city: null,
+    city_warning: 'Nearest city is Putrajaya, 35 km away. Ask Dex for a new city.' };
+  const v = amDescribe(200, far);
+  assert.equal(v.tone, 'warn', 'the known card: its note is sand');
+  assert.deepEqual(v.facts, [['Category', 'Culinary Spot'], ['City', 'No city yet']]);
+  assert.equal(v.note, 'Nearest city is Putrajaya, 35 km away. Ask Dex for a new city.');
+  assert.match(amDescribe(200, { ...far, from_preview: false }).note, /^Nearest city is Putrajaya.*Google was asked again\.$/);
+  // Before I-232 (2) is deployed the answer has no city_warning: unchanged.
+  assert.equal(amDescribe(200, { ...ADDED, city_warning: null }).tone, 'ok');
+});
 await t('Fill: the filled place, its link and the lane; says when the preview had expired', () => {
   const v = amDescribe(200, FILLED);
   assert.equal(v.title, 'Filled: Lai Foong'); assert.equal(v.place.url, 'https://app.unaryx.com/place/f1');
@@ -152,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace'\]\) \{/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v37');
+  assert.equal(build, 'field-v38');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);

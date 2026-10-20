@@ -917,7 +917,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v37';
+const BUILD = 'field-v38';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -7327,9 +7327,12 @@ function amDescribe(status, body) {
       pin: hasPin ? { lat: body.lat, lng: body.lng } : null, canAdd: true, lane };
   }
   if (status === 200 && body.added) {
-    return { tone: 'ok', title: 'Added: ' + body.added.name,
-      facts: [['Category', body.added.category || 'Other'], ['City', body.city || 'None nearby: the place has no city yet']],
-      place: { id: body.added.id, url: placeUrl(body.added.id) }, note: again, lane };
+    // W-88 (I-232 (2)): a pin over 25 km from its nearest city saves with no
+    // city, and the function says why. Shown as the server words it, in sand.
+    const far = typeof body.city_warning === 'string' && body.city_warning.trim() ? body.city_warning.trim() : null;
+    return { tone: far ? 'warn' : 'ok', title: 'Added: ' + body.added.name,
+      facts: [['Category', body.added.category || 'Other'], ['City', far ? 'No city yet' : (body.city || 'None nearby: the place has no city yet')]],
+      place: { id: body.added.id, url: placeUrl(body.added.id) }, note: [far, again].filter(Boolean).join(' ') || null, lane };
   }
   if (status === 200 && body.filled) {
     const f = body.filled;
