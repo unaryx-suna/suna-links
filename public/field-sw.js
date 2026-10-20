@@ -27,7 +27,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v40';
+const CACHE_VERSION = 'field-v41';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be
@@ -64,6 +64,8 @@ self.addEventListener('activate', (event) => {
 // build it IS; the failure mode being guarded against is a worker handing back
 // an older one, and only the worker can answer that.
 self.addEventListener('message', (event) => {
+  // W-96: the page's "Tap to update" moves a waiting worker on, at once.
+  if (event.data && event.data.type === 'SKIP_WAITING') { event.waitUntil(self.skipWaiting()); return; }
   if (!event.data || event.data.ask !== 'version') return;
   if (event.ports && event.ports[0]) event.ports[0].postMessage({ version: CACHE_VERSION });
 });

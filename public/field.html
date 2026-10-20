@@ -920,7 +920,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v40';
+const BUILD = 'field-v41';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2197,7 +2197,7 @@ function initMapkit() {
   return mapkitReady;
 }
 
-async function searchApple(q, centre) {
+async function searchApple(q, centre, { placesOnly = false } = {}) {
   try {
     await initMapkit();
   } catch (e) {
@@ -2211,6 +2211,8 @@ async function searchApple(q, centre) {
   return new Promise((resolve) => {
     try {
       const opts = {};
+      // W-96: the name box wants places, not street addresses.
+      if (placesOnly) opts.includeAddresses = false;
       if (centre) {
         // Roughly the same box stage one passes to Nominatim, so the two
         // providers are biased to the same place. **No region at all when the
@@ -3608,10 +3610,52 @@ async function runNameSearch(q) {
   // Ours renders immediately; MapKit is slower and must not hold it back.
   renderNameResults(ours, [], q, true);
 
+  // W-96 (Ops): Apple's region is only a hint, so "91 Treetops Way,
+  // Auckland" and "Seremban Putra Apartments" came back for a test name.
+  // Places only, around the pin (or the chosen city), and never housing.
+  const centre = nameCentre();
   let theirs = [];
-  try { theirs = await searchApple(q, currentCentre()); } catch { theirs = []; }
+  if (centre) {
+    try { theirs = nameSuggestions(await searchApple(q, { ...centre, span: SPAN_NEAR }, { placesOnly: true }), centre); } catch { theirs = []; }
+  }
   if (seq !== nameSearchSeq) return;
   renderNameResults(ours, theirs, q, false);
+}
+
+/* ── W-96 (2): what the name box may suggest from Apple Maps ───────────── */
+// W-96 logic begin: pure, tested in add-place.test.mjs.
+const NAME_NEAR_KM = 50;
+const HOUSING = /\b(apartments?|apartmen|condominiums?|condos?|residen(?:ce|ces|cy|si)|flats?|kondominium|pangsapuri|homestays?|townhouses?|villas?)\b/i;
+
+/** Apple's answers for a typed name, cut to places within NAME_NEAR_KM of the
+ *  centre: no street address (no category and a name that is a number or
+ *  its own address line) and no housing. Nothing is filled from these until
+ *  a tap; this only decides what is offered. */
+function nameSuggestions(rows, centre) {
+  const R = 6371, rad = Math.PI / 180;
+  const km = (a, b, c, d) => {
+    const x = Math.sin((c - a) * rad / 2) ** 2 + Math.cos(a * rad) * Math.cos(c * rad) * Math.sin((d - b) * rad / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  };
+  return (rows || []).filter((r) => {
+    if (!centre || !isFinite(r.lat) || !isFinite(r.lon)) return false;
+    if (km(centre.lat, centre.lon, r.lat, r.lon) > NAME_NEAR_KM) return false;
+    const name = String(r.name || '').trim();
+    if (HOUSING.test(name)) return false;
+    const firstLine = String(r.address || '').split(/[,\n]/)[0].trim();
+    if (!r.poi && (/^\d/.test(name) || (firstLine && name.toLowerCase() === firstLine.toLowerCase()))) return false;
+    return true;
+  });
+}
+// W-96 logic end
+
+/** The name box's centre: the pin, else the city he chose, else where he is. */
+function nameCentre() {
+  if (cap.lat != null) return { lat: cap.lat, lon: cap.lon };
+  const c = cap.cityId && cities.find((x) => x.id === cap.cityId);
+  if (c) return { lat: c.latitude, lon: c.longitude };
+  const f = liveFix || lastSavedFix;
+  return f ? { lat: f.lat, lon: f.lon } : null;
 }
 
 function renderNameResults(ours, theirs, q, stillLooking) {
@@ -7811,16 +7855,53 @@ function showUpdateBar(theirs) {
 /** Force it: ask for the new worker, let it take over, then reload onto it.
  *  `skipWaiting()` is already in the worker, so the wait is short and bounded —
  *  and the reload happens either way rather than hanging on a promise. */
+/*  W-96 (Ops, 20 Oct): on v40 the bar stayed after two taps, with the new
+ *  worker sitting in `waiting`; it only took over after leaving and coming
+ *  back. So the tap now tells the waiting worker to take over
+ *  (SKIP_WAITING, which field-sw.js answers with skipWaiting()) and the page
+ *  reloads ONCE, when the new worker is in control. A worker that doesn't
+ *  answer (anything before v41 has no listener) still gets the old reload. */
+let reloadingForUpdate = false;
+function reloadOnce() {
+  if (reloadingForUpdate) return;
+  reloadingForUpdate = true;
+  location.reload();
+}
 async function forceUpdate(btn) {
   const label = btn && btn.textContent;
   if (btn) btn.textContent = 'Updating…';
+  let asked = false;
   try {
-    const reg = swRegistration
-      || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration('/field'));
-    if (reg) await reg.update();
+    const sw = navigator.serviceWorker;
+    const reg = swRegistration || (sw && await sw.getRegistration('/field'));
+    if (reg) {
+      if (!reg.waiting) await reg.update().catch(() => {});
+      const w = reg.waiting || reg.installing;
+      if (w && sw) {
+        sw.addEventListener('controllerchange', reloadOnce, { once: true });
+        w.postMessage({ type: 'SKIP_WAITING' });
+        asked = true;
+      }
+    }
   } catch { /* reload anyway — a failed check must not strand him */ }
-  setTimeout(() => location.reload(), 400);
+  // Nothing waiting, or it never takes over: reload anyway, a little later.
+  setTimeout(reloadOnce, asked ? 3000 : 400);
   if (btn && label) setTimeout(() => { btn.textContent = label; }, 3000);
+}
+
+/** W-96: a worker already waiting when the page opens says so at once,
+ *  in its own version, rather than after the next check. */
+function showWaitingWorker(reg) {
+  const w = reg && reg.waiting;
+  if (!w) return;
+  const chan = new MessageChannel();
+  chan.port1.onmessage = (e) => {
+    const theirs = e.data && e.data.version;
+    if (theirs && theirs !== BUILD) showUpdateBar(theirs);
+  };
+  try { w.postMessage({ ask: 'version' }, [chan.port2]); } catch { /* ignore */ }
+  // A worker that doesn't answer leaves it to renderBuildStamp, which asks
+  // the one in control.
 }
 
 $('update-bar').onclick  = () => forceUpdate($('update-bar'));
@@ -7928,6 +8009,7 @@ async function boot() {
     navigator.serviceWorker.register('/field-sw.js', { scope: '/field' })
       .then((reg) => {
         swRegistration = reg;
+        showWaitingWorker(reg);
         reg.update().catch(() => {});
         // Coming back to the tab is the other moment a new build might exist.
         document.addEventListener('visibilitychange', () => {
@@ -7947,6 +8029,8 @@ async function boot() {
           if (!w) return;
           w.addEventListener('statechange', () => {
             if (w.state === 'activated') renderBuildStamp();
+            // W-96: stuck behind the old one: say so, and the tap moves it on.
+            if (w.state === 'installed' && reg.waiting === w) showWaitingWorker(reg);
           });
         });
       })

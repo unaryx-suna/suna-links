@@ -163,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace'\]\) \{/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v40');
+  assert.equal(build, 'field-v41');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
@@ -271,7 +271,46 @@ await t('W-91 over 100 km: blocked as before; non-admins keep the 100 km rule', 
 await t('W-91 BUILD and the worker move together', () => {
   const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
   assert.equal(html.match(/const BUILD = '([^']+)'/)[1], sw.match(/const CACHE_VERSION = '([^']+)'/)[1]);
-  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v40');
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v41');
+});
+
+// ── W-96: the update tap, and what the name box may suggest ──
+const block96 = html.match(/\/\/ W-96 logic begin[^\n]*\n([\s\S]*?)\/\/ W-96 logic end/)[1];
+const { nameSuggestions, NAME_NEAR_KM } = new Function(block96 + '\nreturn { nameSuggestions, NAME_NEAR_KM };')();
+const PIN = { lat: 2.7258, lon: 101.9424 };   // Seremban
+
+await t('W-96 the name box: Ops\'s two (Auckland, an apartment block) never come back; a nearby place does', () => {
+  assert.equal(NAME_NEAR_KM, 50);
+  const rows = [
+    { name: '91 Treetops Way', address: '91 Treetops Way, Auckland 0632, New Zealand', lat: -36.75, lon: 174.7, poi: null },
+    { name: 'Seremban Putra Apartments', address: 'Jalan Putra, Seremban', lat: 2.72, lon: 101.95, poi: null },
+    { name: 'Kedai Kopi Seng Huat', address: 'Jalan Dato Lee Fong Yee, Seremban', lat: 2.724, lon: 101.94, poi: 'Cafe' },
+    { name: 'Jalan Tuanku Antah', address: 'Jalan Tuanku Antah, Seremban, Negeri Sembilan', lat: 2.72, lon: 101.94, poi: null },
+    { name: 'Kopitiam KL', address: 'Bukit Bintang, Kuala Lumpur', lat: 3.146, lon: 101.711, poi: 'Cafe' },   // 52 km
+  ];
+  assert.deepEqual(nameSuggestions(rows, PIN).map((r) => r.name), ['Kedai Kopi Seng Huat']);
+  assert.deepEqual(nameSuggestions(rows, null), [], 'no centre, no Apple suggestions');
+  for (const n of ['Pangsapuri Seri Mawar', 'Residensi Lake', 'The Villas Seremban', 'Condo 8']) {
+    assert.equal(nameSuggestions([{ name: n, address: 'Seremban', lat: 2.72, lon: 101.94, poi: 'Restaurant' }], PIN).length, 0, n);
+  }
+});
+
+await t('W-96 wiring: places only from Apple for the name box, centred on the pin or the chosen city; filled only on a tap', () => {
+  assert.match(html, /if \(placesOnly\) opts\.includeAddresses = false;/);
+  assert.match(html, /nameSuggestions\(await searchApple\(q, \{ \.\.\.centre, span: SPAN_NEAR \}, \{ placesOnly: true \}\), centre\)/);
+  assert.match(html, /const c = cap\.cityId && cities\.find\(\(x\) => x\.id === cap\.cityId\);/);
+  // Two mentions: the function, and the one call, on the suggestion's own button.
+  assert.equal(html.split('chooseNameMapResult(').length - 1, 2);
+  assert.ok(html.includes('b.onclick = () => chooseNameMapResult(r);'));
+});
+
+await t('W-96 the update: the tap moves a waiting worker on, the page reloads once, a waiting worker shows at once', () => {
+  const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
+  assert.match(sw, /event\.data\.type === 'SKIP_WAITING'\) \{ event\.waitUntil\(self\.skipWaiting\(\)\); return; \}/);
+  assert.match(html, /w\.postMessage\(\{ type: 'SKIP_WAITING' \}\);/);
+  assert.match(html, /sw\.addEventListener\('controllerchange', reloadOnce, \{ once: true \}\);/);
+  assert.match(html, /if \(reloadingForUpdate\) return;/);
+  assert.match(html, /swRegistration = reg;\s*showWaitingWorker\(reg\);/);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
