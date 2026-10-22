@@ -65,6 +65,18 @@ export function pastGone(t, now = Date.now()) {
   return Number.isFinite(ended) && now - ended > GONE_AFTER_MS;
 }
 
+/**
+ * W-109 (W-100's rule): "<venue>, <city>", without the city when the venue
+ * already ends with it as a whole word ("Jalan Dato Lee Fong Yee, Seremban").
+ */
+export function withCity(venue, cityName) {
+  const v = String(venue || '').trim();
+  if (!v) return cityName || '';
+  if (!cityName) return v;
+  const esc = String(cityName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\p{L}])${esc}[\\s.,;]*$`, 'iu').test(v) ? v.replace(/[\s,;]+$/, '') : `${v}, ${cityName}`;
+}
+
 // Ops's notes: 3 events from the next 7 days nearest the pin, within 5 km,
 // else the city; never ended, never this one.
 const MORE_KM = 5;
@@ -93,7 +105,7 @@ export function eventBody(e, now = new Date(), more = []) {
   const over = e.cancelled ? 'cancelled' : eventState(e, now.getTime());
   const img = ourImage(e.image_url);
   const venue = (e.venue && String(e.venue).trim()) || null;
-  const where = [venue, city && city.name].filter(Boolean).join(', ');
+  const where = withCity(venue, city && city.name);
   const price = priceShort(e);
   const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
   const store = storeURL('web-e', 'web-e');
