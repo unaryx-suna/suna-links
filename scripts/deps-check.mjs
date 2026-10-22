@@ -7,10 +7,11 @@
 //   node scripts/deps-check.mjs --strict   exit 1 when a high/critical
 //                                          advisory is found
 //
-// Neither site has a package.json: what the pages load is vendored files
-// (unaryx-site's /vendor) and CDN tags (jsdelivr, cdnjs, unpkg). So there is
-// nothing for `npm outdated` / `npm audit` to read; this does what they do,
-// from the npm registry only:
+// What the pages load is vendored files (unaryx-site's /vendor) and CDN tags
+// (jsdelivr, cdnjs, unpkg), which `npm outdated` / `npm audit` can't see; and
+// since W-112 unaryx-site's package.json pins the image routes' packages
+// (sharp, satori), read here too. This does what npm's checks do, from the
+// npm registry only:
 //   - finds every vendored library and CDN-pinned script in tracked files,
 //     with the version it is (or the range a CDN resolves, e.g. `@2`);
 //   - asks the registry for the latest version and the newest in that range,
@@ -152,6 +153,11 @@ async function main() {
       out.other_third_party.push({ url, host, version: ver, files: [f], served: isServed,
         note: ver && /x/.test(ver) ? 'floating range served by its owner; not on npm' : 'not on npm, no version in the URL' });
     }
+  }
+  // W-112: npm packages the api/ functions use (unaryx-site's image routes),
+  // pinned exactly in package.json. Server-side: no page loads them.
+  for (const [name, version] of Object.entries((pkg && pkg.dependencies) || {})) {
+    add(name, { where: { file: 'package.json', served: false, kind: 'npm' }, version: parse(version) ? version : null, range: parse(version) ? null : version, source: 'package.json' });
   }
   // An outside asset only in unserved files isn't loaded by any page.
   for (const o of out.other_third_party) if (o.files) o.served = o.files.some((f) => served(f));
