@@ -98,7 +98,7 @@ async function moreThisWeek(e, now) {
 
 const fmtDay = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(d).replace(',', '');
 
-export function eventBody(e, now = new Date(), more = []) {
+export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {}) {
   const tz = zoneFor(e.latitude, e.longitude);
   const city = cityFor(e.latitude, e.longitude);
   // W-85: a cancelled event (a tombstone, cancelled) is over too: Ops's W5.
@@ -108,7 +108,7 @@ export function eventBody(e, now = new Date(), more = []) {
   const where = withCity(venue, city && city.name);
   const price = priceShort(e);
   const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
-  const store = storeURL('web-e', 'web-e');
+  const store = storeURL(ct, 'web-e');
   const save = (cls) => saveInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, store, cls);
   const dir = (cls) => directions(e.latitude, e.longitude, venue || e.name, cls);
   const tickets = !over && e.price_type === 'paid' && e.source_url;
@@ -182,6 +182,17 @@ export function missingBody() {
 </main>`;
 }
 
+/**
+ * W-112 (4): unaryx.com's Save in Suna opens this page as
+ * /e/<id>?action=save&src=event-web. With the app installed the universal
+ * link never reaches here (I-262 saves it in the app); without it, this
+ * page's App Store links carry ct=event-web, so those installs are counted
+ * as the event page's. Any other src keeps web-e.
+ */
+export function ctFrom(url) {
+  try { return new URL(url, 'https://app.unaryx.com').searchParams.get('src') === 'event-web' ? 'event-web' : 'web-e'; } catch { return 'web-e'; }
+}
+
 export default async function handler(req, res) {
   const id = eventId(req.url);
   let e = null;
@@ -245,7 +256,7 @@ export default async function handler(req, res) {
     canonical,
     ogUrl: own,
     image: ourImage(e.image_url),
-    body: eventBody(e, now, more),
+    body: eventBody(e, now, more, { ct: ctFrom(req.url) }),
     ld: eventLD(e, canonical),
     // Ended: still a page for anyone holding the link, but not one to index.
     noindex: Boolean(eventState(e, now.getTime())),
