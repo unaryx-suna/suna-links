@@ -11,9 +11,11 @@
 // the commission note is in the footer.
 //
 // An event that has ended keeps its page (200, noindex) so a shared link
-// never dead-ends: Ops's W4, with what's on this week instead. A cancelled
-// one can't be told apart from a missing one: the public policy returns
-// approved rows only, so W5 waits for a read path Brian hasn't approved.
+// never dead-ends: Ops's W4, with what's on this week instead. W-85 (I-210):
+// once events-cleanup deletes the row, its tombstone (public read) keeps the
+// page, W4 "ended" or W5 "cancelled"; past 90 days crawlers get 410 and
+// nothing is cached, so they always reach it. Only a link to nothing at all
+// gets "This event isn't listed".
 
 import {
   EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenText, whenFact, hoursFact, eventState, priceShort,
@@ -45,6 +47,24 @@ async function loadEvent(id) {
   return e;
 }
 
+/** A cleared-out event's tombstone, as an event-shaped row, or null. Never throws. */
+async function loadTombstone(id) {
+  try {
+    const rows = await rest(`event_tombstones?event_id=eq.${id}&select=event_id,name,venue,latitude,longitude,start_time,end_time,reason,removed_at&limit=1`);
+    const t = rows[0];
+    if (!t || !Number.isFinite(t.latitude) || !Number.isFinite(t.longitude)) return null;
+    return { ...t, id: t.event_id, image_url: null, cancelled: t.reason === 'cancelled', tombstone: true };
+  } catch { return null; }
+}
+
+// Google, Bing and the others, and link-preview fetchers. People never match.
+const CRAWLER = /bot\b|crawler|spider|slurp|bingpreview|facebookexternalhit|embedly|google-inspectiontool|duckduckgo|yandex|baidu/i;
+const GONE_AFTER_MS = 90 * 86400000;
+export function pastGone(t, now = Date.now()) {
+  const ended = Date.parse(t.end_time) || Date.parse(t.removed_at);
+  return Number.isFinite(ended) && now - ended > GONE_AFTER_MS;
+}
+
 // Ops's notes: 3 events from the next 7 days nearest the pin, within 5 km,
 // else the city; never ended, never this one.
 const MORE_KM = 5;
@@ -69,7 +89,8 @@ const fmtDay = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekd
 export function eventBody(e, now = new Date(), more = []) {
   const tz = zoneFor(e.latitude, e.longitude);
   const city = cityFor(e.latitude, e.longitude);
-  const over = eventState(e, now.getTime());
+  // W-85: a cancelled event (a tombstone, cancelled) is over too: Ops's W5.
+  const over = e.cancelled ? 'cancelled' : eventState(e, now.getTime());
   const img = ourImage(e.image_url);
   const venue = (e.venue && String(e.venue).trim()) || null;
   const where = [venue, city && city.name].filter(Boolean).join(', ');
@@ -86,7 +107,7 @@ export function eventBody(e, now = new Date(), more = []) {
     <div class="hero-top">${MARK}</div>
     <div>
       <div class="pills">${over
-        ? '<span class="pill pill-over">Ended</span>'
+        ? `<span class="pill pill-over">${over === 'cancelled' ? 'Cancelled' : 'Ended'}</span>`
         : `<span class="pill pill-now">${escapeHtml(eyebrow(e, tz, now))}</span>${pricePill ? `<span class="pill">${pricePill}</span>` : ''}`}</div>
       <h1>${escapeHtml(e.name)}</h1>
       ${venue ? `<p class="hero-sub">${escapeHtml(venue)}</p>` : ''}
@@ -100,8 +121,11 @@ export function eventBody(e, now = new Date(), more = []) {
     const near = venue ? `near ${venue}` : city ? `in ${city.name}` : 'nearby';
     return `<main class="over">
   ${hero}
-  <div class="state"><p class="state-lead">This ended on ${escapeHtml(fmtDay(new Date(e.end_time), tz))}.</p>
-    <p class="state-sub">Here’s what’s on ${escapeHtml(near)} this week.</p></div>
+  ${over === 'cancelled'
+    ? `<div class="state"><p class="state-lead">The organiser cancelled this.</p>
+    <p class="state-sub">Here’s what else is on nearby.</p></div>`
+    : `<div class="state"><p class="state-lead">This ended on ${escapeHtml(fmtDay(new Date(e.end_time), tz))}.</p>
+    <p class="state-sub">Here’s what’s on ${escapeHtml(near)} this week.</p></div>`}
   ${rows ? `<h2>On this week instead</h2>${rows}` : ''}
   <a class="btn btn-outline" href="${escapeHtml(eventsPage(city))}">See what’s on ${city ? `in ${escapeHtml(city.name)}` : 'this week'}</a>
   ${footer()}
@@ -150,6 +174,36 @@ export default async function handler(req, res) {
   const id = eventId(req.url);
   let e = null;
   try { e = id ? await loadEvent(id) : null; } catch { /* the honest page below, never a 500 */ }
+  // W-85: cleared out by events-cleanup? Its tombstone keeps the page.
+  const tomb = !e && id ? await loadTombstone(id) : null;
+  if (tomb) {
+    const gone = pastGone(tomb);
+    if (gone && CRAWLER.test(String(req.headers['user-agent'] || ''))) {
+      res.status(410).setHeader('Content-Type', 'text/plain; charset=utf-8')
+        .setHeader('Cache-Control', 'no-store').setHeader('X-Robots-Tag', 'noindex');
+      res.send('This event has ended and its page is gone.');
+      return;
+    }
+    const now = new Date();
+    let more = [];
+    try { more = await moreThisWeek(tomb, now); } catch { /* the page without the rail */ }
+    const city = cityFor(tomb.latitude, tomb.longitude);
+    const venue = (tomb.venue && String(tomb.venue).trim()) || (city && city.name) || '';
+    const html = page({
+      title: `${tomb.name}${venue ? ` · ${venue}` : ''} · ${tomb.cancelled ? 'Cancelled' : 'Ended'} · Suna`,
+      description: tomb.cancelled ? 'The organiser cancelled this. Here’s what else is on nearby.' : 'This has ended. Here’s what’s on nearby this week.',
+      canonical: `${ORIGIN}/e/${tomb.id}`,
+      body: eventBody(tomb, now, more),
+      noindex: true,
+    });
+    if (gone) {
+      // The edge keys on the URL, not the reader: nothing kept, so a crawler
+      // always reaches the 410 above.
+      res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').setHeader('Cache-Control', 'no-store');
+      res.send(html);
+    } else send(res, html);
+    return;
+  }
   if (!e) {
     send(res, page({
       title: 'Event not found · Suna',
