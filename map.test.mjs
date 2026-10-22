@@ -68,5 +68,13 @@ await t('/e/: src=event-web gives ct=event-web, anything else web-e', () => {
   for (const u of ['/e/abc', '/e/abc?src=evil', '/e/abc?src=event-web2']) assert.equal(ctFrom(u), 'web-e', u);
 });
 
+await t('/e/: og:image is unaryx.com\'s preview, with the same ?v= its page there uses (a0f5f956ca for this row, from unaryx-site)', async () => {
+  const { previewImage } = await import('./api/event.js');
+  const row = { id: '11111111-2222-4333-8444-555555555555', name: 'The Street Social: Halloween', venue: 'Harbour Esplanade, Docklands VIC', latitude: -37.81, longitude: 144.94,
+    image_url: null, start_time: '2026-10-31T01:00:00Z', end_time: '2026-11-01T08:00:00Z', daily_start_time: '12:00:00', daily_end_time: '19:00:00',
+    recurrence_type: null, price_type: 'free', price_amount: null, price_currency: null, description: 'not in the hash' };
+  assert.equal(previewImage(row), 'https://unaryx.com/api/og/event/11111111-2222-4333-8444-555555555555.jpg?v=a0f5f956ca');
+});
+
 console.log(bad ? `\n✗ ${bad} failed\n` : '\n✓ all map and save checks pass\n');
 process.exit(bad ? 1 : 0);

@@ -17,6 +17,7 @@
 // nothing is cached, so they always reach it. Only a link to nothing at all
 // gets "This event isn't listed".
 
+import { createHash } from 'node:crypto';
 import {
   EVENT_SELECT, rest, escapeHtml, cityFor, zoneFor, whenText, whenFact, hoursFact, eventState, priceShort,
   ourImage, eventLD, eventPageURL, eventsPage, storeURL, page, send, segment, eyebrow, eventRow,
@@ -189,6 +190,19 @@ export function missingBody() {
  * page's App Store links carry ct=event-web, so those installs are counted
  * as the event page's. Any other src keeps web-e.
  */
+/**
+ * unaryx.com's 1200×630 preview for this event (W-112 (1), unaryx-site
+ * api/event-image.js), with the same ?v= as its page there: a hash of what the
+ * image shows (unaryx-site api/_lib/event-share.js imageVersion; keep the two
+ * lists the same, though a difference only costs a cache key).
+ */
+export function previewImage(e) {
+  const shown = [e.name, e.venue, e.start_time, e.end_time, e.daily_start_time, e.daily_end_time,
+    e.recurrence_type, e.price_type, e.price_amount, e.price_currency, e.image_url, e.latitude, e.longitude];
+  const v = createHash('sha256').update(JSON.stringify(shown)).digest('hex').slice(0, 10);
+  return `https://unaryx.com/api/og/event/${e.id}.jpg?v=${v}`;
+}
+
 export function ctFrom(url) {
   try { return new URL(url, 'https://app.unaryx.com').searchParams.get('src') === 'event-web' ? 'event-web' : 'web-e'; } catch { return 'web-e'; }
 }
@@ -255,7 +269,8 @@ export default async function handler(req, res) {
     description,
     canonical,
     ogUrl: own,
-    image: ourImage(e.image_url),
+    // W-112 (Dex 16:24): the event's own preview from unaryx.com, as its page there uses.
+    image: previewImage(e),
     body: eventBody(e, now, more, { ct: ctFrom(req.url) }),
     ld: eventLD(e, canonical),
     // Ended: still a page for anyone holding the link, but not one to index.
