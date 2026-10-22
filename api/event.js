@@ -197,8 +197,9 @@ export function missingBody() {
  * lists the same, though a difference only costs a cache key).
  */
 export function previewImage(e) {
-  const shown = [e.name, e.venue, e.start_time, e.end_time, e.daily_start_time, e.daily_end_time,
-    e.recurrence_type, e.price_type, e.price_amount, e.price_currency, e.image_url, e.latitude, e.longitude];
+  // W-117: the rules number and source_url joined the list on unaryx.com.
+  const shown = [2, e.name, e.venue, e.start_time, e.end_time, e.daily_start_time, e.daily_end_time,
+    e.recurrence_type, e.price_type, e.price_amount, e.price_currency, e.image_url, e.latitude, e.longitude, e.source_url || null];
   const v = createHash('sha256').update(JSON.stringify(shown)).digest('hex').slice(0, 10);
   return `https://unaryx.com/api/og/event/${e.id}.jpg?v=${v}`;
 }
