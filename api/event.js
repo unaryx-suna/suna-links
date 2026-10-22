@@ -207,6 +207,7 @@ export default async function handler(req, res) {
       canonical: `${ORIGIN}/e/${tomb.id}`,
       body: eventBody(tomb, now, more),
       noindex: true,
+      android: { from: 'event', city: city ? city.slug : '' },
     });
     if (gone) {
       // The edge keys on the URL, not the reader: nothing kept, so a crawler
@@ -222,6 +223,7 @@ export default async function handler(req, res) {
       description: "What's on this week, within a short walk, on Suna.",
       canonical: `${ORIGIN}/e/${id || ''}`,
       body: missingBody(),
+      android: { from: 'event' },
     }), 300);
     return;
   }
@@ -247,5 +249,6 @@ export default async function handler(req, res) {
     ld: eventLD(e, canonical),
     // Ended: still a page for anyone holding the link, but not one to index.
     noindex: Boolean(eventState(e, now.getTime())),
+    android: { from: 'event', city: city ? city.slug : '' },
   }));
 }

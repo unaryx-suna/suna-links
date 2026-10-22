@@ -178,5 +178,5 @@ export default async function handler(req, res) {
     : 'Events tonight and places worth the detour, within a short walk. On Suna.';
   const canonical = `${ORIGIN}/c/${venue ? encodeURIComponent(venue.slug) : ''}`;
   // Five minutes at the edge: "on now" goes stale faster than an itinerary.
-  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar' }), 300);
+  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' } }), 300);
 }

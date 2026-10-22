@@ -410,7 +410,15 @@ export const MARK = '<a class="mark" href="https://unaryx.com/events"><span clas
  * The page around a body. Same palette and font as /i/. The meta tag is what
  * surfaces the Clip card in Safari: both routes are registered experiences.
  */
-export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '' }) {
+/**
+ * W-115: on Android, App Store buttons become the Android waitlist
+ * (public/android.js). `from` is the page kind, `city` its slug if known.
+ */
+export function androidTag({ from = 'page', city = '' } = {}) {
+  return `<script src="/android.js" data-from="${escapeHtml(from)}"${city ? ` data-city="${escapeHtml(city)}"` : ''}></script>`;
+}
+
+export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '', android = null }) {
   const tags = [
     noindex ? '<meta name="robots" content="noindex">' : '',
     `<title>${escapeHtml(title)}</title>`,
@@ -530,6 +538,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
 <body${bodyClass ? ` class="${bodyClass}"` : ''}>
 ${body}
 ${PAGE_SCRIPT}
+${androidTag(android || undefined)}
 </body>
 </html>`;
 }
