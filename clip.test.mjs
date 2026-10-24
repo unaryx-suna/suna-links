@@ -60,7 +60,7 @@ const CLIP_META = '<meta name="apple-itunes-app" content="app-id=6759053765, app
 
 await t('AASA: /c/* and /e/* claimed, old paths and appclips unchanged', async () => {
   const a = JSON.parse(readFileSync('public/.well-known/apple-app-site-association', 'utf8'));
-  assert.deepEqual(a.applinks.details[0].components.map((c) => c['/']), ['/place/*', '/trip/*', '/i/*', '/city/*', '/c/*', '/e/*']);
+  assert.deepEqual(a.applinks.details[0].components.map((c) => c['/']), ['/place/*', '/trip/*', '/i/*', '/city/*', '/c/*', '/e/*', '/u/*']);
   assert.deepEqual(a.applinks.details[0].appIDs, ['29XRVFHL4F.com.unaryx.TravelMug']);
   assert.deepEqual(a.appclips, { apps: ['29XRVFHL4F.com.unaryx.TravelMug.Clip'] });
 });
