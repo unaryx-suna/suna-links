@@ -10,7 +10,10 @@
 // ct: the new user finds their friend in the app afterwards. A bad username
 // gets the same redirects. Never cached, since the answer depends on the phone.
 
-import { storeURL } from './_clip.js';
+// W-159: the one App Store link the sites use (unaryx.com/get, SITE-ALIGNMENT),
+// with no storefront in it, so Apple opens the visitor's own country's store.
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${ct}&mt=8`;
+const CT = /^[a-z0-9-]{1,40}$/;
 
 /** 'ios', 'android' or 'desktop'. Android first, as /get does. */
 export function deviceFrom(ua) {
@@ -20,15 +23,20 @@ export function deviceFrom(ua) {
   return 'desktop';
 }
 
-/** invite-qr when the link came from a code, else invite-link. */
+/**
+ * The link's own ct when it carries an allowed one (W-159: the app's Ask Suna
+ * invite sends ct=ask-invite), else invite-qr from a code, else invite-link.
+ */
 export function ctFrom(rawURL) {
-  let via = '';
-  try { via = new URL(String(rawURL || ''), 'https://app.unaryx.com').searchParams.get('via') || ''; } catch { /* none */ }
-  return via === 'qr' ? 'invite-qr' : 'invite-link';
+  let q = new URLSearchParams();
+  try { q = new URL(String(rawURL || ''), 'https://app.unaryx.com').searchParams; } catch { /* none */ }
+  const ct = q.get('ct') || '';
+  if (CT.test(ct)) return ct;
+  return q.get('via') === 'qr' ? 'invite-qr' : 'invite-link';
 }
 
 export function targetFor(device, ct) {
-  if (device === 'ios') return storeURL(ct, 'invite-link');
+  if (device === 'ios') return STORE(CT.test(ct) ? ct : 'invite-link');
   if (device === 'android') return 'https://unaryx.com/android?from=invite';
   return 'https://unaryx.com/get?ct=invite-link';
 }

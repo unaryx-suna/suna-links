@@ -15,7 +15,7 @@ const UA = {
   mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
 };
 const call = (url, ua) => { const o = { code: 0, h: {}, body: null }; handler({ url, headers: { 'user-agent': ua } }, { status(c) { o.code = c; return this; }, setHeader(k, v) { o.h[k] = v; return this; }, end(b) { o.body = b ?? ''; return this; }, send(b) { o.body = b; return this; } }); return o; };
-const STORE = (ct) => `https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&ct=${ct}&mt=8`;
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${ct}&mt=8`;
 
 t('iPhone, iPad, in-app browsers → the App Store: ct=invite-qr from a code, else invite-link; never the username', () => {
   for (const ua of [UA.iphone, UA.instagram, UA.ipad]) {
@@ -27,6 +27,21 @@ t('iPhone, iPad, in-app browsers → the App Store: ct=invite-qr from a code, el
     assert.doesNotMatch(q.h.Location, /aina/);
   }
   assert.equal(ctFrom('/u/aina?via=qr'), 'invite-qr');
+});
+
+t('W-159: the App Store link has no storefront (/au/), as /get', () => {
+  for (const u of ['/u/aina', '/u/aina?via=qr', '/u/aina?ct=ask-invite']) {
+    const l = call(u, UA.iphone).h.Location;
+    assert.doesNotMatch(l, /apps\.apple\.com\/[a-z]{2}\//, u);
+    assert.match(l, /^https:\/\/apps\.apple\.com\/app\/id6759053765\?pt=128539200&ct=[a-z0-9-]+&mt=8$/, u);
+  }
+});
+
+t('W-159: an allowed ct on the link goes through (the Ask Suna invite); anything else keeps the default', () => {
+  assert.equal(call('/u/aina?via=ask-for-sam&ct=ask-invite', UA.iphone).h.Location, STORE('ask-invite'));
+  assert.equal(call('/u/aina?via=qr&ct=ask-invite', UA.iphone).h.Location, STORE('ask-invite'), 'the link’s own ct wins');
+  for (const bad of ['Ask', 'a b', 'a%26pt%3D1', 'x'.repeat(41), '']) assert.equal(call(`/u/aina?via=qr&ct=${bad}`, UA.iphone).h.Location, STORE('invite-qr'), bad);
+  assert.equal(call('/u/aina?ct=' + 'x'.repeat(40), UA.iphone).h.Location, STORE('x'.repeat(40)));
 });
 
 t('Android → /android?from=invite; a computer → /get?ct=invite-link', () => {
