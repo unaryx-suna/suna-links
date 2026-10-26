@@ -70,5 +70,10 @@ t('the AASA still lists /u/*, the appclips entry unchanged; /u/* is routed here'
   assert.ok(v.rewrites.some((r) => r.source === '/u/:path*' && r.destination === '/api/invite'));
 });
 
+t('W3 flow pass: no App Store link anywhere on app.unaryx.com names a storefront (/e/ and /i/ said /au/)', () => {
+  const files = execSync('git ls-files api public', { encoding: 'utf8' }).split('\n').filter((f) => /\.(js|mjs|html)$/.test(f));
+  for (const f of files) assert.doesNotMatch(readFileSync(f, 'utf8'), /apps\.apple\.com\/[a-z]{2}\//, f);
+});
+
 if (bad) { console.log(`\n${bad} failed`); process.exit(1); }
 console.log('\ninvite: all ok');

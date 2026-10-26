@@ -52,7 +52,7 @@ export const EVENT_SELECT = [
   'organizer_name', 'performer_names', 'on_sale_from', 'venue_landmark_id', 'hours_text',
 ].join(',');
 
-const STORE = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765';
+const STORE = 'https://apps.apple.com/app/id6759053765';
 const CT = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** The App Store link, always attributed; a `ct` that isn't a clean token falls back. */

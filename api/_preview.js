@@ -35,7 +35,7 @@ export const SHOWN_STOPS = 3;
 
 /** The App Store link before i.html's script picks the `via` token (W-30):
  *  never bare, so even a no-JS tap is attributed to /i/. */
-const STORE_WEB_I = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8';
+const STORE_WEB_I = 'https://apps.apple.com/app/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8';
 
 /**
  * "By Suna" (W-31, Brian 13 Oct): Suna's own itineraries for a city and its
