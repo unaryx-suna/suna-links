@@ -24,7 +24,7 @@ await handler({ url: `/i/${SLUG}`, headers: { host: 'app.unaryx.com' } },
 
 let bad = 0;
 const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
-const WEB_I = 'https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&ct=web-i&mt=8';
+const WEB_I = 'https://apps.apple.com/app/id6759053765?pt=128539200&ct=web-i&mt=8';
 
 await t('server render: the preview has its three link kinds', async () => {
   assert.match(html, /data-preview="1"/);

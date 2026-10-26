@@ -55,7 +55,7 @@ async function render(handler, url) {
 
 let bad = 0;
 const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
-const STORE = (ct) => `https://apps.apple.com/au/app/suna-things-to-do-near-you/id6759053765?pt=128539200&ct=${ct}&mt=8`;
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${ct}&mt=8`;
 const CLIP_META = '<meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com.unaryx.TravelMug.Clip">';
 
 await t('AASA: /c/* and /e/* claimed, old paths and appclips unchanged', async () => {
