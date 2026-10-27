@@ -228,7 +228,7 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.match(r.body, /Suna may earn a commission on some ticket links/);
   assert.doesNotMatch(r.body, /Open in Suna|Get Suna|class="bar"/);
   assert(r.body.includes(CLIP_META));
-  assert(r.body.includes(`href="${STORE('web-e').replace(/&/g, '&amp;')}"`));
+  assert(r.body.includes(`href="${`${STORE('web-e')}&ppid=fec2691e-4d4c-4e48-8520-eda55592bfe1`.replace(/&/g, '&amp;')}"`))  // W-172: /e/ adds the event ppid;
   const ld = JSON.parse(r.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld['@type'], 'Event');
   assert.equal(ld.startDate, '2027-03-05T19:30:00+08:00');
@@ -359,7 +359,7 @@ await t('W-47 maps links: walking directions, and nothing for a missing or 0,0 p
 await t('W-48 (2) Save in Suna: store href with the page ct everywhere, the app scheme for iPhone; See it all in Suna on /c/', async () => {
   state.eventRow = ev(U(4), 0, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   let r = await render(event, `/e/${U(4)}`);
-  assert(r.body.includes(`data-scheme="suna://event?id=${U(4)}" href="${STORE('web-e').replace(/&/g, '&amp;')}">Save in Suna</a>`));
+  assert(r.body.includes(`data-scheme="suna://event?id=${U(4)}" href="${`${STORE('web-e')}&ppid=fec2691e-4d4c-4e48-8520-eda55592bfe1`.replace(/&/g, '&amp;')}">Save in Suna</a>`))  // W-172: /e/ adds the event ppid;
   assert(r.body.includes(maps.PAGE_SCRIPT));
   state.events = [ev(U(1), 0.0045)];
   r = await render(venue, '/c/worq-ttdi');
