@@ -66,6 +66,14 @@ await t('Apple refuses the first encoding: the second is tried; both refused: 40
 await t('/e/: src=event-web gives ct=event-web, anything else web-e', () => {
   assert.equal(ctFrom('/e/abc?action=save&src=event-web'), 'event-web');
   for (const u of ['/e/abc', '/e/abc?src=evil', '/e/abc?src=event-web2']) assert.equal(ctFrom(u), 'web-e', u);
+  // W-171: unaryx.com's Save in Suna carries the page's via; the four known kinds become the ct.
+  for (const v of ['org-test', 'partner-worq', 'creator-joshyeatsss', 'ad-meta-p1']) {
+    assert.equal(ctFrom(`/e/abc?action=save&src=event-web&via=${v}`), v, v);
+    assert.equal(ctFrom(`/e/abc?via=${v}`), v, v);
+  }
+  for (const v of ['fl-12', 'qr-desktop', 'evil', 'org-', 'ORG-test', 'org-a b', `org-${'x'.repeat(40)}`]) {
+    assert.equal(ctFrom(`/e/abc?action=save&src=event-web&via=${encodeURIComponent(v)}`), 'event-web', v);
+  }
 });
 
 await t('/e/: og:image is unaryx.com\'s preview, with the same ?v= its page there uses (e54b46f73a for this row, from unaryx-site)', async () => {

@@ -188,7 +188,8 @@ export function missingBody() {
  * /e/<id>?action=save&src=event-web. With the app installed the universal
  * link never reaches here (I-262 saves it in the app); without it, this
  * page's App Store links carry ct=event-web, so those installs are counted
- * as the event page's. Any other src keeps web-e.
+ * as the event page's. Any other src keeps web-e. W-171: a known `via`
+ * wins (see ctFrom).
  */
 /**
  * unaryx.com's 1200×630 preview for this event (W-112 (1), unaryx-site
@@ -204,8 +205,20 @@ export function previewImage(e) {
   return `https://unaryx.com/api/og/event/${e.id}.jpg?v=${v}`;
 }
 
+// W-171 (Axel AXL-091): unaryx.com's Save in Suna now carries the page's
+// `via`, so an organiser's, partner's, creator's or ad's link keeps its own
+// App Store ct here, the same rule as unaryx.com (unaryx-site api/_lib/via.js;
+// AXL-052 / AXL-065). Only these four kinds, lowercase, 40 at most; anything
+// else is ignored. No via: event-web from unaryx.com's button, else web-e.
+const VIA_CT = /^(?:org|partner|creator|ad)-[a-z0-9-]+$/;
+
 export function ctFrom(url) {
-  try { return new URL(url, 'https://app.unaryx.com').searchParams.get('src') === 'event-web' ? 'event-web' : 'web-e'; } catch { return 'web-e'; }
+  try {
+    const q = new URL(url, 'https://app.unaryx.com').searchParams;
+    const via = q.get('via') || '';
+    if (via.length <= 40 && VIA_CT.test(via)) return via;
+    return q.get('src') === 'event-web' ? 'event-web' : 'web-e';
+  } catch { return 'web-e'; }
 }
 
 export default async function handler(req, res) {
