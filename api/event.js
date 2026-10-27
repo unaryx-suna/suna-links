@@ -109,7 +109,8 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
   const where = withCity(venue, city && city.name);
   const price = priceShort(e);
   const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
-  const store = storeURL(ct, 'web-e');
+  // W-172: this page's App Store link opens Apple's event custom product page.
+  const store = `${storeURL(ct, 'web-e')}&ppid=${EVENT_PPID}`;
   const save = (cls) => saveInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, store, cls);
   const dir = (cls) => directions(e.latitude, e.longitude, venue || e.name, cls);
   const tickets = !over && e.price_type === 'paid' && e.source_url;
@@ -211,6 +212,12 @@ export function previewImage(e) {
 // AXL-052 / AXL-065). Only these four kinds, lowercase, 40 at most; anything
 // else is ignored. No via: event-web from unaryx.com's button, else web-e.
 const VIA_CT = /^(?:org|partner|creator|ad)-[a-z0-9-]+$/;
+
+// W-172 (Axel AXL-092): Apple's approved custom product page "Event page
+// visitors · event-web". The App Store resolves this id (Ops's, from App
+// Store Connect) as the page's variant; the same id is unaryx-site
+// api/_lib/cpp.js EVENT_PPID. Only this page's link carries it.
+export const EVENT_PPID = 'fec2691e-4d4c-4e48-8520-eda55592bfe1';
 
 export function ctFrom(url) {
   try {
