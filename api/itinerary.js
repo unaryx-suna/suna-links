@@ -172,11 +172,16 @@ export default async function handler(req, res) {
   let body = null;
   // True when the body carries signed moment URLs, which expire in an hour.
   let signed = false;
+  // W-179: no public itinerary behind this link (missing, private or a
+  // draft): the generic page stays (the app opens a private one for its
+  // owner), but it's never one to index. A database failure isn't "none".
+  let none = !slug;
 
   if (slug) {
     try {
       const data = await loadItinerary(slug, coverURL);
       const it = data ? data.it : null;
+      none = !it;
       if (it) {
         // "Bangkok for you — a Suna itinerary by @booak55"
         rawName = it.name || '';
@@ -235,6 +240,7 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image" content="${escapeHtml(image)}">` : '',
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
+    none ? '<meta name="robots" content="noindex">' : '',
   ].filter(Boolean).join('\n  ');
 
   // Replace the static head block rather than appending: a duplicate og:title

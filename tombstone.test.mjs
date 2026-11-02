@@ -66,9 +66,10 @@ await t('90 days past its end: 410 for a crawler, the page for a person, nothing
   assert.equal((await call(id('aaaaaaaa'), BOT)).code, 200, 'before 90 days a crawler gets the page');
 });
 
-await t('a link to nothing: "This event isn\'t listed", as before', async () => {
+await t('a link to nothing: "This event isn\'t listed", now a 404 with noindex (W-179)', async () => {
   const r = await call(id('dddddddd'));
-  assert.equal(r.code, 200);
+  assert.equal(r.code, 404);
+  assert.match(r.body, /<meta name="robots" content="noindex">/);
   assert.match(r.body, /This event isn't listed/);
 });
 

@@ -15,7 +15,8 @@
 // once events-cleanup deletes the row, its tombstone (public read) keeps the
 // page, W4 "ended" or W5 "cancelled"; past 90 days crawlers get 410 and
 // nothing is cached, so they always reach it. Only a link to nothing at all
-// gets "This event isn't listed".
+// gets "This event isn't listed": a 404 with noindex (W-179), or a 200 with
+// noindex when the database didn't answer.
 
 import { createHash } from 'node:crypto';
 import {
@@ -230,8 +231,8 @@ export function ctFrom(url) {
 
 export default async function handler(req, res) {
   const id = eventId(req.url);
-  let e = null;
-  try { e = id ? await loadEvent(id) : null; } catch { /* the honest page below, never a 500 */ }
+  let e = null, failed = false;
+  try { e = id ? await loadEvent(id) : null; } catch { failed = true; /* the honest page below, never a 500 */ }
   // W-85: cleared out by events-cleanup? Its tombstone keeps the page.
   const tomb = !e && id ? await loadTombstone(id) : null;
   if (tomb) {
@@ -269,8 +270,12 @@ export default async function handler(req, res) {
       description: "What's on this week, within a short walk, on Suna.",
       canonical: `${ORIGIN}/e/${id || ''}`,
       body: missingBody(),
+      // W-179: never one to index. A link to nothing is a 404 (the same
+      // friendly page); a database failure stays 200 and isn't cached long,
+      // so an outage can't tell Google a real event is gone.
+      noindex: true,
       android: { from: 'event' },
-    }), 300);
+    }), failed ? 60 : 300, failed ? 200 : 404);
     return;
   }
   const now = new Date();

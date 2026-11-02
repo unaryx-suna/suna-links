@@ -544,9 +544,9 @@ ${androidTag(android || undefined)}
 }
 
 /** Writes the page. Cached briefly at the edge, like /i/. */
-export function send(res, html, sMaxAge = 600) {
+export function send(res, html, sMaxAge = 600, status = 200) {
   res
-    .status(200)
+    .status(status)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     .setHeader('Cache-Control', `public, max-age=300, s-maxage=${sMaxAge}, stale-while-revalidate=3600`)
     .send(html);

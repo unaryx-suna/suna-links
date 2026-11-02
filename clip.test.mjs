@@ -303,11 +303,12 @@ await t('/e/: no price → no offers, Save in Suna; free → price 0, More from 
   assert.match(r.body, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"/);
   assert.doesNotMatch(r.body, /Get tickets|commission/);
 });
-await t('/e/: unknown, junk and database failure → 200 with a link to /events', async () => {
+await t('/e/: unknown and junk → 404 + noindex (W-179); database failure → 200 + noindex; all link to /events', async () => {
   state.eventRow = null;
   for (const url of [`/e/${U(7)}`, '/e/nope', '/e/']) {
     const r = await render(event, url);
-    assert.equal(r.status, 200, url);
+    assert.equal(r.status, 404, url);
+    assert.match(r.body, /<meta name="robots" content="noindex">/, url);
     assert.match(r.body, /This event isn't listed/, url);
     assert.match(r.body, /href="https:\/\/unaryx\.com\/events"/, url);
     assert.doesNotMatch(r.body, /ld\+json/, url);
@@ -315,6 +316,7 @@ await t('/e/: unknown, junk and database failure → 200 with a link to /events'
   state.restFails = true;
   const r = await render(event, `/e/${U(4)}`);
   assert.equal(r.status, 200);
+  assert.match(r.body, /<meta name="robots" content="noindex">/);
   assert.match(r.body, /This event isn't listed/);
   state.restFails = false;
 });
