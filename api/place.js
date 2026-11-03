@@ -18,6 +18,7 @@
 
 import { mapsLinks, MAPS_HEAD, MAPS_CSS } from './_maps.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
+import { creditFor } from './_preview.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, the same one place.html already ships.
@@ -75,6 +76,10 @@ const SCHEMA_TYPE = {
  * review, no opening hours (we don't hold them in a form we'd stand by).
  * The image is our own cover only, never the stock picture. `<` is escaped
  * so a name can't close the script.
+ * W-183: when the landmark records a real credit for that cover (_preview.js
+ * creditFor: never the bootstrap's 'Suna' marker), the image is an
+ * ImageObject carrying it. The page shows no photo of its own, so this is
+ * where a place page credits its photographer.
  */
 function placeLD(place, canonical, cover) {
   const lat = Number(place.latitude); const lng = Number(place.longitude);
@@ -88,7 +93,11 @@ function placeLD(place, canonical, cover) {
   if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
     node.geo = { '@type': 'GeoCoordinates', latitude: lat, longitude: lng };
   }
-  if (cover) node.image = cover;
+  const credit = cover ? creditFor(place) : null;
+  if (credit) {
+    node.image = { '@type': 'ImageObject', url: cover, creditText: credit.replace(/^Photo: /, ''),
+      creator: { '@type': 'Person', name: String(place.photographer_name).trim() } };
+  } else if (cover) node.image = cover;
   const text = String(place.description || '').trim();
   if (text) node.description = text;
   return `<script type="application/ld+json">${JSON.stringify(node).replace(/</g, '\\u003c')}</script>`;
@@ -257,7 +266,7 @@ export default async function handler(req, res) {
       const url = `${SUPABASE_URL}/rest/v1/landmarks`
         + `?${idFilter(ref)}`
         + `&is_hidden=eq.false&merged_into=is.null`
-        + `&select=id,name,category,description,address,cover_image_url,city_id,latitude,longitude,city:cities(country_code)&limit=2`;
+        + `&select=id,name,category,description,address,cover_image_url,photographer_name,cover_source,city_id,latitude,longitude,city:cities(country_code)&limit=2`;
       const r = await fetch(url, {
         headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
         signal: AbortSignal.timeout(2500),

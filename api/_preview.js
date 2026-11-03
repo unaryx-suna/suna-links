@@ -22,7 +22,16 @@
 //
 // ONE IMAGE PER SHOWN STOP, the first that exists: the creator's moment, the
 // place's own photo, the stock image the app deals that place (_stock.js).
-// Never a photographer credit, never more than one.
+// Never more than one.
+//
+// W-183 (Brian via Ops OPS-106, 3 Nov: "don't use stock images for
+// itineraries", "only … the itineraries we create"): on SUNA'S OWN plans
+// (partner 'suna', or owned by @sunatravels) a stop shows the place's real
+// photo, else its moment, else no picture (a plain card); never a stock image.
+// Other people's plans keep the order above. Under a place's real photo:
+// "Photo: <photographer> · <licence>" when the landmark records a real
+// credit ('Suna' in photographer_name marks a row the bootstrap made, not a
+// photographer, so it is never shown).
 
 import { stockFor, isGooglePhoto } from './_stock.js';
 import { mapsLinks } from './_maps.js';
@@ -45,6 +54,38 @@ const STORE_WEB_I = 'https://apps.apple.com/app/id6759053765?pt=128539200&amp;ct
  */
 export function isBySuna(it) {
   return !!it && it.partner_slug === 'suna';
+}
+
+/** W-183: Suna's own plans, "By Suna" or owned by @sunatravels: no stock images. */
+export function isSunaOwn(it) {
+  return isBySuna(it) || (!!it && String(it.creator_username || '').toLowerCase() === 'sunatravels');
+}
+
+/** A URL in the place-stock bucket: the app's dealt stock image, never a real photo of the place. */
+export function isStockPhoto(url) {
+  return /\/storage\/v1\/object\/(public|sign)\/place-stock\//.test(String(url || ''));
+}
+
+/** A real photo of the place: ours or an outside one, never Google's (W-53), never a stock image. */
+function realPlacePhoto(url) {
+  return !!url && !isGooglePhoto(url) && !isStockPhoto(url);
+}
+
+// W-183: the licence each recorded cover source carries, shown after the name.
+// Commons and community photos have no recorded licence (see creditFor).
+const LICENCE = { pexels: 'Pexels License', unsplash: 'Unsplash License' };
+
+/**
+ * "Photo: <name> · <licence>" for a landmark's cover, or null. Only a real
+ * credit: a name that isn't the bootstrap's 'Suna' marker, on a cover that
+ * isn't Google's. A licence only when the source records one.
+ */
+export function creditFor(landmark) {
+  if (!landmark) return null;
+  const name = String(landmark.photographer_name || '').trim();
+  if (!name || name.toLowerCase() === 'suna' || landmark.cover_source === 'google_places') return null;
+  const licence = LICENCE[landmark.cover_source] || '';
+  return `Photo: ${name}${licence ? ` · ${licence}` : ''}`;
 }
 // Signed moment URLs last an hour; the page's cache stays well inside that.
 const SIGN_SECONDS = 3600;
@@ -156,18 +197,58 @@ export async function loadItinerary(slug, coverURL) {
   } catch { /* a moment is optional; the stop falls through to the next image */ }
 
   // One stock image at most once per page (I-112, W-53).
+  const sunaOwn = isSunaOwn(it);
   const images = new Map();
   const taken = new Set();
-  for (const s of shown) images.set(s, imageFor(s, signed, taken));
+  for (const s of shown) images.set(s, imageFor(s, signed, taken, sunaOwn));
+
+  // W-183: the credit under each shown place photo, from its landmark.
+  const credits = new Map();
+  const ids = [...new Set(shown.filter((s) => (images.get(s) || {}).kind === 'place' && s.landmark_id).map((s) => s.landmark_id))];
+  if (ids.length) {
+    try {
+      const rows = await rest(`landmarks?id=in.(${ids.map(encodeURIComponent).join(',')})`
+        + '&select=id,cover_image_url,photographer_name,cover_source');
+      const byId = new Map((Array.isArray(rows) ? rows : []).map((r) => [r.id, r]));
+      for (const s of shown) {
+        const im = images.get(s), lm = byId.get(s.landmark_id);
+        // Only when the photo shown IS the landmark's cover the credit belongs to.
+        if (im && im.kind === 'place' && lm && lm.cover_image_url === s.place_image_url) {
+          const c = creditFor(lm);
+          if (c) credits.set(s, c);
+        }
+      }
+    } catch { /* a credit is optional; the photo still shows */ }
+  }
   return {
+    credits,
     it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked,
     signedMoments: [...images.values()].some((im) => im && im.kind === 'moment' && im.signed),
     cover: coverURL(it.cover_media_path),
   };
 }
 
-/** One image for a shown stop: moment, else place photo, else stock. Never Google (W-53). */
-function imageFor(s, signed, taken) {
+/**
+ * One image for a shown stop: moment, else place photo, else stock. Never Google (W-53).
+ * W-183: on Suna's own plans, the place's real photo, else the moment, else none.
+ */
+function imageFor(s, signed, taken, sunaOwn = false) {
+  if (sunaOwn) {
+    if (realPlacePhoto(s.place_image_url)) return { kind: 'place', url: s.place_image_url };
+    return momentFor(s, signed);
+  }
+  const moment = momentFor(s, signed);
+  if (moment) return moment;
+  if (s.place_image_url && !isGooglePhoto(s.place_image_url)) return { kind: 'place', url: s.place_image_url };
+  const stock = stockFor({
+    landmarkId: s.landmark_id, category: s.category, countryCode: s.country_code,
+    latitude: s.latitude, longitude: s.longitude,
+  }, taken);
+  return stock ? { kind: 'stock', url: stock.url, tint: stock.tint, tintOpacity: stock.tintOpacity } : null;
+}
+
+/** The stop's own moment, when it has a usable one. */
+function momentFor(s, signed) {
   if (s.moment_path) {
     if (s.moment_bucket === 'creator-media' && signed.get(s.moment_path)) {
       return { kind: 'moment', url: signed.get(s.moment_path), signed: true };
@@ -176,12 +257,7 @@ function imageFor(s, signed, taken) {
       return { kind: 'moment', url: publicObject('community-post-photos', s.moment_path) };
     }
   }
-  if (s.place_image_url && !isGooglePhoto(s.place_image_url)) return { kind: 'place', url: s.place_image_url };
-  const stock = stockFor({
-    landmarkId: s.landmark_id, category: s.category, countryCode: s.country_code,
-    latitude: s.latitude, longitude: s.longitude,
-  }, taken);
-  return stock ? { kind: 'stock', url: stock.url, tint: stock.tint, tintOpacity: stock.tintOpacity } : null;
+  return null;
 }
 
 /**
@@ -191,7 +267,7 @@ function imageFor(s, signed, taken) {
  */
 export function coverFor(data, coverResolves) {
   if (coverResolves) return data.cover;
-  const first = data.shown.find((s) => s.place_image_url && !isGooglePhoto(s.place_image_url));
+  const first = data.shown.find((s) => realPlacePhoto(s.place_image_url));
   return first ? first.place_image_url : null;
 }
 
@@ -205,9 +281,12 @@ export function summaryLine(it, stops) {
   return parts.join(' · ');
 }
 
-function stopImage(image, name) {
+function stopImage(image, name, credit) {
   if (!image) return '';
-  if (image.kind === 'place') return `<div class="stop-pic">${photo(image.url, 640, 'stop-img', name, false)}</div>`;
+  if (image.kind === 'place') {
+    return `<div class="stop-pic">${photo(image.url, 640, 'stop-img', name, false)}</div>`
+      + (credit ? `<p class="photo-credit">${escapeHtml(credit)}</p>` : '');
+  }
   if (image.kind === 'stock') {
     // The app's designed backdrop: the dealt image (its _w/640 copy; every
     // place-stock image has one) under its dealt tint.
@@ -231,7 +310,7 @@ export function eventState(s, now = Date.now()) {
   return Number.isFinite(ends) && ends <= now ? 'ended' : null;
 }
 
-function stopBlock(s, n, image) {
+function stopBlock(s, n, image, credit) {
   const { time } = splitTime(s.suggested_time);
   // Ops's E2: a grey pill first, the photo desaturated, the rest at 50%.
   // A viewer can't delete a stop on the web, so E2's Delete has no place here.
@@ -245,7 +324,7 @@ function stopBlock(s, n, image) {
   const maps = state ? '' : mapsLinks(s.latitude, s.longitude, 'map-btn');
   return `<li class="stop${state ? ' stop-over' : ''}">
       <article class="card">
-        ${stopImage(image, name)}
+        ${stopImage(image, name, credit)}
         <div class="stop-text">
           ${pill}<p class="stop-meta">${escapeHtml(meta)}</p>
           <h3 class="stop-name">${escapeHtml(name)}</h3>
@@ -301,6 +380,7 @@ export async function coverVariants(cover, resolves) {
 /** The body of the preview page: Figma B1, "The shared itinerary". */
 export function previewBody(data, cover, variants, mascot) {
   const { it, shown, images, summary, multiDay, lockedCount, lockedTimes } = data;
+  const credits = data.credits || new Map();
   const title = it.name || 'An itinerary on Suna';
 
   // On the web, Follow does what the bar's button does: opens Suna, or the
@@ -340,7 +420,7 @@ export function previewBody(data, cover, variants, mascot) {
       head = `<li class="day"><h3 class="day-label">Day ${day + 1}</h3></li>`;
       lastDay = day;
     }
-    return head + stopBlock(s, i + 1, images.get(s));
+    return head + stopBlock(s, i + 1, images.get(s), credits.get(s));
   }).join('\n    ') + lockedBlock(lockedCount, lockedTimes);
 
   return `<main class="pv">

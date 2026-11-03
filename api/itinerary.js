@@ -18,13 +18,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, previewBody, isBySuna } from './_preview.js';
-// Suna herself, from the app's own source (the Lab's copy is byte-identical to
-// TravelMug/Resources/suna-faces.js). Rendered here as SVG, so she cannot fail
-// to load the way an <img> can.
-import { sunaSvg, SUNA_DEFS, SUNA_CSS } from '../public/lab/suna-faces.js';
 import { MAPS_HEAD, MAPS_CSS } from './_maps.js';
 
-const mascot = () => sunaSvg('st-idle', 96, { label: 'Suna' });
+// W-183 (Brian via Ops OPS-106, 3 Nov: "the Suna bot is the wrong design"):
+// today's Suna, the smooth bronze egg with the visor and no limbs (Ops's v5
+// render, claude/content/asksuna/blocky-video-1/suna/suna-ref-idle-fullbody-
+// 1080-alpha.png, trimmed to 288 px tall for a 96 px box at 3x). It replaces
+// the old SVG Suna with arms and legs (public/lab/suna-faces.js), which no
+// page here draws any more.
+export const mascot = () => '<picture class="suna-3d"><source srcset="/icons/suna-3d-idle.webp" type="image/webp">'
+  + '<img src="/icons/suna-3d-idle.png" width="72" height="96" alt="Suna" decoding="async"></picture>';
 
 // vercel.json `includeFiles` ships public/i.html inside this function, at
 // the same path under the function's working directory. (Not import.meta:
@@ -256,12 +259,7 @@ export default async function handler(req, res) {
     .replace(/<body>[\s\S]*?<!--\/BODY-->/, (generic) => (body
       ? `<body class="pv-body" data-preview="1">\n${body}`
       : generic))
-    // Her gradients and her motion, only where she is drawn.
-    .replace('<!--MASCOT-->', mascot())
-    .replace('</head>', () => (/class="sn /.test(body || '<!--MASCOT-->')
-      ? `<style>${SUNA_CSS}</style>\n</head>` : '</head>'))
-    .replace(/<body([^>]*)>/, (m) => (/class="sn /.test(body || 'generic')
-      ? `${m}\n<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${SUNA_DEFS}</defs></svg>` : m));
+    .replace('<!--MASCOT-->', mascot());
 
   // Record the open. Started BEFORE the response so the request is already in
   // flight, then handed to the platform to finish afterwards.
