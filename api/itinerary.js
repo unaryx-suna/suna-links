@@ -143,6 +143,18 @@ function canonicalItineraryURL(origin, slug, name) {
   return `${origin}/i/${prefix ? `${prefix}--${slug}` : slug}`;
 }
 
+/**
+ * W-193 (Axel AXL-125): the `via` the open log records. A link shared with a
+ * channel tag (`?ct=deepavali-bfd`) and no `via` used to count as no source;
+ * it's now 'ct:<ct>'. A `via` always wins. Raw, as the log stores everything.
+ */
+export function openVia(params) {
+  const via = params.get('via');
+  if (via) return via;
+  const ct = params.get('ct');
+  return ct ? `ct:${ct}` : null;
+}
+
 export default async function handler(req, res) {
   const slug = slugFrom(req.url || '');
   // Stamped before any awaiting happens, so the row records when the visitor
@@ -272,7 +284,7 @@ export default async function handler(req, res) {
   const params = new URL(req.url || '/', origin).searchParams;
   const logging = recordOpen({
     slug,
-    via: params.get('via'),
+    via: openVia(params),
     ctx: params.get('ctx'),
     referrer: req.headers.referer || req.headers.referrer || null,
     userAgent: req.headers['user-agent'] || null,

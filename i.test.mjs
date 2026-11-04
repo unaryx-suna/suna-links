@@ -144,5 +144,17 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   assert((html.replace(/<script[\s\S]*?<\/script>/g, '').match(/maps-google" href="[^"]+" target="_blank" rel="noopener"/g) || []).length > 0);
 });
 
+await t('W-193 the open log keeps ct: no via + ct=deepavali-bfd records via "ct:deepavali-bfd"; a via always wins; neither is null', async () => {
+  const { openVia } = await import('./api/itinerary.js');
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(openVia(q('ct=deepavali-bfd')), 'ct:deepavali-bfd');
+  assert.equal(openVia(q('via=creator-aina&ct=deepavali-bfd')), 'creator-aina');
+  assert.equal(openVia(q('via=&ct=x')), 'ct:x');
+  assert.equal(openVia(q('')), null);
+  assert.equal(openVia(q('ct=')), null);
+  const src = (await import('node:fs')).readFileSync('./api/itinerary.js', 'utf8');
+  assert.match(src, /recordOpen\(\{[\s\S]*?via: openVia\(params\),/);
+});
+
 console.log(bad ? `\ni: ${bad} FAILED` : '\ni: all passed');
 process.exit(bad ? 1 : 0);
