@@ -1,5 +1,13 @@
 // Server-rendered place page.
 //
+// W-197 (Ops OPS-135, design claude/design/APP-WEB-REDESIGN-0511.html):
+// the whole page is rendered here now, not only its <head>: hero, open now,
+// Save in Suna + Directions, Good to know, what's on within 1 km this month,
+// three places a short walk away, and the app card. A place we can't show
+// (unknown, hidden, merged, ambiguous) gets "This place isn't on Suna any
+// more" with what's on in the nearest city, never a blank page. The notes
+// below about the <head> still hold.
+//
 // `public/place.html` is a static shell whose <title> is the literal
 // "Suna — Discover Places" for every place in the catalogue. Shared into a chat
 // it previews as that string with no image; crawled, thousands of URLs present
@@ -16,7 +24,8 @@
 // would change what that number means without anyone deciding to. If place
 // views are worth counting, they get their own decision and their own rows.
 
-import { mapsLinks, MAPS_HEAD, MAPS_CSS } from './_maps.js';
+import { MAPS_HEAD, PAGE_SCRIPT, hasPin } from './_maps.js';
+import { CSS, HEAD_FONTS, esc, tzFor, hoursInfo, km, placeBody, missingBody } from './_placepage.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
 import { creditFor } from './_preview.js';
 
@@ -231,46 +240,118 @@ export const _bookingFor = bookingFor;
 export const _placeLD = placeLD;
 export const _cutWords = cutWords;
 
+// ---- W-197: what's around the place --------------------------------------
+const REST_HEADERS = { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` };
+async function rest(path, ms = 2000) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: REST_HEADERS, signal: AbortSignal.timeout(ms) });
+    return r.ok ? await r.json() : [];
+  } catch { return []; }
+}
+/** A bounding box `r` km round a point, as PostgREST filters on latitude/longitude. */
+function box(lat, lng, r) {
+  const dLat = r / 111.32, dLng = r / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  return `latitude=gte.${(lat - dLat).toFixed(5)}&latitude=lte.${(lat + dLat).toFixed(5)}`
+    + `&longitude=gte.${(lng - dLng).toFixed(5)}&longitude=lte.${(lng + dLng).toFixed(5)}`;
+}
+const EVENT_COLS = 'id,name,start_time,end_time,image_url,latitude,longitude,venue,recurrence_until';
+/** When an event is over: its end, else three hours after it starts; a recurring one runs to its last day. */
+function endsAt(e) {
+  if (e.recurrence_until) return Date.parse(`${String(e.recurrence_until).slice(0, 10)}T23:59:59Z`);
+  return e.end_time ? Date.parse(e.end_time) : Date.parse(e.start_time) + 3 * 3600e3;
+}
+/**
+ * Approved events within `r` km that haven't ended and start within 31 days,
+ * soonest first, at most 3. world_events has 976 rows and no geo index; the
+ * box, the status and the time window bound the read, and the limit caps it.
+ */
+async function eventsNear(lat, lng, r, now) {
+  const soon = new Date(now + 31 * 864e5).toISOString(), past = new Date(now - 3 * 3600e3).toISOString();
+  const rows = await rest(`world_events?status=eq.approved&${box(lat, lng, r)}`
+    + `&start_time=lte.${soon}&or=(end_time.gte.${past},start_time.gte.${past},recurrence_until.gte.${new Date(now).toISOString().slice(0, 10)})`
+    + `&select=${EVENT_COLS}&order=start_time.asc&limit=30`);
+  return (Array.isArray(rows) ? rows : [])
+    .filter((e) => hasPin(e.latitude, e.longitude) && endsAt(e) > now)
+    .map((e) => ({ ...e, km: km(lat, lng, e.latitude, e.longitude), now }))
+    .filter((e) => e.km <= r)
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))
+    .slice(0, 3);
+}
+/** Up to 3 visible places with their own cover within ~500 m, nearest first. */
+async function walksNear(id, lat, lng) {
+  const rows = await rest(`landmarks?is_hidden=eq.false&merged_into=is.null&cover_image_url=not.is.null&id=neq.${encodeURIComponent(id)}`
+    + `&${box(lat, lng, 0.5)}&select=id,name,category,cover_image_url,latitude,longitude&limit=40`);
+  return (Array.isArray(rows) ? rows : [])
+    .map((w) => ({ ...w, cover: coverURL(w.cover_image_url), km: km(lat, lng, w.latitude, w.longitude) }))
+    .filter((w) => w.cover && w.km <= 0.5)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, 3);
+}
+// The not-found page's city: the reader's nearest, by the edge's coordinates.
+const CITIES = [
+  { slug: 'kuala-lumpur', name: 'Kuala Lumpur', short: 'KL', lat: 3.139, lng: 101.687, tz: 'Asia/Kuala_Lumpur' },
+  { slug: 'singapore', name: 'Singapore', short: 'Singapore', lat: 1.3521, lng: 103.8198, tz: 'Asia/Singapore' },
+  { slug: 'melbourne', name: 'Melbourne', short: 'Melbourne', lat: -37.8136, lng: 144.9631, tz: 'Australia/Melbourne' },
+  { slug: 'sydney', name: 'Sydney', short: 'Sydney', lat: -33.8688, lng: 151.2093, tz: 'Australia/Sydney' },
+];
+function cityFor(headers) {
+  const lat = Number(headers['x-vercel-ip-latitude']), lng = Number(headers['x-vercel-ip-longitude']);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return CITIES[0];
+  return CITIES.slice().sort((a, b) => km(lat, lng, a.lat, a.lng) - km(lat, lng, b.lat, b.lng))[0];
+}
+
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${encodeURIComponent(ct)}&mt=8`;
+
+function page({ tags, body, android }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Triggers the App Clip card automatically in iOS Safari -->
+  <meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com.unaryx.TravelMug.Clip">
+  <link rel="icon" type="image/svg+xml" href="/icons/suna-mark.svg">
+  <meta name="theme-color" content="#0f1110">
+  ${tags}
+  ${HEAD_FONTS}
+  ${MAPS_HEAD}
+  <style>${CSS}</style>
+</head>
+<body>
+<div class="wrap">
+${body}
+</div>
+${PAGE_SCRIPT}
+<script src="/android.js" data-from="${android}"></script>
+</body>
+</html>`;
+}
+
 export default async function handler(req, res) {
   const ref = placeRefFrom(req.url || '');
   // The full UUID. A short link has none until exactly one row answers it.
   let id = ref && ref.uuid ? ref.uuid : '';
   const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
-
-  // The static shell, fetched from this same deployment so the markup has one
-  // definition and cannot drift.
-  let html;
-  try {
-    const shell = await fetch(`${origin}/place.html`);
-    html = await shell.text();
-  } catch {
-    res.status(302).setHeader('Location', '/place.html').end();
-    return;
-  }
+  const now = Date.now();
 
   let title = 'Discover this place on Suna';
   let description = 'Places worth walking to, with notes from people who went.';
   let image = null;
   let indexable = false;
-  // Take me there (W-47), when the place has a real pin.
-  let maps = '';
-  // The row and its own cover, for the JSON-LD (W-61) and the h1 (W-62).
+  // The row, its own cover, and what the page shows.
   let resolved = null;
 
   if (ref) {
     try {
       // Visible rows only. A merged row is always hidden, and this key can't
       // read hidden rows (RLS), so its `merged_into` can't be followed from
-      // here: a merged place's link gets the generic card, never a wrong one.
+      // here: a merged place's link gets the not-found page, never a wrong one.
       // `limit=2` so a short id that two places share is seen as ambiguous.
       const url = `${SUPABASE_URL}/rest/v1/landmarks`
         + `?${idFilter(ref)}`
         + `&is_hidden=eq.false&merged_into=is.null`
-        + `&select=id,name,category,description,address,cover_image_url,photographer_name,cover_source,city_id,latitude,longitude,city:cities(country_code)&limit=2`;
-      const r = await fetch(url, {
-        headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
-        signal: AbortSignal.timeout(2500),
-      });
+        + `&select=id,name,category,description,address,cover_image_url,photographer_name,cover_source,city_id,latitude,longitude,operating_hours,city:cities(country_code)&limit=2`;
+      const r = await fetch(url, { headers: REST_HEADERS, signal: AbortSignal.timeout(2500) });
       const rows = r.ok ? await r.json() : [];
       const place = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
       if (place && place.id) id = String(place.id).toLowerCase();
@@ -281,33 +362,18 @@ export default async function handler(req, res) {
         // whole row with it. A missing city costs a few words in a title.
         let cityName = '';
         if (place.city_id) {
-          try {
-            const cr = await fetch(
-              `${SUPABASE_URL}/rest/v1/cities?id=eq.${encodeURIComponent(place.city_id)}&select=name&limit=1`,
-              {
-                headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
-                signal: AbortSignal.timeout(2000),
-              }
-            );
-            const cityRows = cr.ok ? await cr.json() : [];
-            cityName = cityRows?.[0]?.name || '';
-          } catch { /* title just loses the city */ }
+          const cityRows = await rest(`cities?id=eq.${encodeURIComponent(place.city_id)}&select=name&limit=1`);
+          cityName = cityRows?.[0]?.name || '';
         }
 
         // "Tal Barahi Temple — Architecture in Pokhara | Suna"
-        const middle = [place.category, cityName ? `in ${cityName}` : '']
-          .filter(Boolean).join(' ');
+        const middle = [place.category, cityName ? `in ${cityName}` : ''].filter(Boolean).join(' ');
         title = [place.name, middle].filter(Boolean).join(' — ') + ' | Suna';
 
         const text = (place.description || '').trim().replace(/\s+/g, ' ');
         // About 155 characters, on a word (W-61): what a results page shows.
-        if (text) {
-          description = cutWords(text, 155);
-        } else if (place.address) {
-          description = `${place.name} — ${place.address}`;
-        }
-
-        maps = mapsLinks(place.latitude, place.longitude, 'map-btn');
+        if (text) description = cutWords(text, 155);
+        else if (place.address) description = `${place.name} — ${place.address}`;
 
         // The preview image (I-112, W-53): the place's own cover when it
         // resolves, else the stock image the app deals it. Never Google.
@@ -316,9 +382,16 @@ export default async function handler(req, res) {
           landmarkId: id, category: place.category, countryCode: place.city && place.city.country_code,
           latitude: place.latitude, longitude: place.longitude,
         });
-        const ownCover = (await imageResolves(candidate)) ? candidate : null;
+        const pinned = hasPin(place.latitude, place.longitude);
+        const [ok, events, walks] = await Promise.all([
+          imageResolves(candidate),
+          pinned ? eventsNear(Number(place.latitude), Number(place.longitude), 1, now) : [],
+          pinned ? walksNear(id, Number(place.latitude), Number(place.longitude)) : [],
+        ]);
+        const ownCover = ok ? candidate : null;
         image = ownCover || (stock ? stock.url : null);
-        resolved = { place, ownCover };
+        const tz = tzFor(place.city && place.city.country_code, place.longitude);
+        resolved = { place, ownCover, cityName, tz, events, walks, hours: hoursInfo(place.operating_hours, tz, now) };
 
         // Only a page with real content of its own asks to be indexed. This
         // mirrors the sitemap's gate, and it is the half that matters: the
@@ -327,29 +400,28 @@ export default async function handler(req, res) {
         indexable = text.length >= 60 && !/^highly rated .+ nearby\.?$/i.test(text);
       }
     } catch {
-      // Fall through with the generic values — a preview must never 500.
+      // Fall through to the not-found page: a place page must never 500.
     }
   }
 
-  // No canonical for a request that names no place: `/place/` is not an address
-  // worth consolidating onto, and pointing at it would be worse than silence.
-  const canonical = id ? canonicalURL(origin, id) : '';
+  // No canonical for a page that names no place we can show.
+  const canonical = resolved && id ? canonicalURL(origin, id) : '';
 
   // The campaign token. `?src=partner-<slug>` is a claim by whoever shared the
   // link; it becomes `ct=partner-<slug>` only when the database agrees that
-  // slug belongs to THIS place. Otherwise the ordinary token applies, so a
+  // slug belongs to THIS place. Otherwise the page's own token applies, so a
   // guessed or stale slug costs nothing and attributes nothing.
   const [listing, booking] = await Promise.all([
-    id ? listingFor(id) : null,
-    bookingFor(id),
+    resolved && id ? listingFor(id) : null,
+    resolved ? bookingFor(id) : null,
   ]);
   const claimed = claimedSlug(req.url);
-  const campaign = (claimed && listing && listing.slug === claimed)
-    ? `partner-${claimed}`
-    : null;
+  const campaign = (claimed && listing && listing.slug === claimed) ? `partner-${claimed}` : null;
+  const store = STORE(campaign || 'place-page');
   const offer = offerLine(listing);
+
   const tags = [
-    `<title>${escapeHtml(title)}</title>`,
+    `<title>${escapeHtml(resolved ? title : "This place isn't on Suna any more · Suna")}</title>`,
     canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : '',
     `<meta name="description" content="${escapeHtml(description)}">`,
     `<meta property="og:title" content="${escapeHtml(title)}">`,
@@ -357,9 +429,7 @@ export default async function handler(req, res) {
     `<meta property="og:type" content="place">`,
     canonical ? `<meta property="og:url" content="${escapeHtml(canonical)}">` : '',
     `<meta property="og:site_name" content="Suna">`,
-    image
-      ? `<meta name="twitter:card" content="summary_large_image">`
-      : `<meta name="twitter:card" content="summary">`,
+    image ? `<meta name="twitter:card" content="summary_large_image">` : `<meta name="twitter:card" content="summary">`,
     `<meta name="twitter:title" content="${escapeHtml(title)}">`,
     `<meta name="twitter:description" content="${escapeHtml(description)}">`,
     image ? `<meta property="og:image" content="${escapeHtml(image)}">` : '',
@@ -367,39 +437,34 @@ export default async function handler(req, res) {
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     indexable ? '' : `<meta name="robots" content="noindex,follow">`,
     resolved && canonical ? placeLD(resolved.place, canonical, resolved.ownCover) : '',
-    // Read by place.html to swap the App Store link's token and to show the
-    // offer. Both are escaped: offer_text is written by the business.
-    campaign ? `<meta name="suna:campaign" content="${escapeHtml(campaign)}">` : '',
-    offer ? `<meta name="suna:offer" content="${escapeHtml(offer)}">` : '',
-    // Read by place.html for Open in Suna: the full id, so the app gets the
-    // UUID rather than a percent-encoded slug from the path (W-59).
-    id ? `<meta name="suna:place" content="${escapeHtml(id)}">` : '',
-    // Read by place.html to show "Book tickets". Our own /go URL, built here.
-    booking ? `<meta name="suna:book" content="${escapeHtml(booking)}">` : '',
+    // The app gets the full UUID, never a percent-encoded slug from the path (W-59).
+    id && resolved ? `<meta name="suna:place" content="${escapeHtml(id)}">` : '',
   ].filter(Boolean).join('\n  ');
 
-  // Replace rather than append: a duplicate og:title is resolved differently by
-  // each scraper, so leaving both is a coin flip.
-  const rendered = html
-    .replace(/<title>[\s\S]*?<\/title>/i, '')
-    .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description|robots)"[^>]*>\s*/gi, '')
-    .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>`)
-    .replace('<!--MAPS-->', maps ? `<p id="maps">${maps}</p>` : '')
-    // W-62: a place we found is named in its h1 (the same name as the
-    // JSON-LD), with the generic line kept above it as a kicker. A page with
-    // no place keeps the shell's own h1, so every page has exactly one.
-    .replace(/<h1>✨ Discover this place on Suna<\/h1>/, (h1) => (resolved && resolved.place.name
-      ? `<p class="kicker">✨ Discover this place on Suna</p>\n    <h1>${escapeHtml(resolved.place.name)}</h1>`
-      : h1));
+  let body;
+  let cache = 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400';
+  if (resolved) {
+    body = placeBody({
+      place: resolved.place, cityName: resolved.cityName, tz: resolved.tz, hours: resolved.hours,
+      cover: resolved.ownCover || image, events: resolved.events, walks: resolved.walks,
+      store, scheme: `suna://place?id=${encodeURIComponent(id)}`, offer, booking, now,
+    });
+  } else {
+    // W-197 (3): what's on in the reader's nearest city. It depends on where
+    // the reader is, so the edge keeps one copy per country.
+    const city = cityFor(req.headers);
+    const events = (await eventsNear(city.lat, city.lng, 25, now)).map((e) => ({ ...e, meta: e.venue || '' }));
+    body = missingBody({ cityName: city.name, cityShort: city.short, citySlug: city.slug, events, store, tz: city.tz });
+    res.setHeader('Vary', 'x-vercel-ip-country');
+    cache = 'public, max-age=300, s-maxage=600';
+  }
 
   res
     .status(200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     // A partner link renders a different page from the same path, so it
     // cannot share a cache entry with the plain one. Vercel keys on the full
-    // URL including the query, so `?src=` already separates them; this header
-    // is unchanged, and an expired offer simply drops off within the window.
-    .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400')
-    .send(rendered);
+    // URL including the query, so `?src=` already separates them.
+    .setHeader('Cache-Control', cache)
+    .send(page({ tags, body, android: 'place' }));
 }

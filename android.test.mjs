@@ -29,11 +29,9 @@ const STOP = (i) => ({
   creator_note: 'Go early.', latitude: 3.14, longitude: 101.69, landmark_id: null, category: 'Food', country_code: 'MY',
   place_image_url: null, moment_path: null, moment_bucket: null, event_id: null, event_state: null, event_ends_at: null,
 });
-const PLACE_SHELL = read('./public/place.html');
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (b) => ({ ok: true, status: 200, json: async () => b, text: async () => (typeof b === 'string' ? b : JSON.stringify(b)) });
-  if (u.endsWith('/place.html')) return ok(PLACE_SHELL);
   if (u.startsWith('https://unaryx.com/clip/venues.json')) return ok({ venues: [VENUE] });
   if (u.includes('/rest/v1/world_events')) return ok(u.includes('id=eq.') ? [u.includes(EV_FREE.id) ? EV_FREE : EV] : []);
   if (u.includes('/rest/v1/landmarks')) return ok([{ id: '22222222-2222-4222-8222-222222222222', name: 'Aquaria KLCC', category: 'Attraction', description: 'x'.repeat(80), address: 'KLCC', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.1537, longitude: 101.7134 }]);

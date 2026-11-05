@@ -94,5 +94,12 @@
     "api/itinerary.js": {
       "includeFiles": "public/i.html"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://unaryx.com/",
+      "statusCode": 301
+    }
+  ]
 }

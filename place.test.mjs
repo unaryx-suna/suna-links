@@ -6,7 +6,6 @@ import { readFileSync } from 'node:fs';
 
 const LINKED = 'f6946e57-455d-41d1-88de-f44fb613f76c';
 const PLAIN = '66a850b1-5fcd-4532-941e-df2bea8b0fe8';
-const SHELL = readFileSync(new URL('./public/place.html', import.meta.url), 'utf8');
 
 let placesList = { places: [LINKED] };
 let placesFails = false;
@@ -19,7 +18,6 @@ const landmarkURLs = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, text: async () => body, json: async () => body });
-  if (u.endsWith('/place.html')) return ok(SHELL);
   if (u === 'https://unaryx.com/go/places.json') {
     if (placesFails) throw new Error('timeout');
     return ok(placesList);
@@ -39,7 +37,8 @@ async function render(path) {
     { status(c) { code = c; return this; }, setHeader() { return this; }, send(b) { body = b; return this; }, end() {} });
   return { code, body };
 }
-const bookMeta = (html) => (html.match(/<meta name="suna:book" content="([^"]*)">/) || [])[1] || null;
+// W-197: Book tickets is a link in the page now (it was a meta tag the shell read).
+const bookMeta = (html) => ((html.match(/<p class="book"><a href="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&') || null;
 
 let bad = 0;
 async function t(name, fn) {
@@ -57,7 +56,8 @@ await t('W-53 og:image: own cover, else the stock image, never a Google photo', 
     cover = g; heads.length = 0;
     const b = (await render(`/place/${PLAIN}`)).body;
     assert.equal(og(b), stock, g);
-    assert(!/google(apis|usercontent)\.com/.test(b), 'no Google URL anywhere on the page');
+    // W-197: the page loads Urbanist from Google Fonts, as /i/, /e/ and /c/ do; no Google photo, ever.
+    assert(!/google(apis|usercontent)\.com/.test(b.replace(/https:\/\/fonts\.(googleapis|gstatic)\.com[^"]*/g, '')), 'no Google URL anywhere on the page');
     assert.equal(heads.length, 0, 'no request to Google');
   }
   // No cover: the stock image too.
@@ -95,35 +95,33 @@ await t('places.json down or malformed: page still renders, no link', async () =
   placesList = { places: [LINKED] };
 });
 
-await t('the link markup: sponsored, new tab, commission line, hidden by default', async () => {
-  assert.match(SHELL, /<p id="book" hidden>/);
-  assert.match(SHELL, /rel="sponsored noopener"/);
-  assert.match(SHELL, /target="_blank"/);
-  assert.match(SHELL, /Suna may earn a commission/);
+await t('the link markup: sponsored, new tab, commission line; absent without a link', async () => {
+  const b = (await render(`/place/${LINKED}`)).body;
+  assert.match(b, /<p class="book"><a href="https:\/\/unaryx\.com\/go\/p-[^"]+" target="_blank" rel="sponsored noopener">Book tickets ↗<\/a><small>Suna may earn a commission<\/small><\/p>/);
+  assert(!(await render(`/place/${PLAIN}`)).body.includes('class="book"'));
 });
 
 // W-47: Take me there for people without Apple Maps.
-await t('W-47 a place with a pin gets Apple Maps and Google Maps; the Apple one shows only on Apple devices', async () => {
+await t('W-47/W-197 a place with a pin gets one Directions button (Google Maps), and the iPhone sheet offers Apple Maps too', async () => {
   pin = { latitude: 3.1537, longitude: 101.7134 };
   const r = await render(`/place/${PLAIN}`);
-  assert(r.body.includes('<p id="maps"><a class="map-btn maps-apple" href="https://maps.apple.com/?daddr=3.1537,101.7134&amp;dirflg=w" target="_blank" rel="noopener">Apple Maps</a>'
-    + '<a class="map-btn maps-google" href="https://www.google.com/maps/dir/?api=1&amp;destination=3.1537,101.7134&amp;travelmode=walking" target="_blank" rel="noopener">Google Maps</a></p>'));
-  assert.match(r.body, /classList\.add\('apple-maps'\)/);
-  assert(r.body.includes('html:not(.apple-maps) .maps-apple{display:none !important}'));
-  assert(!r.body.includes('<!--MAPS-->'));
+  assert(r.body.includes('<a class="btn s" id="directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=3.1537,101.7134&amp;travelmode=walking" target="_blank" rel="noopener">Directions</a>'));
+  assert(r.body.includes('<a class="sheet-opt" href="https://maps.apple.com/?daddr=3.1537,101.7134&amp;dirflg=w" target="_blank" rel="noopener">Apple Maps</a>'));
+  assert.match(r.body, /getElementById\('directions'\)/, 'the sheet script');
 });
 await t('W-47 no pin, or 0,0: no maps buttons, and the slot is removed', async () => {
   for (const p of [{ latitude: null, longitude: null }, { latitude: 0, longitude: 0 }]) {
     pin = p;
     const r = await render(`/place/${PLAIN}`);
-    assert(!r.body.includes('id="maps"'), JSON.stringify(p));
-    assert(!r.body.includes('<!--MAPS-->'));
+    assert(!r.body.includes('id="directions"'), JSON.stringify(p));
   }
   pin = { latitude: 3.1537, longitude: 101.7134 };
 });
-await t('W-47 Open in Suna on iPhone is unchanged (the existing suna://place hand-off)', async () => {
-  assert.match(SHELL, /btn\.href = 'suna:\/\/place\?id=' \+ encodeURIComponent\(placeID\)/);
-  assert.match(SHELL, /btn\.textContent = 'Open in Suna'/);
+await t('W-197 Save in Suna: the App Store with ct=place-page, and on iPhone the suna://place hand-off with the full id', async () => {
+  const b = (await render(`/place/${PLAIN}`)).body;
+  assert(b.includes(`<a class="btn p save-suna" data-scheme="suna://place?id=${PLAIN}" href="https://apps.apple.com/app/id6759053765?pt=128539200&amp;ct=place-page&amp;mt=8">`));
+  assert.match(b, /querySelectorAll\('a\.save-suna\[data-scheme\]'\)/, 'the hand-off script');
+  assert.match(b, /<meta name="apple-itunes-app" content="app-id=6759053765, app-clip-bundle-id=com\.unaryx\.TravelMug\.Clip">/, 'the App Clip card');
 });
 
 // W-50: Take me there and Book tickets open a new tab; our own links don't.
@@ -131,7 +129,7 @@ const { badLinkTargets } = await import('./link-targets.mjs');
 await t('W-50 outbound links open a new tab, internal ones never', async () => {
   const r = await render(`/place/${LINKED}`);
   assert.deepEqual(badLinkTargets(r.body), []);
-  assert.match(r.body, /<a id="book-link" target="_blank" rel="sponsored noopener">/, 'Book tickets keeps sponsored');
+  assert.match(r.body, /target="_blank" rel="sponsored noopener">Book tickets/, 'Book tickets keeps sponsored');
 });
 
 // W-59: /place/<slug>--<8 hex> and a bare 8-hex id resolve like the UUID.
@@ -216,8 +214,10 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
     }
     assert.equal(landmarkURLs.length, 0);
   });
-  await t('W-59 Open in Suna prefers the server-resolved id', async () => {
-    assert.match(SHELL, /placeID = meta\('suna:place'\) \|\| placeID;/);
+  await t('W-59 Save in Suna hands the app the server-resolved id, not the slug', async () => {
+    landmarkRows = () => [{ id: 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d', name: 'X', category: 'Museum', description: 'z'.repeat(80), address: 'x', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.15, longitude: 101.7 }];
+    const b = (await render('/place/some-slug--a1b2c3d4')).body;
+    assert(b.includes('data-scheme="suna://place?id=a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"'));
   });
   landmarkRows = null;
 }
@@ -227,12 +227,13 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   const { _placeLD: placeLD, _cutWords: cutWords } = await import('./api/place.js');
   const ld = (html) => { const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/); return m ? JSON.parse(m[1]) : null; };
 
-  await t('W-61 the shell: lang="en", one <main>, a favicon that exists', () => {
-    assert.match(SHELL, /<html lang="en">/);
-    assert.equal((SHELL.match(/<main>/g) || []).length, 1);
-    assert.match(SHELL, /<main>[\s\S]*<h1>[\s\S]*id="cta"[\s\S]*<!--MAPS-->\s*<\/main>/);
-    assert.match(SHELL, /<link rel="icon" type="image\/svg\+xml" href="\/icons\/suna-mark\.svg">/);
+  await t('W-61 the page: lang="en", one <main>, a favicon that exists, the pixel icons exist', async () => {
+    const b = (await render(`/place/${PLAIN}`)).body;
+    assert.match(b, /<html lang="en">/);
+    assert.equal((b.match(/<main>/g) || []).length, 1);
+    assert.match(b, /<link rel="icon" type="image\/svg\+xml" href="\/icons\/suna-mark\.svg">/);
     readFileSync(new URL('./public/icons/suna-mark.svg', import.meta.url));
+    for (const m of b.matchAll(/src="(\/icons\/px\/[a-z]+\.png)"/g)) readFileSync(new URL('./public' + m[1], import.meta.url));
   });
   await t('W-61 description: at most 155 characters, cut on a word', () => {
     const long = 'The old cathedral sits above the river and its bells ring every hour, ' .repeat(4).trim();
@@ -274,9 +275,9 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
 
 // W-62: the h1 is the place's name; the generic line is a kicker above it.
 {
-  const h1s = (html) => [...html.matchAll(/<h1>([\s\S]*?)<\/h1>/g)].map((m) => m[1]);
+  const h1s = (html) => [...html.matchAll(/<h1(?: class="[^"]*")?>([\s\S]*?)<\/h1>/g)].map((m) => m[1]);
   const row = (name) => [{ id: 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d', name, category: 'Museum', description: 'z'.repeat(80), address: 'x', cover_image_url: null, city_id: null, city: { country_code: 'MY' }, latitude: 3.1, longitude: 101.7 }];
-  await t('W-62 the h1 is the name, escaped, once; the old line is a kicker, not a heading', async () => {
+  await t('W-62 the h1 is the name, escaped, once; the kicker is the category, not a heading', async () => {
     for (const [name, html] of [
       ['Petronas Twin Towers', 'Petronas Twin Towers'],
       ['Arts & Crafts "Village"', 'Arts &amp; Crafts &quot;Village&quot;'],
@@ -285,18 +286,21 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
       landmarkRows = () => row(name);
       const b = (await render('/place/x--a1b2c3d4')).body;
       assert.deepEqual(h1s(b), [html], name);
-      assert(b.includes('<p class="kicker">✨ Discover this place on Suna</p>'), name);
+      assert(b.includes('<p class="kick">Museum</p>'), name);
       const ld = JSON.parse(b.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
       assert.equal(ld.name, name, 'the same name as the JSON-LD');
     }
     landmarkRows = () => row('<img src=x onerror=alert(1)>');
     assert.deepEqual(h1s((await render('/place/x--a1b2c3d4')).body), ['&lt;img src=x onerror=alert(1)&gt;']);
   });
-  await t('W-62 no place: the shell\'s own h1, and no kicker', async () => {
+  await t('W-197 no place (unknown, hidden, merged): "This place isn\'t on Suna any more", noindex, no canonical, never a blank page', async () => {
     landmarkRows = () => [];
-    const b = (await render('/place/nope--00000000')).body;
-    assert.deepEqual(h1s(b), ['✨ Discover this place on Suna']);
-    assert(!b.includes('class="kicker"'));
+    const r = await render('/place/nope--00000000');
+    assert.equal(r.code, 200);
+    assert.deepEqual(h1s(r.body), ["This place isn't on Suna any more"]);
+    assert.match(r.body, /<meta name="robots" content="noindex,follow">/);
+    assert(!r.body.includes('rel="canonical"'));
+    assert.match(r.body, /See all of KL this weekend/);
     landmarkRows = null;
   });
 }
