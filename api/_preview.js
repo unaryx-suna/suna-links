@@ -160,6 +160,19 @@ export function splitTime(raw) {
   return m ? { day: Number(m[1]), time: m[2].trim() } : { day: null, time: text };
 }
 
+/**
+ * W-197: the stop's day, 1-based. The published snapshot's `day` (1, 2, …;
+ * public_itinerary_stops.day from 20261105120000) when the view has it, else
+ * the "Day N · " prefix in suggested_time (0-based, so N + 1), else null.
+ * "Da Nang & Hoi An in 4 days" said "1 day": 93 of 122 stops have no prefix.
+ */
+export function stopDay(s) {
+  const d = s && s.day;
+  if (Number.isInteger(d) && d > 0) return d;
+  const p = splitTime(s && s.suggested_time).day;
+  return p === null ? null : p + 1;
+}
+
 /** "~1h 30m" -> "~1 hr 30 min", "~45m" -> "~45 min". Anything else as stored. */
 export function readableDuration(raw) {
   const text = String(raw || '').trim();
@@ -176,18 +189,25 @@ export async function loadItinerary(slug, coverURL) {
     + 'creator_avatar_url,partner_slug,partner_name,cover_media_path,is_creator&limit=1');
   const it = Array.isArray(rows) ? rows[0] : null;
   if (!it) return null;
-  const all = await rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
+  const stopsQuery = (extra) => rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
     + '&select=order_index,place_name,city_name,suggested_time,duration_label,creator_note,'
     + 'latitude,longitude,landmark_id,category,country_code,place_image_url,moment_path,moment_bucket,'
-    + 'event_id,event_state,event_ends_at'
+    + 'event_id,event_state,event_ends_at' + extra
     + '&order=order_index.asc');
+  // W-197: `day` comes with 20261105120000. Until that's applied PostgREST
+  // answers 400 for the unknown column, and the page asks again without it.
+  let all;
+  try { all = await stopsQuery(',day'); } catch (e) {
+    if (!/rest 400/.test(String(e && e.message))) throw e;
+    all = await stopsQuery('');
+  }
 
   // The whole itinerary is counted; only the first stops are kept.
   const summary = summaryLine(it, all);
   const shown = all.slice(0, SHOWN_STOPS);
   const locked = all.slice(SHOWN_STOPS).map((s) => splitTime(s.suggested_time).time).filter(Boolean);
   const lockedCount = Math.max(all.length - SHOWN_STOPS, 0);
-  const multiDay = new Set(all.map((s) => splitTime(s.suggested_time).day).filter((d) => d !== null)).size > 1;
+  const multiDay = new Set(all.map(stopDay).filter((d) => d !== null)).size > 1;
 
   let signed = new Map();
   try {
@@ -273,7 +293,7 @@ export function coverFor(data, coverResolves) {
 
 /** "Kuala Lumpur · 1 day · 4 stops", from what is actually stored. */
 export function summaryLine(it, stops) {
-  const days = new Set(stops.map((s) => splitTime(s.suggested_time).day).filter((d) => d !== null));
+  const days = new Set(stops.map(stopDay).filter((d) => d !== null));
   const parts = [];
   if (it.resolved_city_name) parts.push(it.resolved_city_name);
   if (stops.length) parts.push(`${Math.max(days.size, 1)} day${days.size > 1 ? 's' : ''}`);
@@ -414,10 +434,10 @@ export function previewBody(data, cover, variants, mascot) {
   // Day headings only when the itinerary really spans more than one day.
   let lastDay = null;
   const items = shown.map((s, i) => {
-    const { day } = splitTime(s.suggested_time);
+    const day = stopDay(s);
     let head = '';
     if (multiDay && day !== null && day !== lastDay) {
-      head = `<li class="day"><h3 class="day-label">Day ${day + 1}</h3></li>`;
+      head = `<li class="day"><h3 class="day-label">Day ${day}</h3></li>`;
       lastDay = day;
     }
     return head + stopBlock(s, i + 1, images.get(s), credits.get(s));
