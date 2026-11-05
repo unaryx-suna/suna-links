@@ -34,7 +34,7 @@
 // photographer, so it is never shown).
 
 import { stockFor, isGooglePhoto } from './_stock.js';
-import { mapsLinks } from './_maps.js';
+import { hasPin, googleMapsURL } from './_maps.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -208,6 +208,10 @@ export async function loadItinerary(slug, coverURL) {
   const locked = all.slice(SHOWN_STOPS).map((s) => splitTime(s.suggested_time).time).filter(Boolean);
   const lockedCount = Math.max(all.length - SHOWN_STOPS, 0);
   const multiDay = new Set(all.map(stopDay).filter((d) => d !== null)).size > 1;
+  // W-197: stops per day, counts only (the teaser never sends stops 4+).
+  const dayCounts = [];
+  for (const s of all) { const d = stopDay(s); if (d === null) continue; const c = dayCounts.find((x) => x.day === d); if (c) c.n++; else dayCounts.push({ day: d, n: 1 }); }
+  dayCounts.sort((a, b) => a.day - b.day);
 
   let signed = new Map();
   try {
@@ -242,7 +246,7 @@ export async function loadItinerary(slug, coverURL) {
   }
   return {
     credits,
-    it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked,
+    it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked, dayCounts,
     signedMoments: [...images.values()].some((im) => im && im.kind === 'moment' && im.signed),
     cover: coverURL(it.cover_media_path),
   };
@@ -336,39 +340,113 @@ function stopBlock(s, n, image, credit) {
   // A viewer can't delete a stop on the web, so E2's Delete has no place here.
   const state = eventState(s);
   const pill = state ? `<p class="over-pill">${state === 'cancelled' ? 'Cancelled' : 'Ended'}</p>` : '';
-  const meta = [String(n).padStart(2, '0'), time, readableDuration(s.duration_label)].filter(Boolean).join(' · ');
+  const meta = [time, readableDuration(s.duration_label)].filter(Boolean).join(' · ');
   const note = String(s.creator_note || '').trim();
-  const area = String(s.city_name || '').trim();
   const name = s.place_name || 'Stop';
-  // Take me there (W-47), for a stop with a real pin that isn't over.
-  const maps = state ? '' : mapsLinks(s.latitude, s.longitude, 'map-btn');
+  // W-197: one Directions link (Google Maps) for a stop with a pin that isn't over.
+  const dir = !state && hasPin(s.latitude, s.longitude)
+    ? `<a class="dir" href="${escapeHtml(googleMapsURL(s.latitude, s.longitude))}" target="_blank" rel="noopener">Directions ›</a>` : '';
+  // A stop with no image gets a pixel tile, never a grey box (W-197).
+  const pic = image ? stopImage(image, name, credit)
+    : '<div class="stop-pic px-tile"><img src="/icons/px/pintemples.png" width="52" height="52" alt=""></div>';
   return `<li class="stop${state ? ' stop-over' : ''}">
-      <article class="card">
-        ${stopImage(image, name, credit)}
+      <span class="num" aria-hidden="true">${n}</span>
+      <article class="card sc">
+        ${pic}
         <div class="stop-text">
-          ${pill}<p class="stop-meta">${escapeHtml(meta)}</p>
+          ${pill}${meta ? `<p class="stop-meta">${escapeHtml(meta)}</p>` : ''}
           <h3 class="stop-name">${escapeHtml(name)}</h3>
-          ${area ? `<p class="stop-area">${escapeHtml(area)}</p>` : ''}
           ${note ? `<p class="stop-note">${escapeHtml(note)}</p>` : ''}
-          ${maps ? `<div class="stop-maps">${maps}</div>` : ''}
+          ${dir}
         </div>
       </article>
     </li>`;
 }
 
-/** Stops 4 onward: how many and when, nothing else. */
-function lockedBlock(count, times) {
+/** The copy button: the page's script points it at the app (or the App Store). */
+const COPY_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>';
+const copyButton = () => `<a class="cta copy" id="cta" href="${STORE_WEB_I}">${COPY_ICON} Copy this plan to Suna</a>`;
+const PADLOCK = '<svg class="lk" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><rect width="12" height="12" fill="#FFF9D5"/><path fill="#2B1E0E" d="M4 2h4v1H4zM3 3h1v2H3zM8 3h1v2H8zM2 5h8v6H2z"/><path fill="#F6CB94" d="M3 6h6v4H3z"/><path fill="#2B1E0E" d="M5 7h2v2H5z"/></svg>';
+
+/**
+ * Stops 4 onward (W-15c, W-197): ONE locked card. Blurred ghost rows drawn in
+ * CSS (no stop data), the pixel padlock, "+N more stops in the app", which
+ * days they're on (counts only), and Copy this plan to Suna inside it.
+ */
+function lockedBlock(count, dayCounts, shownDays) {
   if (!count) return '';
-  const chips = times.map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
-  return `<li class="stop stop-locked">
-      <article class="card locked">
-        <p class="locked-head"><img src="/icons/lock.svg" width="16" height="16" alt="">+${count} more stop${count === 1 ? '' : 's'}</p>
-        ${chips ? `<div class="chips">${chips}</div>` : ''}
-        <p class="locked-sub">See the full route in Suna</p>
-        <a class="cta locked-cta" data-open-suna href="${STORE_WEB_I}">Download Suna</a>
-      </article>
+  let where = '';
+  if (dayCounts.length > 1) {
+    const lastShown = shownDays.length ? shownDays[shownDays.length - 1] : null;
+    const sameDay = lastShown !== null ? (dayCounts.find((d) => d.day === lastShown) || { n: 0 }).n - shownDays.filter((d) => d === lastShown).length : 0;
+    const later = dayCounts.filter((d) => lastShown === null || d.day > lastShown).map((d) => d.day);
+    const parts = [];
+    if (sameDay > 0) parts.push(`${sameDay} more on day ${lastShown}`);
+    if (later.length === 1) parts.push(`day ${later[0]}`);
+    else if (later.length > 1) parts.push(`days ${later[0]} to ${later[later.length - 1]}`);
+    where = parts.length ? `${parts.join(', then ')}. ` : '';
+    where = where.charAt(0).toUpperCase() + where.slice(1);
+  }
+  return `<li class="stop-locked">
+      <div class="lock">
+        <div class="ghost" aria-hidden="true"><div class="gr"><i></i><b></b></div><div class="gr"><i></i><b></b></div><div class="gr"><i></i><b></b></div></div>
+        <div class="lockin">
+          ${PADLOCK}
+          <p class="lt">+${count} more stop${count === 1 ? '' : 's'} in the app</p>
+          <p class="ls">${escapeHtml(where)}Copy the plan and Suna takes you through it, stop by stop.</p>
+          ${copyButton()}
+          <p class="ls small">Free on iPhone · Android in December</p>
+        </div>
+      </div>
     </li>`;
 }
+
+// W-197 (Ops OPS-135, design screen 2): the plan's look, over i.html's B1 styles.
+const W197_CSS = `<style>
+body.pv-body{padding:0 0 40px;background:#0f1110}
+.pv{max-width:560px}
+.cover{height:400px}
+.fade-bottom{top:auto;bottom:0;height:280px;background:linear-gradient(180deg,rgba(15,17,16,0) 0%,rgba(15,17,16,.85) 60%,#0f1110 100%)}
+.intro.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.more{background:none;border:0;padding:0;margin:4px 0 0;color:#f6cb94;font:700 14px var(--font);cursor:pointer}
+.cover-text{bottom:18px}
+.cover-text .kick{margin:0;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#f6cb94}
+.cover-text h1{font-size:32px;line-height:1.08;font-weight:800}
+.cover-sub{font-size:16px;line-height:1.4;color:#d9d5cc}
+.daychips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 16px 0}
+.daychips span{border:1px solid #2a2f2c;background:#181b19;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:600}
+.route-head{display:none}
+.route{padding:0 16px 0 50px}
+.route::before{left:28px;top:14px;bottom:30px;width:0;border-left:2px dashed #3a403c;background:none}
+.stop{margin-bottom:14px}
+.stop::before{display:none}
+.num{position:absolute;left:-34px;top:0;width:26px;height:26px;border-radius:13px;background:#f6cb94;color:#1d1408;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:1}
+.sc{display:flex;border-radius:18px;background:#181b19;border-color:#2a2f2c}
+.sc .stop-pic{width:96px;height:auto;min-height:112px;flex:none}
+.sc .stop-pic::before,.sc .stop-pic::after{display:none}
+.sc .stop-pic.px-tile{display:flex;align-items:center;justify-content:center;background:#202421}
+.px-tile img{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E;background:#FFF9D5;padding:6px}
+.sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}
+.sc .stop-name{font-size:16.5px;font-weight:800;line-height:1.2}
+.sc .stop-note{border:0;padding:0;margin:2px 0 0;font-size:14px;line-height:1.4;color:#cfcbc2}
+.sc .dir{font-size:13.5px;color:#f6cb94;font-weight:700;margin-top:6px;text-decoration:none}
+.photo-credit{display:none}
+.day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:#f6cb94}
+.stop-locked{list-style:none;margin:4px 0 0 -34px}
+.lock{position:relative;border-radius:20px;overflow:hidden;border:1px solid #2a2f2c;background:#181b19;min-height:300px}
+.ghost{padding:14px;filter:blur(5px);opacity:.55}
+.gr{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.gr i{width:70px;height:70px;border-radius:12px;background:#3a403c;flex:none}
+.gr b{height:14px;border-radius:7px;background:#3a403c;flex:1}
+.lockin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;background:linear-gradient(180deg,rgba(24,27,25,.35),rgba(24,27,25,.92) 45%)}
+.lk{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E}
+.lt{font-size:20px;font-weight:800;margin:12px 0 0}
+.ls{font-size:14px;color:#a3a8a4;margin:6px 0 0;line-height:1.4}
+.ls.small{font-size:12.5px;margin-top:8px}
+a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;min-height:52px;border-radius:26px;background:#f6cb94;color:#1d1408;font-weight:700;font-size:16px;padding:0 20px}
+.after{padding:4px 16px 0}
+.bar{display:none}
+</style>`;
 
 /**
  * The cover's <img>. It is the page's largest paint, so it never guesses: the
@@ -399,7 +477,8 @@ export async function coverVariants(cover, resolves) {
 
 /** The body of the preview page: Figma B1, "The shared itinerary". */
 export function previewBody(data, cover, variants, mascot) {
-  const { it, shown, images, summary, multiDay, lockedCount, lockedTimes } = data;
+  const { it, shown, images, summary, multiDay, lockedCount } = data;
+  const dayCounts = data.dayCounts || [];
   const credits = data.credits || new Map();
   const title = it.name || 'An itinerary on Suna';
 
@@ -441,31 +520,31 @@ export function previewBody(data, cover, variants, mascot) {
       lastDay = day;
     }
     return head + stopBlock(s, i + 1, images.get(s), credits.get(s));
-  }).join('\n    ') + lockedBlock(lockedCount, lockedTimes);
+  }).join('\n    ') + lockedBlock(lockedCount, dayCounts, shown.map(stopDay).filter((d) => d !== null));
+  const kicker = ['Plan', it.resolved_city_name].filter(Boolean).join(' · ');
 
-  return `<main class="pv">
+  return `${W197_CSS}<main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">
     ${cover ? coverImg(cover, variants) : `<div class="cover-mascot">${mascot || ''}</div>`}
     <div class="fade-top"></div>
     <div class="fade-bottom"></div>
     <button class="round-btn" id="share" type="button" aria-label="Share this itinerary"><img src="/icons/share.svg" width="16" height="16" alt=""></button>
     <div class="cover-text">
+      <p class="kick">${escapeHtml(kicker)}</p>
       <h1 id="title">${escapeHtml(title)}</h1>
       <p class="cover-sub">${escapeHtml(summary)}</p>
     </div>
   </header>
   ${byline || intro ? `<section class="about">
     ${byline}
-    ${intro ? `<p class="intro">${escapeHtml(intro)}</p>` : ''}
+    ${intro ? `<p class="intro${intro.length > 220 ? ' clamp' : ''}" id="intro-text">${escapeHtml(intro)}</p>${intro.length > 220 ? '<button class="more" type="button" onclick="document.getElementById(\'intro-text\').classList.remove(\'clamp\');this.remove()">More</button>' : ''}` : ''}
   </section>` : ''}
+  ${multiDay && dayCounts.length > 1 ? `<div class="daychips">${dayCounts.map((d) => `<span>Day ${d.day} · ${d.n}</span>`).join('')}</div>` : ''}
   ${shown.length ? `<h2 class="route-head">The route</h2>
   <ol class="route">
     ${items}
   </ol>` : ''}
+  ${lockedCount ? '' : `<div class="after">${copyButton()}</div>`}
 </main>
-<div class="bar">
-  <a class="cta" id="cta" href="${STORE_WEB_I}"><img src="/icons/copy.svg" width="17" height="17" alt="">Copy itinerary</a>
-  <p class="bar-sub">Pick a day, and Suna takes you through it.</p>
-</div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>`;
 }

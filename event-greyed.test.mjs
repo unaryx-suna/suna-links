@@ -81,19 +81,18 @@ await t('a stop past its end is Ended even when the view still said on; a plain 
   assert.doesNotMatch(plain, /stop-over|over-pill/);
   assert.doesNotMatch(cafe, /stop-over|over-pill/);
 });
-await t('nothing else changes: name, area, note and the Copy bar are all still there', async () => {
+await t('nothing else changes: name, note, photo and the Copy button are all still there (W-197: no area line, no bar)', async () => {
   const [c] = stopsOf(html.a);
-  for (const s of ['My Fair Lady', 'Sydney', 'Get there early.', 'stop-img']) assert(c.includes(s), s);
-  assert.match(html.a, /id="cta"[^>]*>.*Copy itinerary/);
+  for (const s of ['My Fair Lady', 'Get there early.', 'stop-img']) assert(c.includes(s), s);
+  assert.match(html.a, /id="cta"[^>]*>[\s\S]*?Copy this plan to Suna/);
   assert.doesNotMatch(html.a, /Delete|Get tickets/);
 });
 
 await t('W-47 a cancelled or ended stop offers no directions; one still on does', async () => {
   const [cancelled, ended, on] = stopsOf(html.a);
-  assert.doesNotMatch(cancelled, /map-btn/);
-  assert.doesNotMatch(ended, /map-btn/);
-  assert.match(on, /class="map-btn maps-google"/);
-  assert.match(on, /class="map-btn maps-apple"/);
+  assert.doesNotMatch(cancelled, /class="dir"/);
+  assert.doesNotMatch(ended, /class="dir"/);
+  assert.match(on, /<a class="dir" href="https:\/\/www\.google\.com\/maps\/dir\/[^"]+" target="_blank" rel="noopener">Directions ›<\/a>/);
 });
 
 let chromium;

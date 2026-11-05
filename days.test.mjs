@@ -55,6 +55,16 @@ await t('the page asks for `day`, and says 4 days, with Day 1 over the first sto
   assert.match(html, /<h3 class="day-label">Day 1<\/h3>/);
 });
 
+await t('W-197 teaser: day chips with counts, ONE locked card ("+10 more stops in the app", "2 more on day 1, then days 2 to 4"), stops 4+ never sent, a pixel tile for a stop with no photo', async () => {
+  const { html } = await render(() => ({ ok: true, status: 200, json: async () => stops }));
+  for (const c of ['Day 1 · 5', 'Day 2 · 2', 'Day 3 · 4', 'Day 4 · 2']) assert(html.includes(`<span>${c}</span>`), c);
+  assert.match(html, /<p class="lt">\+10 more stops in the app<\/p>/);
+  assert.match(html, /<p class="ls">2 more on day 1, then days 2 to 4\. Copy the plan/);
+  assert.equal((html.match(/<div class="lock">/g) || []).length, 1);
+  for (let n = 4; n <= 13; n++) assert(!html.includes(`Stop ${n}<`), `Stop ${n} leaked`);
+  assert.match(html, /<div class="stop-pic px-tile"><img src="\/icons\/px\/pintemples\.png"/);
+});
+
 await t('before the migration (400 on `day`): asked again without it, the page still renders', async () => {
   const { html, asked } = await render((u) => (/,day&/.test(u)
     ? { ok: false, status: 400, json: async () => ({ message: 'column does not exist' }) }

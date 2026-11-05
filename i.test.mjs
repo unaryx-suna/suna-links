@@ -40,22 +40,20 @@ await t('W-179 a public itinerary has no noindex; a link to none (missing, priva
 });
 await t('server render: the preview has its three link kinds', async () => {
   assert.match(html, /data-preview="1"/);
-  assert.match(html, /class="cta locked-cta" data-open-suna/);
+  // W-197: the copy button (id="cta", the script's hand-off) sits in the locked card; no sticky bar.
+  assert.match(html, /<div class="lock">[\s\S]*?<a class="cta copy" id="cta" href="[^"]+">[\s\S]*?Copy this plan to Suna<\/a>/);
   assert.match(html, /class="follow" data-open-suna/);
+  assert.doesNotMatch(html, /class="bar"/);
 });
 await t('server render: no bare App Store link; every one is ct=web-i', async () => {
   const links = html.match(/href="https:\/\/apps\.apple\.com[^"]*"/g) || [];
-  assert(links.length >= 3, `${links.length} links`);
+  assert(links.length >= 2, `${links.length} links`);
   for (const l of links) assert.equal(l.replace(/&amp;/g, '&'), `href="${WEB_I}"`);
 });
 
-await t('W-47 each shown stop has Apple Maps and Google Maps; the locked ones have none', async () => {
-  const google = html.match(/class="map-btn maps-google" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.15,101\.7&amp;travelmode=walking"/g) || [];
-  const apple = html.match(/class="map-btn maps-apple" href="https:\/\/maps\.apple\.com\/\?daddr=3\.15,101\.7&amp;dirflg=w"/g) || [];
-  assert.equal(google.length, 3); assert.equal(apple.length, 3);
-  assert.match(html, /classList\.add\('apple-maps'\)/);
-  assert(html.includes('html:not(.apple-maps) .maps-apple{display:none !important}'));
-  assert(html.indexOf("classList.add('apple-maps')") < html.indexOf('</head>'), 'decided before first paint');
+await t('W-47/W-197 each shown stop has one Directions link (Google Maps); the locked ones have none', async () => {
+  const google = html.match(/<a class="dir" href="https:\/\/www\.google\.com\/maps\/dir\/\?api=1&amp;destination=3\.15,101\.7&amp;travelmode=walking" target="_blank" rel="noopener">Directions ›<\/a>/g) || [];
+  assert.equal(google.length, 3);
 });
 
 await t('W-53 a stop with only a Google photo gets its stock image; no stock image twice on the page', async () => {
@@ -141,7 +139,7 @@ if (chromium) {
 const { badLinkTargets } = await import('./link-targets.mjs');
 await t('W-50 outbound links open a new tab, internal ones never', async () => {
   assert.deepEqual(badLinkTargets(html), []);
-  assert((html.replace(/<script[\s\S]*?<\/script>/g, '').match(/maps-google" href="[^"]+" target="_blank" rel="noopener"/g) || []).length > 0);
+  assert((html.replace(/<script[\s\S]*?<\/script>/g, '').match(/class="dir" href="[^"]+" target="_blank" rel="noopener"/g) || []).length > 0);
 });
 
 await t('W-193 the open log keeps ct: no via + ct=deepavali-bfd records via "ct:deepavali-bfd"; a via always wins; neither is null', async () => {
