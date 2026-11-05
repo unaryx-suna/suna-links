@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.unaryx.suna",
+      "sha256_cert_fingerprints": [
+        "C4:5A:11:DB:FF:55:B0:39:14:48:86:84:C8:9F:E5:05:D0:6C:0A:82:EE:84:82:8B:A0:B1:A2:26:11:03:E1:35"
+      ]
+    }
+  }
+]
