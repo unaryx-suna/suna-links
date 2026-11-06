@@ -465,6 +465,8 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
       justify-content: space-between; padding: 16px; background: linear-gradient(#5c4d3d, var(--bg)); overflow: hidden; }
     .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(17,17,17,0) 30%, var(--bg)); }
+    .hero-e::after { background: linear-gradient(rgba(17,17,17,.1) 0%, rgba(17,17,17,.25) 18%, rgba(17,17,17,.82) 42%, rgba(17,17,17,.94) 64%, var(--bg)); }
+    .hero-e h1, .hero-e .hero-sub { text-shadow: 0 1px 12px rgba(0,0,0,.55); }
     .hero > * { position: relative; z-index: 1; }
     .hero > img { z-index: 0; }
     .hero-top { align-self: flex-start; }
