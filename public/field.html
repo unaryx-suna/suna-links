@@ -144,6 +144,21 @@
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
   /* §3 — "stopped" must not read as a quieter "waiting". */
   .badge.failed { background: var(--danger); color: #fff; }
+  /* W-202: Claims */
+  .cl-card { margin-bottom: 12px; }
+  .cl-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .cl-row { display: flex; gap: 10px; font-size: 14px; margin-top: 6px; line-height: 1.4; }
+  .cl-row .k { color: var(--dim); width: 92px; flex: none; }
+  .cl-row a { color: var(--sand); }
+  .cl-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .cl-tag { font-size: 12px; border-radius: 999px; padding: 3px 9px; background: rgba(255,255,255,.10); }
+  .cl-tag.ok { background: rgba(145,244,153,.16); color: #91f499; }
+  .cl-tag.red { background: rgba(255,107,107,.14); color: var(--danger); }
+  .cl-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .cl-actions button { padding: 10px 14px; font-size: 14px; }
+  .cl-form { margin-top: 12px; display: grid; gap: 8px; }
+  .cl-form input { width: 100%; }
+  .cl-h { font-size: 17px; margin: 26px 0 10px; }
   /* §1 — the photograph starts the capture, so it is the first thing on the
      screen rather than a field part way down the form. */
   /* §2 — equal weight, side by side. They stack on a narrow phone rather than
@@ -650,6 +665,21 @@
     <p class="sub" id="cr-results-note" hidden></p>
   </div>
 
+  <!-- ════ Claims (W-202, Ops OPS-138) ═══════════════════════════════════
+       "Claim this page" on unaryx.com, for an admin on the go. Everything
+       goes through the event-claim function's admin actions, which check
+       is_admin against this session's own token: the same list, decisions
+       and emails as Event Review (W-121, W-184). Nothing here is readable by
+       anyone else; the menu row is only shown to admins as a courtesy. -->
+  <div class="wrap" id="pane-claims" hidden>
+    <h1>Claims</h1>
+    <p class="sub">Each claim here has tapped its email link. Approve, ask for proof or turn down: the same emails go out as from Event Review.</p>
+    <div id="cl-list"></div>
+    <p class="sub" id="cl-note" hidden></p>
+    <h2 class="cl-h">Approved recently</h2>
+    <div id="cl-approved"></div>
+  </div>
+
   <!-- ════ Add from Google Maps link (W-56) ══════════════════════════════
        Ops, 15 Oct: adding a tipped place without anyone pasting code. Both
        buttons call `admin-add-place` (I-124) with this page's own session; the
@@ -836,6 +866,7 @@
     <button class="opt" id="menu-events" hidden>Event photos<small>Upcoming events, missing photos first</small></button>
     <button class="opt" id="menu-creators" hidden>Creators<small>Who gets the purple Creator tag</small></button>
     <button class="opt" id="menu-addplace" hidden>Add from Google Maps link<small>A tipped place, straight from Google Maps</small></button>
+    <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
     <button class="opt" id="menu-signout">Sign out</button>
     <p class="note" style="margin-top:14px">
       Build <span id="build-stamp" class="build">…</span>
@@ -920,7 +951,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v41';
+const BUILD = 'field-v42';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5004,6 +5035,7 @@ function openMenu() {
   $('menu-events').hidden = !(profile && profile.is_admin);
   $('menu-creators').hidden = !(profile && profile.is_admin);
   $('menu-addplace').hidden = !(profile && profile.is_admin);
+  $('menu-claims').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
     $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
@@ -5024,11 +5056,12 @@ $('menu-country').onclick = () => { closeMenu(); switchTab('country'); };
 $('menu-events').onclick = () => { closeMenu(); switchTab('events'); };
 $('menu-creators').onclick = () => { closeMenu(); switchTab('creators'); };
 $('menu-addplace').onclick = () => { closeMenu(); switchTab('addplace'); };
+$('menu-claims').onclick = () => { closeMenu(); switchTab('claims'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace']) {
+  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
@@ -5042,6 +5075,7 @@ function switchTab(which) {
   if (which === 'country') renderCountryTab();
   if (which === 'events') loadEventList();
   if (which === 'creators') loadCreators();
+  if (which === 'claims') loadClaims(true);
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
 }
@@ -7321,7 +7355,10 @@ $('in-ev-upload').onchange = evPicked;
 // A link tapped while the Panel is already open changes the hash and
 // nothing else, so the deep link needs this as well as the one in showApp.
 window.addEventListener('hashchange', () => {
-  if (profile && profile.is_admin) { evOpenFromHash().catch(() => {}); }
+  if (profile && profile.is_admin) {
+    evOpenFromHash().catch(() => {});
+    if (location.hash === '#claims') switchTab('claims');
+  }
 });
 
 // Paste, only while the photo screen is open.
@@ -7953,6 +7990,9 @@ async function loadProfile() {
   $('menu-country').hidden = !profile.is_admin;
   $('menu-events').hidden = !profile.is_admin;
   $('menu-addplace').hidden = !profile.is_admin;
+  $('menu-claims').hidden = !profile.is_admin;
+  // W-202: the pending count on the menu row, fetched once per sign-in.
+  if (profile.is_admin) loadClaims(false).catch(() => {});
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -8075,8 +8115,179 @@ async function showApp(s) {
   // there is a session and a profile to check `is_admin` against.
   if (profile && profile.is_admin) {
     try { await evOpenFromHash(); } catch (e) {}
+    // W-202: the "New claim to review" email links to #claims.
+    if (location.hash === '#claims') switchTab('claims');
   }
 }
+
+/* ── Claims (W-202, Ops OPS-138) ───────────────────────────────────────────
+   W-184's Event Review panel, for the Panel Brian carries. The list, the
+   decisions and the emails are the event-claim function's admin actions:
+   list, approve, turn_down, ask_proof, resend_approved. It checks is_admin
+   on this session's token, so a non-admin who opens #claims gets an error
+   and no data. The pure part sits between the markers for claims.test.mjs. */
+/* CLAIMS-LOGIC-START */
+function clEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function clAgo(iso, now) {
+  const m = Math.max(0, Math.round(((now || Date.now()) - Date.parse(iso)) / 60000));
+  return m < 60 ? m + ' min ago' : m < 2880 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago';
+}
+function clDay(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+/** The proof link's site, for prefilling a new organiser (never an Instagram URL as a website). */
+function clSite(proof) {
+  const p = String(proof || '');
+  return /instagram\.com/i.test(p) ? '' : p;
+}
+/** One waiting claim as a card. Only https proof links become links. */
+function clCard(c, now) {
+  const row = (k, v) => '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>';
+  const proof = /^https:\/\//i.test(c.proof || '')
+    ? '<a href="' + clEsc(c.proof) + '" target="_blank" rel="noopener noreferrer">' + clEsc(String(c.proof).replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, '')) + '</a>'
+    : clEsc(c.proof || '');
+  const email = c.email_full
+    ? clEsc(c.email_full) + ' (confirmed) · <a href="mailto:' + clEsc(c.email_full) + '?subject=' + encodeURIComponent('Your claim for ' + c.event.name + ' on Suna') + '">Reply</a>'
+    : clEsc(c.email) + ' (confirmed)';
+  return '<div class="card cl-card" id="cl-' + clEsc(c.id) + '">'
+    + '<div class="cl-top"><strong>' + (c.status === 'dispute' ? '<span class="cl-tag red">Dispute</span> ' : '') + clEsc(c.event.name) + '</strong>'
+    + '<span class="sub" style="margin:0">' + clAgo(c.created_at, now) + '</span></div>'
+    + row('When', clEsc([clDay(c.event.start_time), c.event.city].filter(Boolean).join(' · ')))
+    + row('Claimant', clEsc(c.name) + ' · ' + clEsc(String(c.role || '').charAt(0).toUpperCase() + String(c.role || '').slice(1)))
+    + row('Email', email)
+    + row('Proof', proof)
+    + (c.message ? row('Message', '“' + clEsc(c.message) + '”') : '')
+    + row('Organiser now', c.event.organiser ? clEsc(c.event.organiser.name || c.event.organiser) : 'none')
+    + '<div class="cl-tags">' + (c.domain_match ? '<span class="cl-tag ok">Email matches organiser’s site</span>' : '<span class="cl-tag">Email doesn’t match the site</span>') + '</div>'
+    + '<div class="cl-actions"><button type="button" class="primary" style="width:auto" data-cl="approve" data-id="' + clEsc(c.id) + '">Approve</button>'
+    + '<button type="button" class="ghost" data-cl="ask_proof" data-id="' + clEsc(c.id) + '">Ask for proof</button>'
+    + '<button type="button" class="danger" data-cl="turn_down" data-id="' + clEsc(c.id) + '">Turn down</button></div>'
+    + '<div id="cl-form-' + clEsc(c.id) + '"></div>'
+    + (c.status === 'dispute' ? '<p class="sub">This event already has an organiser. Approving replaces the link; turning down keeps the first.</p>' : '')
+    + '</div>';
+}
+/** Approved in the last 60 days, with Resend where the function allows it (never Me-You Market or Intrigue Summit). */
+function clApprovedRow(c) {
+  const never = /me\W*you\W*market|intrigue\W*summit/i.test(c.event.name);
+  return '<div class="cl-row"><span class="k">' + clEsc(clDay(c.decided_at || c.created_at)) + '</span><span><strong>' + clEsc(c.event.name) + '</strong> · ' + clEsc(c.email_full || c.email)
+    + (c.resend && !never ? ' · <button type="button" class="linkish" data-cl="resend" data-id="' + clEsc(c.id) + '">Resend</button>' : ' · <span class="sub" style="margin:0">emailed by hand</span>') + '</span></div>';
+}
+/**
+ * The request body for a decision, or { error } to show instead of sending.
+ * Approve: `existing` is an organiser row found by slug or website (link it),
+ * else a new organiser from `name` (+ website / Instagram from the proof).
+ */
+function clBody(action, id, input) {
+  const v = String((input && input.text) || '').trim();
+  if (action === 'turn_down') return v.length < 3 ? { error: 'Say why: it’s sent to them.' } : { action, id, reason: v };
+  if (action === 'ask_proof') return { action, id, note: v };
+  if (action === 'resend') return { action: 'resend_approved', id };
+  if (action === 'approve') {
+    if (input && input.existing && input.existing.id) return { action, id, organiser: { id: input.existing.id } };
+    if (v.length < 2 || v.length > 80) return { error: 'Give the organiser a name.' };
+    const org = { name: v };
+    const site = String((input && input.website) || '').trim();
+    if (/^https:\/\//i.test(site)) org.website = site;
+    return { action, id, organiser: org };
+  }
+  return { error: 'Unknown action.' };
+}
+/** "emspaced" or "https://www.emspaced.com/x" → the PostgREST filter to find an organiser we already have. */
+function clOrgFilter(q) {
+  const s = String(q || '').trim().toLowerCase();
+  if (!s) return null;
+  if (/^[a-z0-9-]{2,60}$/.test(s)) return 'slug.eq.' + s;
+  try {
+    const host = new URL(/^https?:\/\//.test(s) ? s : 'https://' + s).hostname.replace(/^www\./, '');
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) ? 'website.ilike.*' + host + '*' : null;
+  } catch (e) { return null; }
+}
+/* CLAIMS-LOGIC-END */
+
+let clRows = [], clApproved = [];
+async function clCall(body) {
+  const token = await amToken();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/event-claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (token || SUPABASE_ANON_KEY) },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || json.error || ('event-claim ' + res.status));
+  return json;
+}
+async function loadClaims(render) {
+  let out;
+  try { out = await clCall({ action: 'list' }); }
+  catch (e) { if (render) { $('cl-list').innerHTML = ''; $('cl-note').hidden = false; $('cl-note').textContent = e.message || 'Could not load claims.'; } return; }
+  clRows = out.claims || []; clApproved = out.approved || [];
+  const n = clRows.length;
+  $('claims-count').textContent = String(n);
+  $('claims-count').classList.toggle('zero', n === 0);
+  if (render) renderClaims();
+}
+function renderClaims() {
+  const now = Date.now();
+  $('cl-note').hidden = clRows.length > 0;
+  $('cl-note').textContent = 'No claims waiting. A claim shows here once its email link is tapped.';
+  $('cl-list').innerHTML = clRows.map((c) => clCard(c, now)).join('');
+  $('cl-approved').innerHTML = clApproved.length ? '<div class="card">' + clApproved.map(clApprovedRow).join('') + '</div>' : '<p class="sub">None in the last 60 days.</p>';
+}
+function clOpenForm(id, action) {
+  const c = clRows.find((x) => x.id === id);
+  if (!c) return;
+  const slot = $('cl-form-' + id);
+  if (action === 'approve') {
+    slot.innerHTML = '<div class="cl-form"><label>Link an organiser we have (slug or website)</label>'
+      + '<input id="cl-find-' + id + '" placeholder="e.g. emspaced or emspaced.com" autocapitalize="off">'
+      + '<p class="sub" id="cl-found-' + id + '" style="margin:0"></p>'
+      + '<label>Or a new organiser: name, as the page will show it</label>'
+      + '<input id="cl-name-' + id + '" maxlength="80" value="' + clEsc((c.event.organiser && c.event.organiser.name) || c.name) + '">'
+      + '<input id="cl-site-' + id + '" placeholder="Website (https://…)" value="' + clEsc(clSite(c.proof)) + '">'
+      + '<div class="cl-actions"><button type="button" class="primary" style="width:auto" data-cl-go="approve" data-id="' + clEsc(id) + '">Approve and link</button><button type="button" class="ghost" data-cl-cancel="' + clEsc(id) + '">Cancel</button></div></div>';
+    let timer = null;
+    $('cl-find-' + id).oninput = (e) => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const f = clOrgFilter(e.target.value);
+        const out = $('cl-found-' + id);
+        slot.dataset.existing = '';
+        if (!f) { out.textContent = ''; return; }
+        const { data } = await db.from('organisers').select('id,name,slug,website').or(f).limit(2);
+        if (data && data.length === 1) { slot.dataset.existing = data[0].id; out.textContent = 'Links to ' + data[0].name + ' (unaryx.com/events/by/' + data[0].slug + ')'; }
+        else out.textContent = data && data.length > 1 ? 'More than one match: type the slug.' : 'No organiser by that. Fill in a new one below.';
+      }, 300);
+    };
+  } else {
+    const label = action === 'turn_down' ? 'Why? (sent to them)' : 'What we need (optional, sent to them)';
+    slot.innerHTML = '<div class="cl-form"><label>' + label + '</label><input id="cl-text-' + id + '" maxlength="500">'
+      + '<div class="cl-actions"><button type="button" class="' + (action === 'turn_down' ? 'danger' : 'primary') + '" style="width:auto" data-cl-go="' + action + '" data-id="' + clEsc(id) + '">' + (action === 'turn_down' ? 'Turn down' : 'Send') + '</button><button type="button" class="ghost" data-cl-cancel="' + clEsc(id) + '">Cancel</button></div></div>';
+  }
+}
+async function clGo(id, action) {
+  const slot = $('cl-form-' + id);
+  const input = action === 'approve'
+    ? { text: $('cl-name-' + id).value, website: $('cl-site-' + id).value, existing: slot && slot.dataset.existing ? { id: slot.dataset.existing } : null }
+    : action === 'resend' ? {} : { text: $('cl-text-' + id).value };
+  const body = clBody(action, id, input);
+  if (body.error) { alertLine(body.error); return; }
+  try { await clCall(body); }
+  catch (e) { alertLine(e.message); return; }
+  alertLine({ approve: 'Approved: they get the email with their stats link.', turn_down: 'Turned down.', ask_proof: 'Asked for proof.', resend: 'Sent again.' }[action]);
+  await loadClaims(true);
+}
+function alertLine(text) { $('cl-note').hidden = false; $('cl-note').textContent = text; $('cl-note').scrollIntoView({ block: 'nearest' }); }
+$('pane-claims').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.cl === 'resend') clGo(b.dataset.id, 'resend');
+  else if (b.dataset.cl) clOpenForm(b.dataset.id, b.dataset.cl);
+  else if (b.dataset.clGo) clGo(b.dataset.id, b.dataset.clGo);
+  else if (b.dataset.clCancel) $('cl-form-' + b.dataset.clCancel).innerHTML = '';
+});
 
 boot();
 </script>
