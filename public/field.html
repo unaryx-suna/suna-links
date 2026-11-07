@@ -316,6 +316,9 @@
   .hinherit, .hclosed { font-size: 13px; color: var(--dim); padding-top: 7px; }
   .hinherit button, .hadd { background: none; color: var(--sand); font-size: 13px; padding: 2px 0; }
   [hidden] { display: none !important; }
+/* W-214: the review card under a place in Review places. */
+.rv-card { margin: 12px 0 4px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.04); display: grid; gap: 8px; cursor: default; }
+.rv-card label { margin: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -697,7 +700,7 @@
     </div>
     <p class="sub" id="rv-sub"></p>
     <div id="rv-list"></div>
-    <button class="btn ghost" type="button" id="rv-more" hidden>Show more</button>
+    <button class="ghost" type="button" id="rv-more" hidden>Show more</button>
   </div>
 
   <!-- ════ Add from Google Maps link (W-56) ══════════════════════════════
@@ -3978,6 +3981,8 @@ function buildRow() {
     // and "closed all week" are different claims.
     operating_hours: buildOperatingHours(),
     hours_source: buildOperatingHours() ? 'admin' : null,
+    // W-214: new hours drop the old written source; Review places asks for it again.
+    hours_source_ref: null,
     building_name: cap.building.trim() || null,
     // **NOT NULL with a `'{}'` default** — an empty array, never null.
     // **`signature_dishes` stays on the table and keeps its data**, but the
@@ -4086,7 +4091,7 @@ const EDIT_KEYS = {
   note: ['description'],
   address: ['address'],
   building: ['building_name'],
-  hours: ['operating_hours', 'hours_source'],
+  hours: ['operating_hours', 'hours_source', 'hours_source_ref'],
   category: ['category'],
   location: ['latitude', 'longitude', 'coordinate_source'],
   city: ['city_id'],
@@ -8266,16 +8271,35 @@ async function clCall(body) {
 }
 /* ── Review places (W-214) ─────────────────────────────────────────────────
    Brian, 7 Nov 20:4x: Ops or Axel keep every place's details current, the
-   places people use first. Waves: 1 saved by someone (place_save_counts, the
-   existing aggregate; itineraries and visits are users' own rows an admin
-   can't read, see STATUS), 2 within 150 m of an upcoming event, 3 a stop in a
-   public itinerary, 4 the rest. Sorted by saves. A tap opens the place in the
-   same editor as Finish these. No rating or review count anywhere. */
+   places people use first. Waves: 1 used (saved, in an itinerary or visited:
+   admin_place_use_counts, counts only), 2 within 150 m of an upcoming event,
+   3 a stop in a public itinerary, 4 the rest. Sorted by use. A tap opens a
+   card: the editor (hours, cover, description, tips), the hours source with
+   its checked date, open or closed, and Verified once every field has a
+   source. No rating or review count anywhere. */
 /* REVIEW-LOGIC-START */
 const RV_EVENT_M = 150;
+/** How much a place is used: saves + itinerary stops + visits. */
+function rvUse(p) { return (p.saves || 0) + (p.itinStops || 0) + (p.visits || 0); }
+/** A written hours source: a URL, or "contacted: <channel> <date>". */
+function rvSourceOk(s) {
+  const v = String(s || '').trim();
+  return v.length >= 3 && v.length <= 300 && (/^https?:\/\/\S+\.\S+/i.test(v) || /^contacted:\s*\S.{2,}/i.test(v));
+}
+/** What stops Verified: every field needs a value and a source. Empty = can verify. */
+function rvBlockers(p) {
+  const b = [];
+  if (!p.operating_hours) b.push('hours');
+  else if (!p.hours_source_ref) b.push('hours source');
+  if (!p.cover_image_url) b.push('cover');
+  else if (!p.cover_source) b.push('cover source');
+  if (!p.description || String(p.description).trim().length < 40) b.push('description');
+  if (!p.business_status || !p.business_status_checked_at) b.push('open or closed');
+  return b;
+}
 /** The wave a place is in: the first that fits. */
 function rvWave(p) {
-  if ((p.saves || 0) > 0) return 1;
+  if (rvUse(p) > 0) return 1;
   if (p.eventVenue) return 2;
   if (p.inItinerary) return 3;
   return 4;
@@ -8284,6 +8308,7 @@ function rvWave(p) {
 function rvMissing(p) {
   const m = [];
   if (!p.operating_hours) m.push('hours');
+  else if (!p.hours_source_ref) m.push('hours source');
   if (!p.cover_image_url) m.push('cover');
   if (!p.description || String(p.description).trim().length < 40) m.push('description');
   if (!(p.tips > 0)) m.push('tips');
@@ -8299,13 +8324,14 @@ function rvWhen(iso) {
 function rvLine(p) {
   const miss = rvMissing(p);
   return (p.saves || 0) + ((p.saves || 0) === 1 ? ' save' : ' saves')
+    + (p.itinStops ? ' · ' + p.itinStops + ' in plans' : '') + (p.visits ? ' · ' + p.visits + ' visits' : '')
     + ' · verified ' + rvWhen(p.last_verified_at)
     + ' · hours ' + (p.hours_source || '—')
     + ' · ' + (miss.length ? 'needs ' + miss.join(', ') : 'nothing missing');
 }
 /** Sort: most saves first, then never-verified before verified, then by name. */
 function rvSort(a, b) {
-  return (b.saves || 0) - (a.saves || 0)
+  return rvUse(b) - rvUse(a)
     || (a.last_verified_at ? 1 : 0) - (b.last_verified_at ? 1 : 0)
     || String(a.name || '').localeCompare(String(b.name || ''));
 }
@@ -8356,17 +8382,19 @@ async function loadReview() {
     let places = [];
     for (let from = 0; from < 6000; from += 1000) {
       const { data, error } = await db.from('landmarks')
-        .select('id,name,latitude,longitude,cover_image_url,operating_hours,hours_source,description,last_verified_at,business_status')
+        .select('id,name,latitude,longitude,cover_image_url,cover_source,operating_hours,hours_source,hours_source_ref,hours_checked_at,description,last_verified_at,business_status,business_status_checked_at')
         .eq('city_id', cityId).eq('is_hidden', false).order('name').range(from, from + 999);
       if (error) throw error;
       places = places.concat(data || []);
       if (!data || data.length < 1000) break;
     }
     const ids = places.map((p) => p.id);
-    const saves = new Map(), tips = new Map(), stops = new Set();
+    const use = new Map(), tips = new Map(), stops = new Set();
     for (const c of rvChunks(ids, 500)) {
-      const { data } = await db.rpc('place_save_counts', { p_landmark_ids: c });
-      for (const r of data || []) saves.set(r.landmark_id, r.saves);
+      // W-214: counts only (saves, itinerary stops, visits), admin only, checked in the function.
+      const { data, error } = await db.rpc('admin_place_use_counts', { p_landmark_ids: c });
+      if (error) throw error;
+      for (const r of data || []) use.set(r.landmark_id, r);
     }
     for (const c of rvChunks(ids, 150)) {
       const [h, s] = await Promise.all([
@@ -8387,13 +8415,69 @@ async function loadReview() {
       events = (data || []).filter((e) => e.latitude != null);
     }
     rvRows = places.map((p) => ({
-      ...p, saves: saves.get(p.id) || 0, tips: tips.get(p.id) || 0, inItinerary: stops.has(p.id),
+      ...p, saves: (use.get(p.id) || {}).saves || 0, itinStops: (use.get(p.id) || {}).itinerary_stops || 0, visits: (use.get(p.id) || {}).visits || 0,
+      tips: tips.get(p.id) || 0, inItinerary: stops.has(p.id),
       eventVenue: p.latitude != null && events.some((e) => haversineKm(p.latitude, p.longitude, e.latitude, e.longitude) * 1000 <= RV_EVENT_M),
     })).sort(rvSort);
     renderReview(true);
   } catch (e) {
     list.innerHTML = '<p class="sub">Could not load: ' + escapeHtml(String(e.message || e)) + '</p>';
   } finally { rvBusy = false; }
+}
+
+/** W-214 (b)/(c): one place's review card, under its row. */
+function rvToggleCard(row, p) {
+  const open = row.querySelector('.rv-card');
+  if (open) { open.remove(); return; }
+  for (const c of document.querySelectorAll('#rv-list .rv-card')) c.remove();
+  const today = new Date().toISOString().slice(0, 10);
+  const c = document.createElement('div');
+  c.className = 'rv-card';
+  c.innerHTML =
+    '<p class="sub rv-need"></p>'
+    + '<button class="ghost" type="button" data-act="edit">Edit hours, cover, description and tips</button>'
+    + '<label>Hours source <small>a link, or “contacted: WhatsApp 7 Nov”</small></label>'
+    + '<input type="text" data-f="src" maxlength="300" autocomplete="off" placeholder="https://… or contacted: …">'
+    + '<label>Hours checked on</label><input type="date" data-f="on" max="' + today + '">'
+    + '<button class="ghost" type="button" data-act="src">Save hours source</button>'
+    + '<label>Open or closed</label><select data-f="st"><option value="OPERATIONAL">Open</option>'
+    + '<option value="CLOSED_TEMPORARILY">Closed for now</option><option value="CLOSED_PERMANENTLY">Closed for good</option></select>'
+    + '<button class="ghost" type="button" data-act="st">Save, checked today</button>'
+    + '<button class="primary" type="button" data-act="ok">Verified</button>'
+    + '<p class="note" data-f="msg" hidden></p>';
+  const $c = (sel) => c.querySelector(sel);
+  $c('[data-f="src"]').value = p.hours_source_ref || '';
+  $c('[data-f="on"]').value = (p.hours_checked_at || '').slice(0, 10) || today;
+  $c('[data-f="st"]').value = p.business_status || 'OPERATIONAL';
+  const say = (t, bad) => { const m = $c('[data-f="msg"]'); m.textContent = t; m.hidden = !t; m.className = bad ? 'err' : 'note'; };
+  const refresh = () => {
+    const b = rvBlockers(p);
+    $c('.rv-need').textContent = b.length ? 'To verify: ' + b.join(', ') + '.' : 'Every field has a source. Verified sets today’s date.';
+    $c('[data-act="ok"]').disabled = b.length > 0;
+    row.querySelector('p').textContent = rvLine(p);
+  };
+  const write = async (patch) => {
+    const { error } = await db.from('landmarks').update(patch).eq('id', p.id);
+    if (error) { say('Not saved: ' + error.message, true); return false; }
+    Object.assign(p, patch); refresh(); return true;
+  };
+  $c('[data-act="edit"]').onclick = async () => { switchTab('capture'); await openExisting(p.id); };
+  $c('[data-act="src"]').onclick = async () => {
+    const src = $c('[data-f="src"]').value.trim(), on = $c('[data-f="on"]').value;
+    if (!p.operating_hours) return say('Add the hours in the editor first.', true);
+    if (!rvSourceOk(src)) return say('The source is a link (https://…) or “contacted: <channel> <date>”.', true);
+    if (!on || on > today) return say('Pick the day the hours were checked.', true);
+    if (await write({ hours_source: 'admin', hours_source_ref: src, hours_checked_at: new Date(on + 'T12:00:00Z').toISOString() })) say('Hours source saved.');
+  };
+  $c('[data-act="st"]').onclick = async () => {
+    if (await write({ business_status: $c('[data-f="st"]').value, business_status_checked_at: new Date().toISOString() })) say('Saved.');
+  };
+  $c('[data-act="ok"]').onclick = async () => {
+    if (rvBlockers(p).length) return refresh();
+    if (await write({ last_verified_at: new Date().toISOString() })) { say('Verified today.'); loadReviewCount(); }
+  };
+  refresh();
+  row.appendChild(c);
 }
 
 function renderReview(reset) {
@@ -8411,7 +8495,7 @@ function renderReview(reset) {
     d.className = 'item';
     d.innerHTML = '<h3>' + escapeHtml(p.name || 'Unnamed') + (p.business_status && p.business_status !== 'OPERATIONAL' ? ' <small>· ' + escapeHtml(p.business_status.toLowerCase().replace('_', ' ')) + '</small>' : '') + '</h3>'
       + '<p>' + escapeHtml(rvLine(p)) + '</p>';
-    d.onclick = async () => { switchTab('capture'); await openExisting(p.id); };
+    d.onclick = (e) => { if (!e.target.closest('.rv-card')) rvToggleCard(d, p); };
     list.appendChild(d);
   }
   if (!rows.length) list.innerHTML = '<p class="sub">Nothing in this wave here.</p>';
