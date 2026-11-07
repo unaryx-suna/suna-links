@@ -951,7 +951,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v42';
+const BUILD = 'field-v43';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2851,9 +2851,22 @@ async function addStockPhoto(link) {
   }
 }
 
+/** W-213 (2): run `fn` when a link box's value is ready: after a paste lands, on
+ *  Enter, or on change (leaving the box). Typing clears an old note, nothing more. */
+function onLinkReady(id, fn) {
+  const el = $(id);
+  let busy = false;
+  const run = async () => { if (busy || !el.value.trim()) return; busy = true; try { await fn(); } finally { busy = false; } };
+  el.addEventListener('paste', () => setTimeout(run, 0));
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  el.addEventListener('change', run);
+}
+
 function capitalise(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }
 
-$('stock-link').addEventListener('input', async () => {
+// W-213 (2): the link is read on paste, Enter or leaving the box, never on each
+// keystroke (a half-typed URL used to say "That photo could not be fetched").
+onLinkReady('stock-link', async () => {
   const link = parseStockLink($('stock-link').value);
   if (link && link.unsupported === 'unsplash-page') {
     stockNote(UNSPLASH_PAGE_HELP, true);
@@ -4774,8 +4787,15 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
   // **One column, and its provenance. Nothing else.** Guarded by
   // `cover_image_url is null` server-side as well, so two devices racing cannot
   // both win.
-  const patch = { cover_image_url: coverURL, cover_source: 'user' };
-  if (profile.username) patch.photographer_name = profile.username;
+  // W-213 (Ops OPS-145): a pasted Pexels/Unsplash cover keeps its source, ref and
+  // photographer (buildRow put them on the queued row); only his own photograph
+  // is 'user' with his username. Before this, every cover here was 'user'/'admin'.
+  const stockCover = row.cover_source && row.cover_source !== 'user';
+  const patch = stockCover
+    ? { cover_image_url: coverURL, cover_source: row.cover_source, cover_source_ref: row.cover_source_ref || null,
+        photographer_name: row.photographer_name || null }
+    : { cover_image_url: coverURL, cover_source: 'user' };
+  if (!stockCover && profile.username) patch.photographer_name = profile.username;
   const { error: upErr } = await db.from('landmarks')
     .update(patch).eq('id', row.id).is('cover_image_url', null);
   if (upErr) throw new Error('landmarks · update cover · ' + upErr.message);
@@ -6301,7 +6321,7 @@ for (const id of ['in-replace-cam', 'in-replace-lib']) {
   };
 }
 
-$('replace-link').addEventListener('input', async () => {
+onLinkReady('replace-link', async () => {
   const raw = $('replace-link').value;
   const link = parseStockLink(raw);
   if (link && link.unsupported === 'unsplash-page') { replaceNote(UNSPLASH_PAGE_HELP, true); return; }
