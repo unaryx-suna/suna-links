@@ -241,6 +241,15 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.doesNotMatch(r.body, /noindex/);
   assert.match(r.body, /<a class="mark" href="https:\/\/unaryx\.com\/events">/);
 });
+await t('/e/ (W-197 (5), Ops OPS-135): the hero has its own darker scrim under the title; /c/ keeps the shared one', async () => {
+  state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
+  state.events = [];
+  const r = await render(event, `/e/${U(4)}`);
+  assert.match(r.body, /<header class="hero hero-e">/);
+  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(17,17,17,\.1\) 0%, rgba\(17,17,17,\.25\) 18%, rgba\(17,17,17,\.82\) 42%/);
+  assert.match(r.body, /\.hero::after \{ content: ""; position: absolute; inset: 0; background: linear-gradient\(rgba\(17,17,17,0\) 30%, var\(--bg\)\); \}/, 'the shared scrim unchanged');
+});
+
 await t('/e/: Directions is Google Maps in the HTML, with the Apple/Google sheet for iPhone', async () => {
   state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   const r = await render(event, `/e/${U(4)}`);
