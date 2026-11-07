@@ -23,7 +23,7 @@ t('markup: an admin-only menu row with a count, the Claims pane, #claims after s
   assert.match(html, /\$\('menu-claims'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-claims'\)\.hidden = !profile\.is_admin;/);
   assert.equal((html.match(/if \(location\.hash === '#claims'\) switchTab\('claims'\);/g) || []).length, 2);
-  assert.match(html, /'addplace', 'claims'\]\) \{/);
+  assert.match(html, /'addplace', 'claims', 'review'\]\) \{/);
 });
 
 t('every decision goes through event-claim with this session\'s token (the function checks is_admin); no other read of claims', () => {
