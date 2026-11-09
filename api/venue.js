@@ -18,7 +18,7 @@ import {
   eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer,
 } from './_clip.js';
 import { saveInSuna } from './_maps.js';
-import { isLodging, hasRealContent } from './sitemap.js';
+import { isLodging, hasRealContent, LIST_DESCRIPTION_LENGTH } from './sitemap.js';
 import { stockFor } from './_stock.js';
 import { sized } from './_preview.js';
 
@@ -85,7 +85,7 @@ async function placesNear(venue) {
     + `&longitude=gte.${venue.lng - dLng}&longitude=lte.${venue.lng + dLng}`
     + '&select=id,name,category,description,cover_image_url,latitude,longitude,city:cities(country_code)&limit=200');
   return rows
-    .filter((p) => p.id && !isLodging(p) && hasRealContent(p))
+    .filter((p) => p.id && !isLodging(p) && hasRealContent(p, LIST_DESCRIPTION_LENGTH))
     .map((p) => ({ ...p, km: distanceKm(venue.lat, venue.lng, p.latitude, p.longitude) }))
     .filter((p) => p.km <= km && p.km > 0.02)
     .sort((a, b) => a.km - b.km)

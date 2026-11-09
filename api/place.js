@@ -28,6 +28,7 @@ import { MAPS_HEAD, PAGE_SCRIPT, hasPin } from './_maps.js';
 import { CSS, HEAD_FONTS, esc, tzFor, hoursInfo, km, placeBody, missingBody } from './_placepage.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
 import { creditFor } from './_preview.js';
+import { hasRealContent } from './sitemap.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // Publishable key: public by design, the same one place.html already ships.
@@ -397,7 +398,7 @@ export default async function handler(req, res) {
         // mirrors the sitemap's gate, and it is the half that matters: the
         // sitemap merely omits a thin page, whereas a crawler that reaches one
         // by following a link will index it unless the page says otherwise.
-        indexable = text.length >= 60 && !/^highly rated .+ nearby\.?$/i.test(text);
+        indexable = hasRealContent({ description: text }); // W-217 (3): the sitemap's own gate
       }
     } catch {
       // Fall through to the not-found page: a place page must never 500.

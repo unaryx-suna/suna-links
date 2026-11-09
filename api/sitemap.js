@@ -188,11 +188,18 @@ const LODGING_WORDS = new Set([
  * correctness rule, and it is meant to be revisited.
  */
 const FILLER_DESCRIPTION = /^highly rated .+ nearby\.?$/i;
-const MIN_DESCRIPTION_LENGTH = 60;
+// W-217 (3), Brian 9 Nov 19:1x ("2916"): 60 → 120. Search Console had
+// 3,960 place pages discovered-not-indexed and 144 crawled-not-indexed: a
+// 60-character line is too thin to rank. 5,612 places → 2,916 at the time.
+// place.js's `indexable` calls this same function, so the two never drift.
+const MIN_DESCRIPTION_LENGTH = 120;
 
-export function hasRealContent(row) {
-  const description = (row.description || '').trim();
-  if (description.length < MIN_DESCRIPTION_LENGTH) return false;
+// `min` lets a page that only LISTS places (venue.js's Worth a walk) keep its
+// own, lower bar: indexing a place page and showing a name are not the same.
+export const LIST_DESCRIPTION_LENGTH = 60;
+export function hasRealContent(row, min = MIN_DESCRIPTION_LENGTH) {
+  const description = (row.description || '').trim().replace(/\s+/g, ' ');
+  if (description.length < min) return false;
   if (FILLER_DESCRIPTION.test(description)) return false;
   return true;
 }
