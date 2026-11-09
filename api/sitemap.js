@@ -188,11 +188,13 @@ const LODGING_WORDS = new Set([
  * correctness rule, and it is meant to be revisited.
  */
 const FILLER_DESCRIPTION = /^highly rated .+ nearby\.?$/i;
-// W-217 (3), Brian 9 Nov 19:1x ("2916"): 60 → 120. Search Console had
+// W-217 (3), Brian 9 Nov 19:5x ("at 100"): 60 → 100. Search Console had
 // 3,960 place pages discovered-not-indexed and 144 crawled-not-indexed: a
-// 60-character line is too thin to rank. 5,612 places → 2,916 at the time.
+// 60-character line is too thin to rank. 100, not 120, keeps KL's best known
+// (Petronas Twin Towers 113, Batu Caves 107, Central Market 119): 5,612
+// places → 3,678 at the time (KL 420 → 203).
 // place.js's `indexable` calls this same function, so the two never drift.
-const MIN_DESCRIPTION_LENGTH = 120;
+const MIN_DESCRIPTION_LENGTH = 100;
 
 // `min` lets a page that only LISTS places (venue.js's Worth a walk) keep its
 // own, lower bar: indexing a place page and showing a name are not the same.

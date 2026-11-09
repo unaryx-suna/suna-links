@@ -1,5 +1,5 @@
-// W-217 (3), Brian 9 Nov ("2916"): a place page is in the sitemap and asks to
-// be indexed only with a description of 120+ characters (not filler); the
+// W-217 (3), Brian 9 Nov ("at 100"): a place page is in the sitemap and asks to
+// be indexed only with a description of 100+ characters (not filler); the
 // venue page's Worth a walk list keeps its 60. `node w217-place.test.mjs`.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,14 +9,14 @@ let bad = 0;
 const t = (name, fn) => { try { fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
 const d = (n) => ({ description: 'x'.repeat(n) });
 
-t('120 characters is the bar; 119 is out; filler is out at any length', () => {
-  assert.equal(hasRealContent(d(120)), true);
-  assert.equal(hasRealContent(d(119)), false);
+t('100 characters is the bar; 99 is out; filler is out at any length', () => {
+  assert.equal(hasRealContent(d(100)), true);
+  assert.equal(hasRealContent(d(99)), false);
   assert.equal(hasRealContent({ description: `Highly rated ${'Pub '.repeat(40)}nearby.` }), false);
   assert.equal(hasRealContent({ description: null }), false);
 });
 t('whitespace runs count once, as the page measures them', () => {
-  assert.equal(hasRealContent({ description: `${'a'.repeat(60)}          ${'b'.repeat(58)}` }), false);
+  assert.equal(hasRealContent({ description: `${'a'.repeat(50)}          ${'b'.repeat(48)}` }), false);
 });
 t('a list (Worth a walk) keeps 60', () => {
   assert.equal(LIST_DESCRIPTION_LENGTH, 60);
