@@ -276,11 +276,11 @@ await t('/e/: More on this week: 3 nearest in 5 km, never this one, rows link to
   assert.deepEqual(ids, ['2']);
   state.events = [];
 });
-await t('/e/: the query is one approved row by id', async () => {
+await t('/e/: the query is one row by id: approved, or over (completed / cancelled, W-217)', async () => {
   calls.length = 0;
   await render(event, `/e/${U(4)}`);
   const q = calls.find((c) => c.includes('/rest/v1/world_events'));
-  assert.match(q, new RegExp(`id=eq\\.${U(4)}&status=eq\\.approved&`));
+  assert.match(q, new RegExp(`id=eq\\.${U(4)}&status=in\\.\\(approved,completed,cancelled\\)&`));
 });
 await t('/e/: an ended event (Ops W4): Ended pill, the state card, on this week instead, noindex, no buttons', async () => {
   state.eventRow = ev(U(5), 0, { start_time: iso(now - 5 * H), end_time: iso(now - H) });

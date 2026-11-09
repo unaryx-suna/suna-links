@@ -36,7 +36,11 @@ export function eventId(rawURL) {
 }
 
 async function loadEvent(id) {
-  const rows = await rest(`world_events?id=eq.${id}&status=eq.approved&select=${EVENT_SELECT}&limit=1`);
+  // W-217 (1): events-cleanup marks an ended event `completed` (or it was
+  // `cancelled`) and keeps the row, so those are read too and get the W4/W5
+  // page. The public read policy decides what this key sees: today only
+  // `approved`, so until the policy covers the other two this is unchanged.
+  const rows = await rest(`world_events?id=eq.${id}&status=in.(approved,completed,cancelled)&select=${EVENT_SELECT},status&limit=1`);
   const e = rows[0] || null;
   // WHERE is the venue, never just the city (W-48). Every live event has
   // venue text today; when one doesn't, the place it's linked to names it.
@@ -234,8 +238,16 @@ export default async function handler(req, res) {
   const id = eventId(req.url);
   let e = null, failed = false;
   try { e = id ? await loadEvent(id) : null; } catch { failed = true; /* the honest page below, never a 500 */ }
+  // W-217 (1): a row that is over (completed / cancelled) is shown exactly as
+  // its tombstone would be: W4 "ended" or W5 "cancelled", noindex, and 410 for
+  // crawlers 90 days past its end.
+  let over = null;
+  if (e && e.status && e.status !== 'approved') {
+    over = { ...e, cancelled: e.status === 'cancelled', tombstone: false };
+    e = null;
+  }
   // W-85: cleared out by events-cleanup? Its tombstone keeps the page.
-  const tomb = !e && id ? await loadTombstone(id) : null;
+  const tomb = over || (!e && id ? await loadTombstone(id) : null);
   if (tomb) {
     const gone = pastGone(tomb);
     if (gone && CRAWLER.test(String(req.headers['user-agent'] || ''))) {
