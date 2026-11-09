@@ -40,6 +40,11 @@ Disallow: /field.html
 Disallow: /lab
 Disallow: /lab.html
 
+# W-217 (Search Console): "Save in Suna" links (`/e/<id>?action=save&src=…`)
+# hand off to the app; they are not pages. The event page itself, `/e/<id>`
+# with no `action`, stays crawlable.
+Disallow: /*?action=
+
 # Apple's association file. Fetched directly by iOS, never by a search crawler,
 # and not a page.
 Disallow: /.well-known/
