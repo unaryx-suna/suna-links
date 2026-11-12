@@ -126,14 +126,19 @@ export default async function handler(req, res) {
     // `is_hidden` is respected because it is the existing "do not surface this"
     // flag. Lodging is excluded to match PlaceFilter — the product rule is that
     // hotels and rentals are never surfaced, and a public page IS surfacing.
-    const places = await fetchAll(
-      'landmarks?select=id,name,category,description,updated_at'
-      + '&is_hidden=eq.false'
-      + '&name=not.is.null'
-      + '&order=updated_at.desc'
-    );
+    // W-223: published tips count toward the gate too. ONE read of the tips for
+    // the whole sitemap (a few pages), alongside the places, never one per place.
+    const [places, tips] = await Promise.all([
+      fetchAll(
+        'landmarks?select=id,name,category,description,updated_at'
+        + '&is_hidden=eq.false'
+        + '&name=not.is.null'
+        + '&order=updated_at.desc'
+      ),
+      publishedTips(),
+    ]);
     for (const row of places) {
-      if (!row.id || isLodging(row) || !hasRealContent(row)) continue;
+      if (!row.id || isLodging(row) || !hasRealContent(row, undefined, tips.get(String(row.id).toLowerCase()))) continue;
       entries.push(urlEntry({
         loc: `/place/${row.id}`,
         lastmod: row.updated_at,
@@ -199,11 +204,38 @@ const MIN_DESCRIPTION_LENGTH = 100;
 // `min` lets a page that only LISTS places (venue.js's Worth a walk) keep its
 // own, lower bar: indexing a place page and showing a name are not the same.
 export const LIST_DESCRIPTION_LENGTH = 60;
-export function hasRealContent(row, min = MIN_DESCRIPTION_LENGTH) {
-  const description = (row.description || '').trim().replace(/\s+/g, ' ');
-  if (description.length < min) return false;
-  if (FILLER_DESCRIPTION.test(description)) return false;
-  return true;
+// W-223 (Brian 12 Nov: "okay" to "count tips"): `tips` are the place's
+// published place_hints (strings, or rows with a `body`). Their text counts
+// with the description toward `min`: Search Console had 60 real places with
+// 79–96-character descriptions plus a tip marked noindex. A filler
+// description counts as 0, with or without tips. A caller that passes no tips
+// (venue.js's list) gets the description-only rule it always had.
+const squeeze = (v) => String(v || '').trim().replace(/\s+/g, ' ');
+export function hasRealContent(row, min = MIN_DESCRIPTION_LENGTH, tips = []) {
+  const description = squeeze(row.description);
+  let length = FILLER_DESCRIPTION.test(description) ? 0 : description.length;
+  for (const t of tips || []) length += squeeze(t && typeof t === 'object' ? t.body : t).length;
+  return length >= min;
+}
+
+/** The filter both readers use, so the page and the sitemap count the same tips. */
+export const PUBLISHED_TIPS = 'status=eq.published';
+/**
+ * Every published tip, grouped by place: Map<landmark id, body[]>. One paged
+ * read for the whole sitemap. If it fails or comes back short, the places it
+ * missed are judged on their description alone, as before W-223.
+ */
+export async function publishedTips() {
+  const byPlace = new Map();
+  let rows = [];
+  try { rows = await fetchAll(`place_hints?select=landmark_id,body&${PUBLISHED_TIPS}&order=id`); } catch { /* description only */ }
+  for (const r of rows) {
+    if (!r || !r.landmark_id || !r.body) continue;
+    const k = String(r.landmark_id).toLowerCase();
+    if (!byPlace.has(k)) byPlace.set(k, []);
+    byPlace.get(k).push(r.body);
+  }
+  return byPlace;
 }
 
 export function isLodging(row) {
