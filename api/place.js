@@ -388,19 +388,19 @@ export default async function handler(req, res) {
           imageResolves(candidate),
           pinned ? eventsNear(Number(place.latitude), Number(place.longitude), 1, now) : [],
           pinned ? walksNear(id, Number(place.latitude), Number(place.longitude)) : [],
-          // W-223: this place's published tips, for the index gate below.
-          rest(`place_hints?landmark_id=eq.${encodeURIComponent(id)}&${PUBLISHED_TIPS}&select=body`),
+          // W-223: this place's published tips: shown on the page, and counted by the index gate below.
+          rest(`place_hints?landmark_id=eq.${encodeURIComponent(id)}&${PUBLISHED_TIPS}&select=body,attribution&order=id`),
         ]);
         const ownCover = ok ? candidate : null;
         image = ownCover || (stock ? stock.url : null);
         const tz = tzFor(place.city && place.city.country_code, place.longitude);
-        resolved = { place, ownCover, cityName, tz, events, walks, hours: hoursInfo(place.operating_hours, tz, now) };
+        resolved = { place, ownCover, cityName, tz, events, walks, tips: Array.isArray(tips) ? tips : [], hours: hoursInfo(place.operating_hours, tz, now) };
 
         // Only a page with real content of its own asks to be indexed. This
         // mirrors the sitemap's gate, and it is the half that matters: the
         // sitemap merely omits a thin page, whereas a crawler that reaches one
         // by following a link will index it unless the page says otherwise.
-        indexable = hasRealContent({ description: text }, undefined, tips); // W-217 (3) + W-223: the sitemap's own gate, tips included
+        indexable = hasRealContent({ description: text }, undefined, resolved.tips); // W-217 (3) + W-223: the sitemap's own gate, with the tips the page prints
       }
     } catch {
       // Fall through to the not-found page: a place page must never 500.
@@ -449,7 +449,7 @@ export default async function handler(req, res) {
   if (resolved) {
     body = placeBody({
       place: resolved.place, cityName: resolved.cityName, tz: resolved.tz, hours: resolved.hours,
-      cover: resolved.ownCover || image, events: resolved.events, walks: resolved.walks,
+      cover: resolved.ownCover || image, events: resolved.events, walks: resolved.walks, tips: resolved.tips,
       store, scheme: `suna://place?id=${encodeURIComponent(id)}`, offer, booking, now,
     });
   } else {

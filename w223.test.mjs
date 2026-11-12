@@ -41,9 +41,32 @@ await t('one rule: the page calls the same function with the same tips filter (p
   const place = readFileSync(new URL('./api/place.js', import.meta.url), 'utf8');
   assert.equal(PUBLISHED_TIPS, 'status=eq.published');
   assert.match(place, /import \{ hasRealContent, PUBLISHED_TIPS \} from '\.\/sitemap\.js';/);
-  assert.match(place, /rest\(`place_hints\?landmark_id=eq\.\$\{encodeURIComponent\(id\)\}&\$\{PUBLISHED_TIPS\}&select=body`\)/);
-  assert.match(place, /indexable = hasRealContent\(\{ description: text \}, undefined, tips\)/);
+  assert.match(place, /rest\(`place_hints\?landmark_id=eq\.\$\{encodeURIComponent\(id\)\}&\$\{PUBLISHED_TIPS\}&select=body,attribution&order=id`\)/);
+  assert.match(place, /indexable = hasRealContent\(\{ description: text \}, undefined, resolved\.tips\)/);
+  assert.match(place, /tips: resolved\.tips,/);   // the same rows go to the page body
   assert.equal((place.match(/hasRealContent\(/g) || []).length, 1);
+});
+
+// The page prints what the gate counts (Brian 12 Nov: "Show tips, then go live").
+const { tipsBlock, placeBody } = await import('./api/_placepage.js');
+await t('the Tip block: every published tip, escaped, with its attribution once; "Tips" for several; nothing when there are none', () => {
+  const one = tipsBlock([{ body: "It's a small room, so arrive  early <b>.", attribution: "Suna's Advice" }]);
+  assert.equal(one, '<section class="tips" aria-label="Tip"><p class="kick">Tip</p><ul><li>It&#39;s a small room, so arrive early &lt;b&gt;.</li></ul><small>Suna&#39;s Advice</small></section>');
+  const two = tipsBlock([{ body: 'Order the laksa.', attribution: "Suna's Advice" }, { body: 'Go before noon.', attribution: null }, { body: '  ' }]);
+  assert.match(two, /aria-label="Tips"><p class="kick">Tips<\/p><ul><li>Order the laksa\.<\/li><li>Go before noon\.<\/li><\/ul><small>Suna&#39;s Advice<\/small>/);
+  assert.equal(tipsBlock([]), ''); assert.equal(tipsBlock(undefined), ''); assert.equal(tipsBlock([{ body: null }]), '');
+});
+await t('on the page: the block sits under the hero, before the chips and the Save button; a place with no tips has no block', () => {
+  const d = { place: { name: 'Sister Bella', category: 'Bar', description: 'Small cocktail bar.', latitude: null, longitude: null }, cityName: 'Melbourne', tz: 'Australia/Melbourne', cover: null, hours: null, events: [], walks: [], store: 'https://apps.apple.com/x', scheme: 'suna://place?id=x', offer: null, booking: null, now: Date.now() };
+  const withTip = placeBody({ ...d, tips: [{ body: 'Arrive early.', attribution: "Suna's Advice" }] });
+  assert.ok(withTip.indexOf('<div class="pad">') < withTip.indexOf('class="tips"') && withTip.indexOf('class="tips"') < withTip.indexOf('class="btns"'));
+  // Three or more: the same block, below the buttons, so Save in Suna stays on a phone's first screen.
+  const many = placeBody({ ...d, tips: [{ body: 'One.' }, { body: 'Two.' }, { body: 'Three.' }] });
+  assert.ok(many.indexOf('class="btns"') < many.indexOf('class="tips"'));
+  assert.equal(many.split('class="tips"').length - 1, 1);
+  assert.equal(withTip.split('class="tips"').length - 1, 1);
+  assert.ok(!placeBody({ ...d, tips: [] }).includes('class="tips"'));
+  assert.ok(!placeBody(d).includes('class="tips"'));
 });
 
 // A stub database: 2,300 tips over 3 pages, 4 places.
@@ -101,6 +124,7 @@ if (process.env.LIVE) {
     await t(`${name}: no robots meta, and in the sitemap`, async () => {
       const h = await (await fetch(`${HOST}/place/${id}?w223=${Date.now()}`)).text();
       assert.doesNotMatch(h, /<meta name="robots"/);
+      assert.match(h, /<section class="tips" aria-label="Tips?"><p class="kick">Tips?<\/p><ul><li>/);
       assert.ok(xml.includes(`/place/${id}</loc>`), 'in the sitemap');
     });
   }

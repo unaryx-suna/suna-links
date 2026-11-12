@@ -25,7 +25,7 @@ t('a list (Worth a walk) keeps 60', () => {
 });
 t('the place page and venue page call the same function (no second copy of the rule)', () => {
   const place = readFileSync(new URL('./api/place.js', import.meta.url), 'utf8');
-  assert.match(place, /indexable = hasRealContent\(\{ description: text \}, undefined, tips\)/);   // W-223: with the place's tips
+  assert.match(place, /indexable = hasRealContent\(\{ description: text \}, undefined, resolved\.tips\)/);   // W-223: with the place's tips
   assert.doesNotMatch(place, /text\.length >= 60/);
   assert.match(readFileSync(new URL('./api/venue.js', import.meta.url), 'utf8'), /hasRealContent\(p, LIST_DESCRIPTION_LENGTH\)/);
 });

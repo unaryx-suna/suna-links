@@ -169,6 +169,11 @@ h1{font-size:34px;line-height:1.05;font-weight:800;margin:8px 0;letter-spacing:-
 .btn.s,.btn-outline{border:1px solid #3a403c;color:var(--text);background:none}
 .hint{font-size:13.5px;color:var(--muted);margin:10px 0 0;line-height:1.4;display:flex;gap:8px;align-items:flex-start}
 .hint svg{flex:none;margin-top:1px}
+.tips{margin:14px 0 0;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.tips ul{list-style:none;margin:6px 0 0;padding:0}
+.tips li{font-size:16px;line-height:1.4;color:var(--text);padding:6px 0;border-bottom:1px solid var(--line)}
+.tips li:last-child{border-bottom:0;padding-bottom:0}
+.tips small{display:block;margin:6px 0 0;font-size:13px;color:var(--muted)}
 .offer{margin:14px 0 0;padding:10px 14px;border-radius:12px;background:rgba(246,203,148,.12);color:var(--sand);font-size:15px;line-height:1.4}
 .book{margin:12px 0 0;font-size:14px}
 .book a{color:var(--sand);font-weight:700;text-decoration:none}
@@ -257,8 +262,21 @@ export const categoryWords = (c) => CATEGORY_WORDS[c] || String(c || '');
 
 /**
  * The place page (design screen 1).
- * d = { place, cityName, tz, cover, hours, events, walks, store, scheme, offer, booking, now }
+ * d = { place, cityName, tz, cover, hours, events, walks, tips, store, scheme, offer, booking, now }
  */
+/**
+ * W-223 (Brian 12 Nov: "Show tips, then go live"): the place's published tips,
+ * every one of them, under the description. The index gate counts these same
+ * words (sitemap.js hasRealContent), so a page is never indexable for text it
+ * doesn't print. tips = [{ body, attribution }].
+ */
+export function tipsBlock(tips) {
+  const list = (tips || []).map((t) => ({ body: String((t && t.body) || '').trim().replace(/\s+/g, ' '), by: String((t && t.attribution) || '').trim() })).filter((t) => t.body);
+  if (!list.length) return '';
+  const by = [...new Set(list.map((t) => t.by).filter(Boolean))].join(' · ');
+  return `<section class="tips" aria-label="${list.length > 1 ? 'Tips' : 'Tip'}"><p class="kick">${list.length > 1 ? 'Tips' : 'Tip'}</p><ul>${list.map((t) => `<li>${esc(t.body)}</li>`).join('')}</ul>${by ? `<small>${esc(by)}</small>` : ''}</section>`;
+}
+
 export function placeBody(d) {
   const p = d.place;
   const kicker = [categoryWords(p.category), d.cityName].filter(Boolean).join(' · ');
@@ -269,6 +287,11 @@ export function placeBody(d) {
     nearest && nearest.km <= 0.5 ? `<span class="chip">${esc(away(nearest.km))} from ${esc(nearest.name)}</span>` : '',
   ].filter(Boolean).join('');
   const dir = hasPin(p.latitude, p.longitude) ? directions(p.latitude, p.longitude, p.name, 'btn s') : '';
+  // W-223: one or two tips sit right under the description (as Brian approved).
+  // Three or more would push Save in Suna off a phone's first screen, so the
+  // same block goes just below the buttons instead.
+  const tips = tipsBlock(d.tips);
+  const tipsHigh = (d.tips || []).filter((t) => t && String(t.body || '').trim()).length <= 2;
   const good = [
     d.hours ? `<div class="row"><span class="k">Hours</span><span><b>${esc(d.hours.summary)}</b><details><summary>See the week</summary><ul>${d.hours.week.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></details></span></div>` : '',
     p.address ? `<div class="row"><span class="k">Where</span><span>${esc(p.address)}</span></div>` : '',
@@ -279,9 +302,11 @@ export function placeBody(d) {
 ${kicker ? `<p class="kick">${esc(kicker)}</p>` : ''}<h1>${esc(p.name)}</h1>
 ${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>
 <div class="pad">
+${tipsHigh ? tips : ''}
 ${chips ? `<div class="chips">${chips}</div>` : ''}
 <div class="btns">${saveInSuna(d.scheme, d.store, 'btn p', `${BOOKMARK} Save in Suna`)}${dir}</div>
 <p class="hint">${BELL}<span>Save it, and Suna reminds you when you're walking past.</span></p>
+${tipsHigh ? '' : tips}
 ${d.offer ? `<p class="offer">${esc(d.offer)}</p>` : ''}
 ${d.booking ? `<p class="book"><a href="${esc(d.booking)}" target="_blank" rel="sponsored noopener">Book tickets ↗</a><small>Suna may earn a commission</small></p>` : ''}
 ${good ? `<h2>Good to know</h2><div class="card">${good}</div>` : ''}
