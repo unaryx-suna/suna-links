@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.unaryx.suna",
       "sha256_cert_fingerprints": [
-        "C4:5A:11:DB:FF:55:B0:39:14:48:86:84:C8:9F:E5:05:D0:6C:0A:82:EE:84:82:8B:A0:B1:A2:26:11:03:E1:35"
+        "C4:5A:11:DB:FF:55:B0:39:14:48:86:84:C8:9F:E5:05:D0:6C:0A:82:EE:84:82:8B:A0:B1:A2:26:11:03:E1:35",
+        "B2:0A:21:DC:5E:8B:A2:6F:87:F9:C8:BB:DC:24:8E:A5:94:63:5A:D3:B5:38:7D:1D:43:E1:BF:00:9A:D6:3C:2C"
       ]
     }
   }

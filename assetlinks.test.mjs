@@ -9,14 +9,18 @@ import { readFileSync } from 'node:fs';
 let bad = 0;
 const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
 
-// The Android session's JSON (Team Tracker `dex-and-010-web-links-0411`): the upload key.
-// Add Play App Signing's SHA-256 here once the app is on Play.
+// The Android session's JSON (Team Tracker `dex-and-010-web-links-0411`): the upload key
+// (Firebase builds), then Play App Signing's key (W-220, Android A-120; Play Console ›
+// App signing, build 489). A Play-installed app is signed with the second one.
 const EXPECTED = [{
   relation: ['delegate_permission/common.handle_all_urls'],
   target: {
     namespace: 'android_app',
     package_name: 'com.unaryx.suna',
-    sha256_cert_fingerprints: ['C4:5A:11:DB:FF:55:B0:39:14:48:86:84:C8:9F:E5:05:D0:6C:0A:82:EE:84:82:8B:A0:B1:A2:26:11:03:E1:35'],
+    sha256_cert_fingerprints: [
+      'C4:5A:11:DB:FF:55:B0:39:14:48:86:84:C8:9F:E5:05:D0:6C:0A:82:EE:84:82:8B:A0:B1:A2:26:11:03:E1:35',
+      'B2:0A:21:DC:5E:8B:A2:6F:87:F9:C8:BB:DC:24:8E:A5:94:63:5A:D3:B5:38:7D:1D:43:E1:BF:00:9A:D6:3C:2C',
+    ],
   },
 }];
 
