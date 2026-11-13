@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const SLUG = 'mmutgrh6sn';
 const PLACE = 'b6f1859e-b685-495e-8482-41180f8d252f';
 let found = true;
+const realFetch = globalThis.fetch; // the LIVE checks read the real site
 globalThis.fetch = async (url) => {
   const u = String(url);
   const ok = (b) => ({ ok: true, status: 200, json: async () => b, text: async () => JSON.stringify(b), headers: new Map() });
@@ -97,7 +98,7 @@ await t('/place/: the same dashes are read (name--8hex, em dash, en dash, encode
 
 if (process.env.LIVE) {
   const B = 'https://app.unaryx.com';
-  const head = async (p) => { const r = await fetch(`${B}${p}`, { redirect: 'manual' }); return { code: r.status, to: r.headers.get('location'), body: r.status === 200 ? await r.text() : '' }; };
+  const head = async (p) => { const r = await realFetch(`${B}${p}`, { redirect: 'manual' }); return { code: r.status, to: r.headers.get('location'), body: r.status === 200 ? await r.text() : '' }; };
   await t('LIVE: Brian\'s em-dash link 301s to the canonical one, which is the real page', async () => {
     const r = await head(`/i/chiang-mai%E2%80%94${SLUG}?via=suna_qa`);
     assert.equal(r.code, 301);
