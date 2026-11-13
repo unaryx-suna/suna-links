@@ -24,6 +24,7 @@
 // would change what that number means without anyone deciding to. If place
 // views are worth counting, they get their own decision and their own rows.
 
+import { segmentAfter, tailOf } from './_slug.js';
 import { MAPS_HEAD, PAGE_SCRIPT, hasPin } from './_maps.js';
 import { CSS, HEAD_FONTS, esc, tzFor, hoursInfo, km, placeBody, missingBody } from './_placepage.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
@@ -45,9 +46,8 @@ const PUBLISHABLE_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
  * that is neither shape cannot match a row, so it costs no round trip.
  */
 function placeRefFrom(pathname) {
-  const segment = (pathname.split('/place/')[1] || '').split('/')[0].split('?')[0];
-  const cut = segment.lastIndexOf('--');
-  const tail = (cut < 0 ? segment : segment.slice(cut + 2)).toLowerCase();
+  // W-227: `--` may arrive as an em or en dash, typed or percent-encoded.
+  const tail = tailOf(segmentAfter(pathname, 'place')).toLowerCase();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tail)) return { uuid: tail };
   if (/^[0-9a-f]{8}$/.test(tail)) return { short: tail };
   return null;

@@ -42,7 +42,7 @@ async function render(answerStops) {
   };
   const { default: handler } = await import('./api/itinerary.js');
   let html = '';
-  await handler({ url: '/i/da-nang--30b910089c', headers: { host: 'app.unaryx.com' } },
+  await handler({ url: '/i/da-nang-hoi-an-in-4-days--30b910089c', headers: { host: 'app.unaryx.com' } },
     { setHeader() { return this; }, status() { return this; }, send(b) { html = b; return this; }, end() {} });
   return { html, asked };
 }

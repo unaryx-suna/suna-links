@@ -236,7 +236,9 @@
       // Links now read /i/old-kl-on-foot--cz2fcegzfk — the readable part is
       // decoration and the real slug is whatever follows the last "--". Bare
       // slugs still work, so links issued before this keep resolving.
-      var slug = raw.indexOf('--') === -1 ? raw : raw.split('--').pop();
+      // W-227: "--" may arrive as an em or en dash (phones tidy it).
+      try { raw = decodeURIComponent(raw); } catch (e) {}
+      var slug = raw.split(/--|[\u2014\u2013]/).pop().replace(/^-+/, '') || raw;
       var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
       // Set by api/itinerary.js when it rendered the itinerary itself.
       var preview = document.body.getAttribute('data-preview') === '1';

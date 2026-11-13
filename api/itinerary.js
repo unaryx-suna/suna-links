@@ -14,6 +14,7 @@
 // cover, the byline and every stop (api/_preview.js). A private, draft or
 // missing slug still gets the generic page exactly as before.
 
+import { segmentAfter, tailOf, decodeSegment, hasLongDash, withHyphens } from './_slug.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
@@ -45,12 +46,35 @@ function readShell() {
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 
-/** The real slug from either link form: `nice-name--ab12cd34ef` or `ab12cd34ef`. */
+/** The real slug from any link form: `nice-name--ab12cd34ef`, the same with a long dash (W-227), or `ab12cd34ef`. */
 function slugFrom(pathname) {
-  const raw = decodeURIComponent((pathname.split('/i/')[1] || '').split('/')[0].split('?')[0]);
-  if (!raw.includes('--')) return raw;
-  const tail = raw.split('--').pop();
-  return tail || raw;
+  return tailOf(segmentAfter(pathname, 'i'));
+}
+
+/**
+ * W-227: where a request that isn't the canonical spelling goes, or null.
+ *
+ * `/i/<slug>`, an old name's prefix, `Chiang-Mai--<slug>` and the long-dash
+ * forms all 301 to the one address the page calls canonical, with the query
+ * kept (`via`, `ct`, `ctx`; never the rewrite's own `path`). An itinerary we
+ * could not load has no canonical to go to: only a long dash is put back to
+ * `--`, so the page's script and the app read a link they understand.
+ */
+export function redirectFor(rawURL, origin, canonical, found) {
+  const parsed = new URL(rawURL || '/', origin);
+  const segment = segmentAfter(parsed.pathname, 'i');
+  if (!segment) return null;
+  let target = null;
+  if (found) {
+    const want = decodeSegment(new URL(canonical).pathname.slice(3));
+    if (segment !== want) target = new URL(canonical).pathname;
+  } else if (hasLongDash(segment)) {
+    target = `/i/${encodeURIComponent(withHyphens(segment))}`;
+  }
+  if (!target) return null;
+  parsed.searchParams.delete('path');
+  const query = parsed.searchParams.toString();
+  return `${target}${query ? `?${query}` : ''}`;
 }
 
 function escapeHtml(value) {
@@ -93,20 +117,6 @@ async function imageResolves(url) {
   } catch {
     return false;
   }
-}
-
-/**
- * The canonical URL for this request, without Vercel's rewrite artefacts.
- *
- * The `/i/:path*` rewrite appends its captured group to the query string, so
- * `req.url` arrives as `/i/old-kl--ab12?via=x&path=old-kl--ab12` and og:url was
- * advertising that `path=` param as part of the canonical address. Rebuilt from
- * the pathname plus the params the SHARE LINK actually carries.
- */
-function canonicalURL(origin, rawURL) {
-  const parsed = new URL(rawURL || '/', origin);
-  parsed.searchParams.delete('path');
-  return parsed.toString();
 }
 
 /**
@@ -230,7 +240,20 @@ export default async function handler(req, res) {
   }
 
   const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' ? '' : rawName);
-  const shareURL = canonicalURL(origin, req.url);
+  // W-227: any other spelling of this address goes to the canonical one, so
+  // one itinerary is one URL and a mangled link still lands on the real page.
+  // Before the open is recorded: the request the redirect leads to records it.
+  const elsewhere = redirectFor(req.url, origin, canonical, !none && !!body);
+  if (elsewhere) {
+    res.status(301)
+      .setHeader('Location', elsewhere)
+      .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600')
+      .end();
+    return;
+  }
+  // W-227: og:url is the canonical address too (it used to be the address as
+  // requested, so a bare /i/<slug> advertised a second URL for one page).
+  const shareURL = canonical;
   const tags = [
     `<title>${escapeHtml(title)}</title>`,
     // Consolidates the two link forms. `/i/old-kl-on-foot--cz2fcegzfk` and the
