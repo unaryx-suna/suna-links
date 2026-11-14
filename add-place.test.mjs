@@ -163,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace', 'claims', 'review', 'payments', 'door'\]\) \{/); // W-202 added Claims after it
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v46');
+  assert.equal(build, 'field-v47');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
@@ -271,7 +271,7 @@ await t('W-91 over 100 km: blocked as before; non-admins keep the 100 km rule', 
 await t('W-91 BUILD and the worker move together', () => {
   const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
   assert.equal(html.match(/const BUILD = '([^']+)'/)[1], sw.match(/const CACHE_VERSION = '([^']+)'/)[1]);
-  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v46');
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v47');
 });
 
 // ── W-96: the update tap, and what the name box may suggest ──

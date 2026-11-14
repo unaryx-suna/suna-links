@@ -1029,7 +1029,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v46';
+const BUILD = 'field-v47';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8646,12 +8646,12 @@ $('pane-claims').addEventListener('click', (e) => {
    is_admin against this session's token; nothing here is readable or
    writable by anyone else. */
 const TK_API = {
-  list: 'admin_ticket_list',            // () -> rows: id, event_id, event_name, status, pay_ref, name, amount_due, paid_via, claimed_paid_at, expires_at, paid_at, checked_in_at, proof_path
-  paid: 'mark_ticket_paid',             // (pay_ref, by)
-  release: 'release_ticket',            // (pay_ref, by)
-  refunded: 'mark_ticket_refunded',     // (pay_ref, by)
-  checkIn: 'check_in_ticket',           // (p_code: a ticket id or a reference) -> { ok, error?, name, event_name, status, checked_in_at, already }
-  proofBucket: 'ticket-proofs',
+  list: 'admin_event_tickets',          // (p_event_id null = every Suna-hosted event) -> rows: id, event_id, event_name, status, pay_ref, buyer_name, buyer_email, amount_due, paid_via, seat_no, claimed_paid_at, expires_at, paid_at, checked_in_at, proof_path
+  paid: 'mark_ticket_paid',             // (p_pay_ref, p_by): the server records admin:<id> whatever p_by says
+  release: 'release_ticket',            // (p_pay_ref, p_by)
+  refunded: 'mark_ticket_refunded',     // (p_pay_ref, p_by)
+  checkIn: 'check_in_ticket',           // (p_ticket: a ticket id or a reference) -> { buyer_name, event_name, status, seat_no, checked_in, already_used, checked_in_at }; an unknown one raises P0002
+  proofBucket: 'ticket-proofs',         // admins may sign a URL (I-604 d)
 };
 /* TICKETS-LOGIC-START */
 const TK_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -8688,41 +8688,46 @@ function tkCounts(rows, now) {
 }
 function tkMatches(t, find) {
   const f = String(find || '').trim().toLowerCase();
-  return !f || String(t.pay_ref || '').toLowerCase().includes(f) || String(t.name || '').toLowerCase().includes(f);
+  return !f || String(t.pay_ref || '').toLowerCase().includes(f) || String(t.buyer_name || '').toLowerCase().includes(f) || String(t.buyer_email || '').toLowerCase().includes(f);
 }
 /** One ticket on Payments. Buttons carry the reference, which is what the RPCs take. */
 function tkCard(t, now) {
   const s = tkState(t, now), ref = tkEsc(t.pay_ref || '');
   const tag = s === 'claimed' ? '<span class="cl-tag ok">Says paid ' + tkEsc(tkAgo(t.claimed_paid_at, now)) + '</span>'
     : s === 'pending' ? '<span class="cl-tag">Hold until ' + tkEsc(tkTime(t.expires_at)) + '</span>'
-    : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ' · ' + tkEsc(t.paid_via) : '') + '</span>' + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
+    : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ' · ' + tkEsc(t.paid_via) : '') + '</span>' + (t.seat_no ? '<span class="cl-tag">No. ' + tkEsc(('00' + t.seat_no).slice(-3)) + '</span>' : '') + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
     : '<span class="cl-tag red">' + (t.status === 'refunded' ? 'Refunded' : t.status === 'cancelled' ? 'Released' : 'Hold ran out') + '</span>';
   const actions = s === 'claimed' || s === 'pending'
     ? '<button type="button" class="primary" style="width:auto" data-tk="paid" data-ref="' + ref + '">Mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
     : s === 'paid' ? '<button type="button" class="ghost" data-tk="refunded" data-ref="' + ref + '">Mark refunded</button>' : '';
   const receipt = t.proof_path ? '<button type="button" class="ghost" data-tk="receipt" data-path="' + tkEsc(t.proof_path) + '">Receipt</button>' : '';
   return '<div class="card cl-card"><div class="cl-top"><b>' + (ref || 'No reference') + '</b><b>' + tkEsc(tkRM(t.amount_due)) + '</b></div>'
-    + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.name || 'No name') + '</span></div>'
+    + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.buyer_name || 'No name') + (t.buyer_email ? ' · ' + tkEsc(t.buyer_email) : '') + '</span></div>'
     + '<div class="cl-row"><span class="k">Event</span><span>' + tkEsc(t.event_name || '') + '</span></div>'
     + '<div class="cl-tags">' + tag + '</div>'
     + (actions || receipt ? '<div class="cl-actions">' + actions + receipt + '</div>' : '') + '</div>';
 }
-/** What the Door shows for check_in_ticket's answer: [class, headline, line]. */
+/**
+ * What the Door shows for check_in_ticket's answer: [class, headline, line].
+ * `r` is the function's row, or { error: 'not_found' | 'failed', message } when it raised.
+ */
 function tkDoorResult(r) {
   r = r || {};
-  const who = [r.name, r.event_name].filter(Boolean).join(' · ');
-  if (r.ok && r.already) return ['warn', 'Already checked in at ' + tkTime(r.checked_in_at), who];
-  if (r.ok) return ['ok', r.name || 'Checked in', 'Paid · checked in at ' + tkTime(r.checked_in_at) + (r.event_name ? ' · ' + r.event_name : '')];
-  if (r.error === 'not_paid') return ['no', 'Not paid', (who ? who + ' · ' : '') + 'This ticket is ' + (r.status || 'pending') + '. Don\'t let them in on it.'];
+  const who = [r.buyer_name, r.event_name].filter(Boolean).join(' · ');
+  const no = r.seat_no ? ' · No. ' + ('00' + r.seat_no).slice(-3) : '';
   if (r.error === 'not_found') return ['no', 'No such ticket', 'Check the reference, or scan again.'];
-  return ['no', 'Not checked in', r.message || 'That didn\'t work. Try again.'];
+  if (r.error) return ['no', 'Not checked in', r.message || 'That didn\'t work. Try again.'];
+  if (r.checked_in && r.already_used) return ['warn', 'Already checked in at ' + tkTime(r.checked_in_at), who + no];
+  if (r.checked_in) return ['ok', r.buyer_name || 'Checked in', 'Paid · checked in at ' + tkTime(r.checked_in_at) + (r.event_name ? ' · ' + r.event_name : '') + no];
+  if (r.status && r.status !== 'paid') return ['no', r.status === 'refunded' ? 'Refunded' : r.status === 'cancelled' ? 'Released' : 'Not paid', (who ? who + ' · ' : '') + 'This ticket is ' + r.status + '. Don\'t let them in on it.'];
+  return ['no', 'Not checked in', 'That didn\'t work. Try again.'];
 }
 /* TICKETS-LOGIC-END */
 
 let tkRows = [], tkBy = '';
 async function tkRpc(fn, args) {
   const { data, error } = await db.rpc(fn, args || {});
-  if (error) throw new Error(error.message || fn + ' failed');
+  if (error) { const e = new Error(error.message || fn + ' failed'); e.code = error.code; throw e; }
   return data;
 }
 function tkCountsHTML(c, door) {
@@ -8731,7 +8736,7 @@ function tkCountsHTML(c, door) {
 }
 async function loadTickets(render) {
   let rows;
-  try { rows = await tkRpc(TK_API.list); }
+  try { rows = await tkRpc(TK_API.list, { p_event_id: null }); }
   catch (e) {
     if (render === 'payments') { $('tk-note').hidden = false; $('tk-note').textContent = e.message || 'Could not load tickets.'; }
     if (render === 'door') $('dr-counts').innerHTML = '';
@@ -8775,7 +8780,7 @@ $('pane-payments').addEventListener('click', async (e) => {
   }
   b.disabled = true;
   if (!tkBy) tkBy = (profile && profile.username) || 'panel';
-  try { await tkRpc(TK_API[act], { pay_ref: b.dataset.ref, by: tkBy }); }
+  try { await tkRpc(TK_API[act], { p_pay_ref: b.dataset.ref, p_by: tkBy }); }
   catch (err) { b.disabled = false; tkNote(err.message); return; }
   tkNote({ paid: b.dataset.ref + ' marked paid. They get their ticket by push and email.', release: b.dataset.ref + ' released: the seat is free again.', refunded: b.dataset.ref + ' marked refunded.' }[act]);
   await loadTickets('payments');
@@ -8796,13 +8801,13 @@ async function drCheck(text) {
   if (drBusy) return;
   drBusy = true;
   let r;
-  try { r = await tkRpc(TK_API.checkIn, { p_code: code }); r = Array.isArray(r) ? r[0] : r; }
-  catch (e) { r = { ok: false, message: e.message }; }
+  try { r = await tkRpc(TK_API.checkIn, { p_ticket: code }); r = Array.isArray(r) ? r[0] : r; }
+  catch (e) { r = e.code === 'P0002' ? { error: 'not_found' } : e.code === '42501' ? { error: 'failed', message: 'Only an admin can check tickets in.' } : { error: 'failed' }; }
   drBusy = false;
   const [cls, head, line] = tkDoorResult(r);
   out.innerHTML = '<div class="tk-result ' + cls + '"><b>' + tkEsc(head) + '</b>' + tkEsc(line) + '</div>';
   if (navigator.vibrate) navigator.vibrate(cls === 'ok' ? 80 : [80, 60, 80]);
-  if (r && r.ok && !r.already) loadTickets('door').catch(() => {});
+  if (r && r.checked_in && !r.already_used) loadTickets('door').catch(() => {});
 }
 $('dr-form').onsubmit = (e) => { e.preventDefault(); const v = $('dr-code').value; $('dr-code').value = ''; drCheck(v); };
 // The camera's QR reader: the browser's own where it has one (Chrome on
