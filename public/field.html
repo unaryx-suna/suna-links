@@ -159,6 +159,20 @@
   .cl-form { margin-top: 12px; display: grid; gap: 8px; }
   .cl-form input { width: 100%; }
   .cl-h { font-size: 17px; margin: 26px 0 10px; }
+  /* W-228: Payments and Door (tickets to Suna-hosted events) */
+  .tk-counts { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .tk-counts span { border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,.08); font-size: 14px; }
+  .tk-counts b { font-size: 18px; margin-right: 4px; }
+  .tk-door-in { display: flex; gap: 8px; margin: 10px 0; }
+  .tk-door-in input { flex: 1; min-width: 0; text-transform: uppercase; }
+  .tk-door-in input::placeholder { text-transform: none; }
+  .tk-door-in button { width: auto; padding: 10px 16px; }
+  .tk-video { width: 100%; max-height: 46vh; border-radius: 16px; background: #000; object-fit: cover; }
+  .tk-result { border-radius: 16px; padding: 18px; margin: 12px 0; font-size: 16px; line-height: 1.4; }
+  .tk-result b { display: block; font-size: 24px; margin-bottom: 4px; }
+  .tk-result.ok { background: rgba(145,244,153,.16); color: #91f499; }
+  .tk-result.warn { background: rgba(246,203,148,.16); color: var(--sand); }
+  .tk-result.no { background: rgba(255,107,107,.14); color: var(--danger); }
   /* §1 — the photograph starts the capture, so it is the first thing on the
      screen rather than a field part way down the form. */
   /* §2 — equal weight, side by side. They stack on a narrow phone rather than
@@ -683,6 +697,44 @@
     <div id="cl-approved"></div>
   </div>
 
+  <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
+       Tickets to events Suna hosts, paid by DuitNow or bank transfer with a
+       reference. Brian checks his bank, finds the reference here and marks
+       it paid; that sends the member's push and email (iOS I-604's admin
+       RPCs, which check is_admin themselves). Card payments mark themselves.
+       Admin only; the menu row is shown to admins as a courtesy. -->
+  <div class="wrap" id="pane-payments" hidden>
+    <h1>Payments</h1>
+    <p class="sub">Find the reference from your bank statement, check the amount, then Mark paid. The member gets their ticket by push and email.</p>
+    <div class="tk-counts" id="tk-counts"></div>
+    <input id="tk-find" type="search" placeholder="Find a reference or a name" autocomplete="off" spellcheck="false">
+    <p class="sub" id="tk-note" hidden></p>
+    <h2 class="cl-h">Waiting for payment</h2>
+    <div id="tk-pending"></div>
+    <h2 class="cl-h">Paid</h2>
+    <div id="tk-paid"></div>
+    <h2 class="cl-h">Released and refunded</h2>
+    <div id="tk-closed"></div>
+  </div>
+
+  <!-- ════ Door (W-228) ══════════════════════════════════════════════════
+       At the door: scan a ticket's QR with the camera, or type its
+       reference. The server checks the ticket and sets checked_in_at once;
+       a second scan says when it was first used. Nothing is decided from
+       the picture. Admin only. -->
+  <div class="wrap" id="pane-door" hidden>
+    <h1>Door</h1>
+    <div class="tk-counts" id="dr-counts"></div>
+    <video class="tk-video" id="dr-video" playsinline muted hidden></video>
+    <button class="primary" type="button" id="dr-scan">Scan a ticket</button>
+    <p class="sub" id="dr-cam-note" hidden></p>
+    <form class="tk-door-in" id="dr-form">
+      <input id="dr-code" type="text" placeholder="Or type the reference" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="60">
+      <button class="ghost" type="submit">Check in</button>
+    </form>
+    <div id="dr-result" role="status" aria-live="assertive"></div>
+  </div>
+
   <!-- ════ Review places (W-214, Brian 7 Nov 20:4x: "ops or Axel should update the
        place's details"). Admin only. The places people use first (wave 1 saved,
        2 event venues, 3 public itinerary stops, 4 the rest), what each is missing,
@@ -891,6 +943,8 @@
     <button class="opt" id="menu-addplace" hidden>Add from Google Maps link<small>A tipped place, straight from Google Maps</small></button>
     <button class="opt" id="menu-review" hidden>Review places<small>Keep every place's details current, the most used first</small></button>
     <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
+    <button class="opt" id="menu-payments" hidden>Payments <span class="badge zero" id="payments-count">0</span><small>Tickets waiting to be marked paid</small></button>
+    <button class="opt" id="menu-door" hidden>Door<small>Scan tickets in at a Suna event</small></button>
     <button class="opt" id="menu-signout">Sign out</button>
     <p class="note" style="margin-top:14px">
       Build <span id="build-stamp" class="build">…</span>
@@ -975,7 +1029,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v44';
+const BUILD = 'field-v45';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5083,6 +5137,8 @@ function openMenu() {
   $('menu-addplace').hidden = !(profile && profile.is_admin);
   $('menu-claims').hidden = !(profile && profile.is_admin);
   $('menu-review').hidden = !(profile && profile.is_admin);
+  $('menu-payments').hidden = !(profile && profile.is_admin);
+  $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
     $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
@@ -5105,11 +5161,13 @@ $('menu-creators').onclick = () => { closeMenu(); switchTab('creators'); };
 $('menu-addplace').onclick = () => { closeMenu(); switchTab('addplace'); };
 $('menu-claims').onclick = () => { closeMenu(); switchTab('claims'); };
 $('menu-review').onclick = () => { closeMenu(); switchTab('review'); };
+$('menu-payments').onclick = () => { closeMenu(); switchTab('payments'); };
+$('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review']) {
+  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
@@ -5125,6 +5183,8 @@ function switchTab(which) {
   if (which === 'creators') loadCreators();
   if (which === 'claims') loadClaims(true);
   if (which === 'review') openReview();
+  if (which === 'payments') loadTickets('payments');
+  if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
 }
@@ -7407,6 +7467,8 @@ window.addEventListener('hashchange', () => {
   if (profile && profile.is_admin) {
     evOpenFromHash().catch(() => {});
     if (location.hash === '#claims') switchTab('claims');
+    if (location.hash === '#payments') switchTab('payments');
+    if (location.hash === '#door') switchTab('door');
   }
 });
 
@@ -8041,8 +8103,11 @@ async function loadProfile() {
   $('menu-addplace').hidden = !profile.is_admin;
   $('menu-claims').hidden = !profile.is_admin;
   $('menu-review').hidden = !profile.is_admin;
+  $('menu-payments').hidden = !profile.is_admin;
+  $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
+  if (profile.is_admin) loadTickets(null).catch(() => {});
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -8167,6 +8232,8 @@ async function showApp(s) {
     try { await evOpenFromHash(); } catch (e) {}
     // W-202: the "New claim to review" email links to #claims.
     if (location.hash === '#claims') switchTab('claims');
+    if (location.hash === '#payments') switchTab('payments');
+    if (location.hash === '#door') switchTab('door');
   }
 }
 
@@ -8572,6 +8639,194 @@ $('pane-claims').addEventListener('click', (e) => {
   else if (b.dataset.clGo) clGo(b.dataset.id, b.dataset.clGo);
   else if (b.dataset.clCancel) $('cl-form-' + b.dataset.clCancel).innerHTML = '';
 });
+
+/* ── Payments and Door (W-228, Ops OPS-188) ────────────────────────────────
+   Tickets to Suna-hosted events. The server is iOS I-604: every name the
+   Panel calls is in TK_API, so a renamed RPC is one edit. Each RPC checks
+   is_admin against this session's token; nothing here is readable or
+   writable by anyone else. */
+const TK_API = {
+  list: 'admin_ticket_list',            // () -> rows: id, event_id, event_name, status, pay_ref, name, amount_due, paid_via, claimed_paid_at, expires_at, paid_at, checked_in_at, proof_path
+  paid: 'mark_ticket_paid',             // (pay_ref, by)
+  release: 'release_ticket',            // (pay_ref, by)
+  refunded: 'mark_ticket_refunded',     // (pay_ref, by)
+  checkIn: 'check_in_ticket',           // (p_code: a ticket id or a reference) -> { ok, error?, name, event_name, status, checked_in_at, already }
+  proofBucket: 'ticket-proofs',
+};
+/* TICKETS-LOGIC-START */
+const TK_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+function tkEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function tkRM(n) { n = Number(n); return Number.isFinite(n) ? 'RM' + (Number.isInteger(n) ? n : n.toFixed(2)) : ''; }
+/** What a scan or a typed line means: the ticket id out of its address (or bare), else a reference in capitals; '' for nothing usable. */
+function tkParseCode(text) {
+  const t = String(text || '').trim();
+  const id = t.match(TK_UUID);
+  if (id) return id[0].toLowerCase();
+  const ref = t.toUpperCase().replace(/\s+/g, '');
+  return /^[A-Z0-9][A-Z0-9-]{3,39}$/.test(ref) ? ref : '';
+}
+function tkTime(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function tkAgo(iso, now) {
+  const m = Math.round((now - Date.parse(iso)) / 60000);
+  if (!Number.isFinite(m)) return '';
+  return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago';
+}
+/** pending | claimed (they tapped I've paid) | paid | closed. A hold that ran out with no "I've paid" is closed. */
+function tkState(t, now) {
+  if (t.status === 'paid') return 'paid';
+  if (t.status !== 'pending') return 'closed';
+  if (t.claimed_paid_at) return 'claimed';
+  return t.expires_at && Date.parse(t.expires_at) <= now ? 'closed' : 'pending';
+}
+function tkCounts(rows, now) {
+  const c = { pending: 0, claimed: 0, paid: 0, in: 0 };
+  for (const t of rows) { const s = tkState(t, now); if (s in c) c[s]++; if (s === 'paid' && t.checked_in_at) c.in++; }
+  return c;
+}
+function tkMatches(t, find) {
+  const f = String(find || '').trim().toLowerCase();
+  return !f || String(t.pay_ref || '').toLowerCase().includes(f) || String(t.name || '').toLowerCase().includes(f);
+}
+/** One ticket on Payments. Buttons carry the reference, which is what the RPCs take. */
+function tkCard(t, now) {
+  const s = tkState(t, now), ref = tkEsc(t.pay_ref || '');
+  const tag = s === 'claimed' ? '<span class="cl-tag ok">Says paid ' + tkEsc(tkAgo(t.claimed_paid_at, now)) + '</span>'
+    : s === 'pending' ? '<span class="cl-tag">Hold until ' + tkEsc(tkTime(t.expires_at)) + '</span>'
+    : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ' · ' + tkEsc(t.paid_via) : '') + '</span>' + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
+    : '<span class="cl-tag red">' + (t.status === 'refunded' ? 'Refunded' : t.status === 'cancelled' ? 'Released' : 'Hold ran out') + '</span>';
+  const actions = s === 'claimed' || s === 'pending'
+    ? '<button type="button" class="primary" style="width:auto" data-tk="paid" data-ref="' + ref + '">Mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
+    : s === 'paid' ? '<button type="button" class="ghost" data-tk="refunded" data-ref="' + ref + '">Mark refunded</button>' : '';
+  const receipt = t.proof_path ? '<button type="button" class="ghost" data-tk="receipt" data-path="' + tkEsc(t.proof_path) + '">Receipt</button>' : '';
+  return '<div class="card cl-card"><div class="cl-top"><b>' + (ref || 'No reference') + '</b><b>' + tkEsc(tkRM(t.amount_due)) + '</b></div>'
+    + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.name || 'No name') + '</span></div>'
+    + '<div class="cl-row"><span class="k">Event</span><span>' + tkEsc(t.event_name || '') + '</span></div>'
+    + '<div class="cl-tags">' + tag + '</div>'
+    + (actions || receipt ? '<div class="cl-actions">' + actions + receipt + '</div>' : '') + '</div>';
+}
+/** What the Door shows for check_in_ticket's answer: [class, headline, line]. */
+function tkDoorResult(r) {
+  r = r || {};
+  const who = [r.name, r.event_name].filter(Boolean).join(' · ');
+  if (r.ok && r.already) return ['warn', 'Already checked in at ' + tkTime(r.checked_in_at), who];
+  if (r.ok) return ['ok', r.name || 'Checked in', 'Paid · checked in at ' + tkTime(r.checked_in_at) + (r.event_name ? ' · ' + r.event_name : '')];
+  if (r.error === 'not_paid') return ['no', 'Not paid', (who ? who + ' · ' : '') + 'This ticket is ' + (r.status || 'pending') + '. Don\'t let them in on it.'];
+  if (r.error === 'not_found') return ['no', 'No such ticket', 'Check the reference, or scan again.'];
+  return ['no', 'Not checked in', r.message || 'That didn\'t work. Try again.'];
+}
+/* TICKETS-LOGIC-END */
+
+let tkRows = [], tkBy = '';
+async function tkRpc(fn, args) {
+  const { data, error } = await db.rpc(fn, args || {});
+  if (error) throw new Error(error.message || fn + ' failed');
+  return data;
+}
+function tkCountsHTML(c, door) {
+  return door ? '<span><b>' + c.paid + '</b>paid</span><span><b>' + c.in + '</b>checked in</span>'
+    : '<span><b>' + c.claimed + '</b>say they paid</span><span><b>' + c.pending + '</b>holding</span><span><b>' + c.paid + '</b>paid</span>';
+}
+async function loadTickets(render) {
+  let rows;
+  try { rows = await tkRpc(TK_API.list); }
+  catch (e) {
+    if (render === 'payments') { $('tk-note').hidden = false; $('tk-note').textContent = e.message || 'Could not load tickets.'; }
+    if (render === 'door') $('dr-counts').innerHTML = '';
+    return;
+  }
+  tkRows = Array.isArray(rows) ? rows : [];
+  const c = tkCounts(tkRows, Date.now());
+  $('payments-count').textContent = String(c.claimed);
+  $('payments-count').classList.toggle('zero', c.claimed === 0);
+  if (render === 'payments') renderPayments();
+  if (render === 'door') $('dr-counts').innerHTML = tkCountsHTML(c, true);
+}
+function renderPayments() {
+  const now = Date.now(), find = $('tk-find').value;
+  const by = (s) => tkRows.filter((t) => s.includes(tkState(t, now)) && tkMatches(t, find));
+  // Those who say they've paid first, oldest first: they are the ones waiting on us.
+  const waiting = by(['claimed', 'pending']).sort((a, b) => (tkState(b, now) === 'claimed') - (tkState(a, now) === 'claimed') || Date.parse(a.claimed_paid_at || a.expires_at || 0) - Date.parse(b.claimed_paid_at || b.expires_at || 0));
+  const html = (rows, none) => (rows.length ? rows.map((t) => tkCard(t, now)).join('') : '<p class="sub">' + none + '</p>');
+  $('tk-counts').innerHTML = tkCountsHTML(tkCounts(tkRows, now), false);
+  $('tk-pending').innerHTML = html(waiting, find ? 'Nothing waiting matches that.' : 'Nobody is waiting.');
+  $('tk-paid').innerHTML = html(by(['paid']), find ? 'No paid ticket matches that.' : 'None yet.');
+  $('tk-closed').innerHTML = html(by(['closed']), 'None.');
+}
+function tkNote(text) { $('tk-note').hidden = !text; $('tk-note').textContent = text || ''; if (text) $('tk-note').scrollIntoView({ block: 'nearest' }); }
+$('tk-find').oninput = () => renderPayments();
+$('pane-payments').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-tk]');
+  if (!b) return;
+  const act = b.dataset.tk;
+  if (act === 'receipt') {
+    const { data, error } = await db.storage.from(TK_API.proofBucket).createSignedUrl(b.dataset.path, 300);
+    if (error || !data || !data.signedUrl) { tkNote('Could not open the receipt.'); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+    return;
+  }
+  // Release and Mark refunded can't be taken back from here: a second tap confirms.
+  if (act !== 'paid' && b.dataset.armed !== '1') {
+    b.dataset.armed = '1'; b.textContent = act === 'release' ? 'Tap again to release the seat' : 'Tap again: refunded by transfer';
+    setTimeout(() => { if (b.isConnected) { b.dataset.armed = ''; b.textContent = act === 'release' ? 'Release' : 'Mark refunded'; } }, 4000);
+    return;
+  }
+  b.disabled = true;
+  if (!tkBy) tkBy = (profile && profile.username) || 'panel';
+  try { await tkRpc(TK_API[act], { pay_ref: b.dataset.ref, by: tkBy }); }
+  catch (err) { b.disabled = false; tkNote(err.message); return; }
+  tkNote({ paid: b.dataset.ref + ' marked paid. They get their ticket by push and email.', release: b.dataset.ref + ' released: the seat is free again.', refunded: b.dataset.ref + ' marked refunded.' }[act]);
+  await loadTickets('payments');
+});
+
+// ---- Door
+let drStream = null, drTimer = null, drLast = '', drBusy = false;
+function drStop() {
+  clearInterval(drTimer); drTimer = null;
+  if (drStream) { drStream.getTracks().forEach((t) => t.stop()); drStream = null; }
+  const v = $('dr-video'); v.srcObject = null; v.hidden = true;
+  $('dr-scan').textContent = 'Scan a ticket';
+}
+async function drCheck(text) {
+  const code = tkParseCode(text);
+  const out = $('dr-result');
+  if (!code) { out.innerHTML = '<div class="tk-result no"><b>Not a ticket</b>That isn\'t a Suna ticket code.</div>'; return; }
+  if (drBusy) return;
+  drBusy = true;
+  let r;
+  try { r = await tkRpc(TK_API.checkIn, { p_code: code }); r = Array.isArray(r) ? r[0] : r; }
+  catch (e) { r = { ok: false, message: e.message }; }
+  drBusy = false;
+  const [cls, head, line] = tkDoorResult(r);
+  out.innerHTML = '<div class="tk-result ' + cls + '"><b>' + tkEsc(head) + '</b>' + tkEsc(line) + '</div>';
+  if (navigator.vibrate) navigator.vibrate(cls === 'ok' ? 80 : [80, 60, 80]);
+  if (r && r.ok && !r.already) loadTickets('door').catch(() => {});
+}
+$('dr-form').onsubmit = (e) => { e.preventDefault(); const v = $('dr-code').value; $('dr-code').value = ''; drCheck(v); };
+$('dr-scan').onclick = async () => {
+  if (drStream) { drStop(); return; }
+  const note = $('dr-cam-note');
+  note.hidden = true;
+  if (!('BarcodeDetector' in window)) { note.hidden = false; note.textContent = 'This browser can\'t scan QR codes here. Type the reference under the QR instead.'; $('dr-code').focus(); return; }
+  try { drStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
+  catch (e) { note.hidden = false; note.textContent = 'No camera: allow it for this page, or type the reference.'; return; }
+  const v = $('dr-video'); v.srcObject = drStream; v.hidden = false; await v.play().catch(() => {});
+  $('dr-scan').textContent = 'Stop scanning';
+  const det = new BarcodeDetector({ formats: ['qr_code'] });
+  drLast = '';
+  drTimer = setInterval(async () => {
+    if (drBusy || v.readyState < 2) return;
+    let codes = [];
+    try { codes = await det.detect(v); } catch (e) { return; }
+    const raw = codes[0] && codes[0].rawValue;
+    // The same ticket held in front of the camera is one check, not one every tick.
+    if (!raw || raw === drLast) return;
+    drLast = raw; setTimeout(() => { if (drLast === raw) drLast = ''; }, 5000);
+    drCheck(raw);
+  }, 350);
+};
 
 boot();
 </script>
