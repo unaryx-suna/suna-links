@@ -1029,7 +1029,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v45';
+const BUILD = 'field-v46';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8805,22 +8805,50 @@ async function drCheck(text) {
   if (r && r.ok && !r.already) loadTickets('door').catch(() => {});
 }
 $('dr-form').onsubmit = (e) => { e.preventDefault(); const v = $('dr-code').value; $('dr-code').value = ''; drCheck(v); };
+// The camera's QR reader: the browser's own where it has one (Chrome on
+// Android), else jsQR (vendored, Apache 2.0; Brian 14 Nov: "add the QR
+// library"), loaded only when Scan is first tapped on such a phone (Safari
+// on iPhone). Returns a function: video -> the QR's text, or ''.
+const JSQR_SRC = '/vendor/jsqr-1.4.0.js';
+let drReader = null;
+async function drMakeReader() {
+  if (drReader) return drReader;
+  if ('BarcodeDetector' in window) {
+    try {
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      return (drReader = async (v) => { const c = await det.detect(v); return (c[0] && c[0].rawValue) || ''; });
+    } catch (e) { /* no QR format here: fall through to jsQR */ }
+  }
+  if (!window.jsQR) await new Promise((ok, no) => { const el = document.createElement('script'); el.src = JSQR_SRC; el.onload = ok; el.onerror = () => no(new Error('jsqr')); document.head.appendChild(el); });
+  const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+  return (drReader = async (v) => {
+    // 640 px across is plenty for a ticket held up to the phone, and four times quicker than a full frame.
+    const k = Math.min(1, 640 / (v.videoWidth || 640)), w = Math.round(v.videoWidth * k), h = Math.round(v.videoHeight * k);
+    if (!w || !h) return '';
+    canvas.width = w; canvas.height = h; ctx.drawImage(v, 0, 0, w, h);
+    const hit = window.jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+    return (hit && hit.data) || '';
+  });
+}
 $('dr-scan').onclick = async () => {
   if (drStream) { drStop(); return; }
   const note = $('dr-cam-note');
   note.hidden = true;
-  if (!('BarcodeDetector' in window)) { note.hidden = false; note.textContent = 'This browser can\'t scan QR codes here. Type the reference under the QR instead.'; $('dr-code').focus(); return; }
+  let read;
+  try { read = await drMakeReader(); }
+  catch (e) { note.hidden = false; note.textContent = 'The scanner didn\'t load. Check your connection, or type the reference under the QR.'; $('dr-code').focus(); return; }
   try { drStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
   catch (e) { note.hidden = false; note.textContent = 'No camera: allow it for this page, or type the reference.'; return; }
   const v = $('dr-video'); v.srcObject = drStream; v.hidden = false; await v.play().catch(() => {});
   $('dr-scan').textContent = 'Stop scanning';
-  const det = new BarcodeDetector({ formats: ['qr_code'] });
   drLast = '';
+  let looking = false;
   drTimer = setInterval(async () => {
-    if (drBusy || v.readyState < 2) return;
-    let codes = [];
-    try { codes = await det.detect(v); } catch (e) { return; }
-    const raw = codes[0] && codes[0].rawValue;
+    if (drBusy || looking || v.readyState < 2) return;
+    looking = true;
+    let raw = '';
+    try { raw = await read(v); } catch (e) { raw = ''; }
+    looking = false;
     // The same ticket held in front of the camera is one check, not one every tick.
     if (!raw || raw === drLast) return;
     drLast = raw; setTimeout(() => { if (drLast === raw) drLast = ''; }, 5000);
