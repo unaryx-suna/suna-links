@@ -173,6 +173,12 @@
   .tk-result.ok { background: rgba(145,244,153,.16); color: #91f499; }
   .tk-result.warn { background: rgba(246,203,148,.16); color: var(--sand); }
   .tk-result.no { background: rgba(255,107,107,.14); color: var(--danger); }
+  /* W-236: sessions on Payments and the Door */
+  .tk-ses-h { font-size: 16px; margin: 18px 0 8px; }
+  .tk-ses-h span { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 6px; }
+  .tk-ses-counts { flex-basis: 100%; display: grid; gap: 4px; margin-top: 4px; }
+  .tk-ses-counts p { margin: 0; display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 15px; }
+  .tk-ses-counts span { color: var(--muted); }
   /* W-235: the Door's answer fills the screen. Red "Not valid" for every refusal, green
      only for a ticket checked in now, amber when the check itself failed. */
   .dr-verdict { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center;
@@ -8710,6 +8716,30 @@ function tkMatches(t, find) {
   const f = String(find || '').trim().toLowerCase();
   return !f || String(t.pay_ref || '').toLowerCase().includes(f) || String(t.buyer_name || '').toLowerCase().includes(f) || String(t.buyer_email || '').toLowerCase().includes(f);
 }
+/** W-236: a session's start, "2:40 PM", in Malaysia time (the events are there; so is the Panel's team). */
+function tkSesTime(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' });
+}
+/** "2:40 PM · Craft 3" for a ticket's session (the label only when it adds something), or ''. */
+function tkSesName(t) {
+  if (!t || !t.session_starts_at) return t && t.session_label ? String(t.session_label) : '';
+  const at = tkSesTime(t.session_starts_at), label = String(t.session_label || '').trim();
+  return label && label.replace(/\s/g, '').toLowerCase() !== at.replace(/\s/g, '').toLowerCase() ? at + ' · ' + label : at;
+}
+/**
+ * W-236: rows grouped by session, earliest first; tickets with no session in one group first
+ * (an event without sessions is that one group, with no heading). -> [{ key, name, at, rows }]
+ */
+function tkBySession(rows) {
+  const groups = new Map();
+  for (const t of rows) {
+    const key = t.session_id || '';
+    if (!groups.has(key)) groups.set(key, { key, name: key ? tkSesName(t) : '', at: key ? Date.parse(t.session_starts_at || '') || 0 : -Infinity, rows: [] });
+    groups.get(key).rows.push(t);
+  }
+  return [...groups.values()].sort((a, b) => a.at - b.at);
+}
 /** One ticket on Payments. Buttons carry the reference, which is what the RPCs take. */
 function tkCard(t, now) {
   const s = tkState(t, now), ref = tkEsc(t.pay_ref || '');
@@ -8724,6 +8754,7 @@ function tkCard(t, now) {
   return '<div class="card cl-card"><div class="cl-top"><b>' + (ref || 'No reference') + '</b><b>' + tkEsc(tkRM(t.amount_due)) + '</b></div>'
     + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.buyer_name || 'No name') + (t.buyer_email ? ' · ' + tkEsc(t.buyer_email) : '') + '</span></div>'
     + '<div class="cl-row"><span class="k">Event</span><span>' + tkEsc(t.event_name || '') + '</span></div>'
+    + (tkSesName(t) ? '<div class="cl-row"><span class="k">Session</span><span>' + tkEsc(tkSesName(t)) + '</span></div>' : '')
     + '<div class="cl-tags">' + tag + '</div>'
     + (actions || receipt ? '<div class="cl-actions">' + actions + receipt + '</div>' : '') + '</div>';
 }
@@ -8741,7 +8772,9 @@ function tkDoorResult(r, row, now) {
   r = r || {};
   now = now || Date.now();
   const no = r.seat_no ? 'No. ' + ('00' + r.seat_no).slice(-3) : '';
-  const who = [r.buyer_name, r.event_name, no].filter(Boolean).join(' · ');
+  // W-236: the ticket's session, from the Door's list (check_in_ticket's answer doesn't carry it).
+  const ses = row && row.session_starts_at ? tkSesTime(row.session_starts_at) + ' session' : '';
+  const who = [r.buyer_name, r.event_name, ses, no].filter(Boolean).join(' · ');
   const bad = (reason, line) => ['no', 'Not valid', reason, line != null ? line : who];
   if (r.error === 'not_a_ticket') return bad('Not a Suna ticket', 'That code isn\'t one of ours.');
   if (r.error === 'not_found') return bad('Unknown code', 'No ticket has this code. Check the reference, or scan again.');
@@ -8755,8 +8788,22 @@ function tkDoorResult(r, row, now) {
     return bad('Not paid yet');
   }
   if (r.checked_in && r.already_used) return bad('Already used at ' + tkTime(r.checked_in_at));
-  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(' · ')];
+  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, ses, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(' · ')];
   return ['err', 'Couldn\'t check', 'That didn\'t work. Try again.', 'This says nothing about the ticket.'];
+}
+function tkCountsHTML(c, door) {
+  return door ? '<span><b>' + c.paid + '</b>paid</span><span><b>' + c.in + '</b>checked in</span>'
+    : '<span><b>' + c.claimed + '</b>say they paid</span><span><b>' + c.pending + '</b>holding</span><span><b>' + c.paid + '</b>paid</span>';
+}
+/** W-236: the Door's counts, one line per session when the tickets have sessions ("2:40 PM · 5 paid · 3 in"). */
+function tkDoorCountsHTML(rows, now) {
+  const all = tkCountsHTML(tkCounts(rows, now), true);
+  const groups = tkBySession(rows.filter((t) => tkState(t, now) === 'paid'));
+  if (!groups.some((g) => g.key)) return all;
+  return all + '<div class="tk-ses-counts">' + groups.map((g) => {
+    const c = tkCounts(g.rows, now);
+    return '<p><b>' + tkEsc(g.key ? g.name : 'No session') + '</b><span>' + c.paid + ' paid · ' + c.in + ' in</span></p>';
+  }).join('') + '</div>';
 }
 /* TICKETS-LOGIC-END */
 
@@ -8765,10 +8812,6 @@ async function tkRpc(fn, args) {
   const { data, error } = await db.rpc(fn, args || {});
   if (error) { const e = new Error(error.message || fn + ' failed'); e.code = error.code; throw e; }
   return data;
-}
-function tkCountsHTML(c, door) {
-  return door ? '<span><b>' + c.paid + '</b>paid</span><span><b>' + c.in + '</b>checked in</span>'
-    : '<span><b>' + c.claimed + '</b>say they paid</span><span><b>' + c.pending + '</b>holding</span><span><b>' + c.paid + '</b>paid</span>';
 }
 async function loadTickets(render) {
   let rows;
@@ -8783,7 +8826,7 @@ async function loadTickets(render) {
   $('payments-count').textContent = String(c.claimed);
   $('payments-count').classList.toggle('zero', c.claimed === 0);
   if (render === 'payments') renderPayments();
-  if (render === 'door') $('dr-counts').innerHTML = tkCountsHTML(c, true);
+  if (render === 'door') $('dr-counts').innerHTML = tkDoorCountsHTML(tkRows, Date.now());
 }
 function renderPayments() {
   const now = Date.now(), find = $('tk-find').value;
@@ -8793,7 +8836,11 @@ function renderPayments() {
   const html = (rows, none) => (rows.length ? rows.map((t) => tkCard(t, now)).join('') : '<p class="sub">' + none + '</p>');
   $('tk-counts').innerHTML = tkCountsHTML(tkCounts(tkRows, now), false);
   $('tk-pending').innerHTML = html(waiting, find ? 'Nothing waiting matches that.' : 'Nobody is waiting.');
-  $('tk-paid').innerHTML = html(by(['paid']), find ? 'No paid ticket matches that.' : 'None yet.');
+  // W-236: paid tickets under a heading per session (none when the event has no sessions).
+  const paidGroups = tkBySession(by(['paid']));
+  $('tk-paid').innerHTML = paidGroups.length && paidGroups.some((g) => g.key)
+    ? paidGroups.map((g) => '<h3 class="tk-ses-h">' + tkEsc(g.key ? g.name : 'No session') + ' <span>' + g.rows.length + ' paid</span></h3>' + g.rows.map((t) => tkCard(t, now)).join('')).join('')
+    : html(by(['paid']), find ? 'No paid ticket matches that.' : 'None yet.');
   $('tk-closed').innerHTML = html(by(['closed']), 'None.');
 }
 function tkNote(text) { $('tk-note').hidden = !text; $('tk-note').textContent = text || ''; if (text) $('tk-note').scrollIntoView({ block: 'nearest' }); }
