@@ -173,6 +173,20 @@
   .tk-result.ok { background: rgba(145,244,153,.16); color: #91f499; }
   .tk-result.warn { background: rgba(246,203,148,.16); color: var(--sand); }
   .tk-result.no { background: rgba(255,107,107,.14); color: var(--danger); }
+  /* W-235: the Door's answer fills the screen. Red "Not valid" for every refusal, green
+     only for a ticket checked in now, amber when the check itself failed. */
+  .dr-verdict { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center;
+    gap: 10px; padding: 32px 24px calc(32px + env(safe-area-inset-bottom)); text-align: center; color: #fff; }
+  .dr-verdict[hidden] { display: none; }
+  .dr-verdict p { color: #fff; }
+  .dr-verdict.no { background: #B3261E; }
+  .dr-verdict.ok { background: #1B7F3B; }
+  .dr-verdict.err { background: #8A5A12; }
+  .dr-verdict .v-head { font-size: 44px; font-weight: 800; line-height: 1.05; margin: 0; }
+  .dr-verdict .v-reason { font-size: 30px; font-weight: 700; line-height: 1.15; margin: 0; }
+  .dr-verdict .v-who { font-size: 17px; line-height: 1.4; margin: 6px 0 0; opacity: .92; }
+  .dr-verdict button { margin: 28px auto 0; width: auto; min-width: 200px; padding: 14px 24px; border-radius: 26px;
+    border: 0; background: #fff; color: #111; font-size: 17px; font-weight: 700; }
   /* §1 — the photograph starts the capture, so it is the first thing on the
      screen rather than a field part way down the form. */
   /* §2 — equal weight, side by side. They stack on a narrow phone rather than
@@ -733,6 +747,12 @@
       <button class="ghost" type="submit">Check in</button>
     </form>
     <div id="dr-result" role="status" aria-live="assertive"></div>
+    <div class="dr-verdict" id="dr-verdict" role="alert" hidden>
+      <p class="v-head" id="dr-v-head"></p>
+      <p class="v-reason" id="dr-v-reason"></p>
+      <p class="v-who" id="dr-v-who"></p>
+      <button type="button" id="dr-v-next">Next ticket</button>
+    </div>
   </div>
 
   <!-- ════ Review places (W-214, Brian 7 Nov 20:4x: "ops or Axel should update the
@@ -8708,19 +8728,35 @@ function tkCard(t, now) {
     + (actions || receipt ? '<div class="cl-actions">' + actions + receipt + '</div>' : '') + '</div>';
 }
 /**
- * What the Door shows for check_in_ticket's answer: [class, headline, line].
- * `r` is the function's row, or { error: 'not_found' | 'failed', message } when it raised.
+ * W-235: what the Door shows for check_in_ticket's answer: [class, headline, reason, who].
+ * `r` is the function's row, or { error: 'not_found' | 'not_a_ticket' | 'failed', message } when it
+ * raised. `row` is the same ticket from the Door's list, when loaded: the answer carries no
+ * expires_at or claimed_paid_at, so an expired hold is told from the list.
+ * Class 'ok' (green) only for a ticket checked in by this scan; every refusal is 'no', a red
+ * "Not valid" with the reason in words; 'err' (amber) when the check itself failed, which says
+ * nothing about the ticket. The status wins over "already used": a ticket refunded after it
+ * was used reads "Refunded".
  */
-function tkDoorResult(r) {
+function tkDoorResult(r, row, now) {
   r = r || {};
-  const who = [r.buyer_name, r.event_name].filter(Boolean).join(' · ');
-  const no = r.seat_no ? ' · No. ' + ('00' + r.seat_no).slice(-3) : '';
-  if (r.error === 'not_found') return ['no', 'No such ticket', 'Check the reference, or scan again.'];
-  if (r.error) return ['no', 'Not checked in', r.message || 'That didn\'t work. Try again.'];
-  if (r.checked_in && r.already_used) return ['warn', 'Already checked in at ' + tkTime(r.checked_in_at), who + no];
-  if (r.checked_in) return ['ok', r.buyer_name || 'Checked in', 'Paid · checked in at ' + tkTime(r.checked_in_at) + (r.event_name ? ' · ' + r.event_name : '') + no];
-  if (r.status && r.status !== 'paid') return ['no', r.status === 'refunded' ? 'Refunded' : r.status === 'cancelled' ? 'Released' : 'Not paid', (who ? who + ' · ' : '') + 'This ticket is ' + r.status + '. Don\'t let them in on it.'];
-  return ['no', 'Not checked in', 'That didn\'t work. Try again.'];
+  now = now || Date.now();
+  const no = r.seat_no ? 'No. ' + ('00' + r.seat_no).slice(-3) : '';
+  const who = [r.buyer_name, r.event_name, no].filter(Boolean).join(' · ');
+  const bad = (reason, line) => ['no', 'Not valid', reason, line != null ? line : who];
+  if (r.error === 'not_a_ticket') return bad('Not a Suna ticket', 'That code isn\'t one of ours.');
+  if (r.error === 'not_found') return bad('Unknown code', 'No ticket has this code. Check the reference, or scan again.');
+  if (r.error || !r.status) return ['err', 'Couldn\'t check', r.message || 'That didn\'t work. Try again.', 'This says nothing about the ticket.'];
+  if (r.status === 'refunded') return bad('Refunded');
+  if (r.status === 'cancelled') return bad('Cancelled');
+  if (r.status !== 'paid') {
+    const t = row || {};
+    if (t.claimed_paid_at) return bad('Not paid yet', (who ? who + '. ' : '') + 'They say they\'ve paid: check Payments.');
+    if (t.expires_at && Date.parse(t.expires_at) <= now) return bad('Hold expired', who);
+    return bad('Not paid yet');
+  }
+  if (r.checked_in && r.already_used) return bad('Already used at ' + tkTime(r.checked_in_at));
+  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(' · ')];
+  return ['err', 'Couldn\'t check', 'That didn\'t work. Try again.', 'This says nothing about the ticket.'];
 }
 /* TICKETS-LOGIC-END */
 
@@ -8797,18 +8833,38 @@ function drStop() {
 async function drCheck(text) {
   const code = tkParseCode(text);
   const out = $('dr-result');
-  if (!code) { out.innerHTML = '<div class="tk-result no"><b>Not a ticket</b>That isn\'t a Suna ticket code.</div>'; return; }
-  if (drBusy) return;
+  if (!code) { drShow(tkDoorResult({ error: 'not_a_ticket' })); return; }
+  if (drBusy || drShowing()) return;
   drBusy = true;
   let r;
   try { r = await tkRpc(TK_API.checkIn, { p_ticket: code }); r = Array.isArray(r) ? r[0] : r; }
   catch (e) { r = e.code === 'P0002' ? { error: 'not_found' } : e.code === '42501' ? { error: 'failed', message: 'Only an admin can check tickets in.' } : { error: 'failed' }; }
   drBusy = false;
-  const [cls, head, line] = tkDoorResult(r);
-  out.innerHTML = '<div class="tk-result ' + cls + '"><b>' + tkEsc(head) + '</b>' + tkEsc(line) + '</div>';
-  if (navigator.vibrate) navigator.vibrate(cls === 'ok' ? 80 : [80, 60, 80]);
+  const id = r && r.id, row = id ? tkRows.find((t) => t.id === id) : null;
+  const v = tkDoorResult(r, row, Date.now());
+  drShow(v);
+  // The last answer stays under the screen as a line, for after "Next ticket".
+  out.innerHTML = '<div class="tk-result ' + (v[0] === 'ok' ? 'ok' : v[0] === 'err' ? 'warn' : 'no') + '"><b>' + tkEsc(v[1] + ': ' + v[2]) + '</b>' + tkEsc(v[3]) + '</div>';
+  if (navigator.vibrate) navigator.vibrate(v[0] === 'ok' ? 80 : [80, 60, 80, 60, 80]);
   if (r && r.checked_in && !r.already_used) loadTickets('door').catch(() => {});
 }
+// W-235: the full-screen answer. A refusal stays until "Next ticket" is tapped; a valid ticket
+// clears itself after 2.5 s so the line keeps moving. The camera ignores codes meanwhile.
+let drHideTimer = null;
+function drShowing() { return !$('dr-verdict').hidden; }
+// The same QR still held up after the screen clears isn't checked again for 5 s (a second
+// check of a ticket just let in would read "Already used").
+function drHide() { clearTimeout(drHideTimer); $('dr-verdict').hidden = true; const last = drLast; setTimeout(() => { if (drLast === last) drLast = ''; }, 5000); }
+function drShow(v) {
+  const el = $('dr-verdict');
+  el.className = 'dr-verdict ' + v[0];
+  $('dr-v-head').textContent = v[1]; $('dr-v-reason').textContent = v[2]; $('dr-v-who').textContent = v[3] || '';
+  el.hidden = false;
+  clearTimeout(drHideTimer);
+  if (v[0] === 'ok') drHideTimer = setTimeout(drHide, 2500);
+  $('dr-v-next').focus();
+}
+$('dr-v-next').onclick = drHide;
 $('dr-form').onsubmit = (e) => { e.preventDefault(); const v = $('dr-code').value; $('dr-code').value = ''; drCheck(v); };
 // The camera's QR reader: the browser's own where it has one (Chrome on
 // Android), else jsQR (vendored, Apache 2.0; Brian 14 Nov: "add the QR
@@ -8849,7 +8905,7 @@ $('dr-scan').onclick = async () => {
   drLast = '';
   let looking = false;
   drTimer = setInterval(async () => {
-    if (drBusy || looking || v.readyState < 2) return;
+    if (drBusy || looking || drShowing() || v.readyState < 2) return;
     looking = true;
     let raw = '';
     try { raw = await read(v); } catch (e) { raw = ''; }
