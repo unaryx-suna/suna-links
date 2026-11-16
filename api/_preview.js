@@ -87,6 +87,22 @@ export function creditFor(landmark) {
   const licence = LICENCE[landmark.cover_source] || '';
   return `Photo: ${name}${licence ? ` · ${licence}` : ''}`;
 }
+/**
+ * W-232 (iOS I-627 (2d)): the plan cover's own credit, from the published
+ * row's `cover_credit_name` / `cover_licence`, worded as the app's
+ * PlaceServerFacts.creditLine: licence `business` (a venue's own image, no
+ * licence) is "Image: <name>"; otherwise "Photo: <name> · <licence>", or
+ * "Photo: <name>" with no licence. No name: nothing (a licence alone credits
+ * no one).
+ */
+export function planCoverCredit(it) {
+  const name = String((it && it.cover_credit_name) || '').trim();
+  if (!name) return null;
+  const licence = String(it.cover_licence || '').trim();
+  if (licence.toLowerCase() === 'business') return `Image: ${name}`;
+  return `Photo: ${name}${licence ? ` · ${licence}` : ''}`;
+}
+
 // Signed moment URLs last an hour; the page's cache stays well inside that.
 const SIGN_SECONDS = 3600;
 
@@ -186,7 +202,8 @@ export async function loadItinerary(slug, coverURL) {
   if (!slug) return null;
   const rows = await rest(`public_itineraries?share_slug=eq.${encodeURIComponent(slug)}`
     + '&select=id,name,intro_story,resolved_city_name,recommended_timing,creator_username,'
-    + 'creator_avatar_url,partner_slug,partner_name,cover_media_path,is_creator&limit=1');
+    + 'creator_avatar_url,partner_slug,partner_name,cover_media_path,cover_credit_name,cover_licence,'
+    + 'is_creator&limit=1');
   const it = Array.isArray(rows) ? rows[0] : null;
   if (!it) return null;
   const stopsQuery = (extra) => rest(`public_itinerary_stops?plan_id=eq.${encodeURIComponent(it.id)}`
@@ -249,6 +266,7 @@ export async function loadItinerary(slug, coverURL) {
     it, shown, images, summary, multiDay, lockedCount, lockedTimes: locked, dayCounts,
     signedMoments: [...images.values()].some((im) => im && im.kind === 'moment' && im.signed),
     cover: coverURL(it.cover_media_path),
+    coverCredit: planCoverCredit(it),
   };
 }
 
@@ -431,6 +449,7 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc .stop-note{border:0;padding:0;margin:2px 0 0;font-size:14px;line-height:1.4;color:#cfcbc2}
 .sc .dir{font-size:13.5px;color:#f6cb94;font-weight:700;margin-top:6px;text-decoration:none}
 .photo-credit{display:none}
+.cover-credit{margin:6px 16px 0;font-size:11px;line-height:1.3;color:#a3a8a4;text-align:right}
 .day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:#f6cb94}
 .stop-locked{list-style:none;margin:4px 0 0 -34px}
 .lock{position:relative;border-radius:20px;overflow:hidden;border:1px solid #2a2f2c;background:#181b19;min-height:300px}
@@ -481,6 +500,10 @@ export function previewBody(data, cover, variants, mascot) {
   const dayCounts = data.dayCounts || [];
   const credits = data.credits || new Map();
   const title = it.name || 'An itinerary on Suna';
+  // W-232: only under the plan's own cover, never the first stop's photo
+  // that stands in when it doesn't resolve (that one is credited at its stop).
+  const coverCredit = cover && cover === data.cover && data.coverCredit
+    ? `<p class="cover-credit">${escapeHtml(data.coverCredit)}</p>` : '';
 
   // On the web, Follow does what the bar's button does: opens Suna, or the
   // App Store. The client points both at the same place.
@@ -535,6 +558,7 @@ export function previewBody(data, cover, variants, mascot) {
       <p class="cover-sub">${escapeHtml(summary)}</p>
     </div>
   </header>
+  ${coverCredit}
   ${byline || intro ? `<section class="about">
     ${byline}
     ${intro ? `<p class="intro${intro.length > 220 ? ' clamp' : ''}" id="intro-text">${escapeHtml(intro)}</p>${intro.length > 220 ? '<button class="more" type="button" onclick="document.getElementById(\'intro-text\').classList.remove(\'clamp\');this.remove()">More</button>' : ''}` : ''}
