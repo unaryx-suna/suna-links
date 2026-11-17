@@ -268,7 +268,8 @@ function endsAt(e) {
  */
 async function eventsNear(lat, lng, r, now) {
   const soon = new Date(now + 31 * 864e5).toISOString(), past = new Date(now - 3 * 3600e3).toISOString();
-  const rows = await rest(`world_events?status=eq.approved&${box(lat, lng, r)}`
+  // W-239 (Ops OPS-226): an invite-only event is on no public list.
+  const rows = await rest(`world_events?status=eq.approved&invite_only=not.is.true&${box(lat, lng, r)}`
     + `&start_time=lte.${soon}&or=(end_time.gte.${past},start_time.gte.${past},recurrence_until.gte.${new Date(now).toISOString().slice(0, 10)})`
     + `&select=${EVENT_COLS}&order=start_time.asc&limit=30`);
   return (Array.isArray(rows) ? rows : [])

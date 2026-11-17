@@ -50,6 +50,8 @@ export const EVENT_SELECT = [
   'recurrence_type', 'recurrence_days', 'recurrence_until',
   'price_type', 'price_amount', 'price_currency', 'source_url', 'venue',
   'organizer_name', 'performer_names', 'on_sale_from', 'venue_landmark_id', 'hours_text',
+  // W-239: an invite-only event's own page is never indexed.
+  'invite_only',
 ].join(',');
 
 const STORE = 'https://apps.apple.com/app/id6759053765';
@@ -385,7 +387,8 @@ export async function eventsAround(lat, lng, { km, days = 7, now = new Date(), l
   const dLat = km / 111;
   const dLng = km / (111 * Math.cos((lat * Math.PI) / 180));
   const until = new Date(now.getTime() + days * 86400000);
-  const rows = await rest('world_events?status=eq.approved'
+  // W-239 (Ops OPS-226): an invite-only event is on no public list.
+  const rows = await rest('world_events?status=eq.approved&invite_only=not.is.true'
     + `&end_time=gte.${encodeURIComponent(now.toISOString())}`
     + `&start_time=lte.${encodeURIComponent(until.toISOString())}`
     + `&latitude=gte.${lat - dLat}&latitude=lte.${lat + dLat}`
