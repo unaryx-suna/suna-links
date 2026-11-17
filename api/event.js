@@ -338,7 +338,8 @@ export default async function handler(req, res) {
     body: eventBody(e, now, more, { ct: ctFrom(req.url) }),
     ld: eventLD(e, canonical),
     // Ended: still a page for anyone holding the link, but not one to index.
-    noindex: Boolean(eventState(e, now.getTime())),
+    // W-239: nor an invite-only one (it works by its link, and is on no list).
+    noindex: Boolean(eventState(e, now.getTime())) || e.invite_only === true,
     android: { from: 'event', city: city ? city.slug : '' },
   }));
 }
