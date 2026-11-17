@@ -234,6 +234,18 @@ export function ctFrom(url) {
   } catch { return 'web-e'; }
 }
 
+/**
+ * W-234 follow-up: does Suna sell tickets for this event (a ticket_price, the column unaryx.com's
+ * event page already reads)? Read on its own, so a failure, or the column missing, is "no" and
+ * the share page stays.
+ */
+export async function sellsTickets(id) {
+  try {
+    const rows = await rest(`world_events?id=eq.${id}&select=ticket_price&limit=1`);
+    return Array.isArray(rows) && rows[0] != null && rows[0].ticket_price != null;
+  } catch { return false; }
+}
+
 export default async function handler(req, res) {
   const id = eventId(req.url);
   let e = null, failed = false;
@@ -289,6 +301,16 @@ export default async function handler(req, res) {
       noindex: true,
       android: { from: 'event' },
     }), failed ? 60 : 300, failed ? 200 : 404);
+    return;
+  }
+  // W-234 follow-up (Brian: "merge W-234", 17 Nov): an event Suna sells tickets for has its
+  // page on unaryx.com (the poster, the facts card, Get ticket); this plainer share page can't
+  // sell one. So the web goes there (302, the query kept: ct, via). The app and the Clip still
+  // open the link themselves, as before. Ended events keep the W4 page here.
+  if (!eventState(e) && eventPageURL(e) && await sellsTickets(e.id)) {
+    const q = String(req.url || '').split('?')[1];
+    res.status(302).setHeader('Location', eventPageURL(e) + (q ? `?${q}` : '')).setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+    res.end();
     return;
   }
   const now = new Date();
