@@ -308,7 +308,10 @@ export default async function handler(req, res) {
   // sell one. So the web goes there (302, the query kept: ct, via). The app and the Clip still
   // open the link themselves, as before. Ended events keep the W4 page here.
   if (!eventState(e) && eventPageURL(e) && await sellsTickets(e.id)) {
-    const q = String(req.url || '').split('?')[1];
+    // Vercel's rewrite adds `path` (the /e/:path* capture); that one is ours, not the visitor's.
+    const params = new URLSearchParams(String(req.url || '').split('?')[1] || '');
+    params.delete('path');
+    const q = params.toString();
     res.status(302).setHeader('Location', eventPageURL(e) + (q ? `?${q}` : '')).setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
     res.end();
     return;

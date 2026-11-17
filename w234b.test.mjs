@@ -31,6 +31,9 @@ await t('a ticketed event: 302 to its unaryx.com page, the query kept', async ()
   assert.equal(r.code, 302);
   assert.match(r.hdr.location, /^https:\/\/unaryx\.com\/events\/kuala-lumpur\/qa-ticket-test-a0adacb1\?ct=wa-share&via=org-test$/);
   assert.equal((await call(`/e/${ID}`)).hdr.location, 'https://unaryx.com/events/kuala-lumpur/qa-ticket-test-a0adacb1');
+  // Vercel's rewrite appends ?path=<id>; it never reaches the new address.
+  assert.equal((await call(`/e/${ID}?ct=x&path=${ID}`)).hdr.location, 'https://unaryx.com/events/kuala-lumpur/qa-ticket-test-a0adacb1?ct=x');
+  assert.equal((await call(`/e/${ID}?path=${ID}`)).hdr.location, 'https://unaryx.com/events/kuala-lumpur/qa-ticket-test-a0adacb1');
 });
 await t('no tickets, or the price can\'t be read: the share page as before (200)', async () => {
   price = null;
