@@ -88,6 +88,10 @@
     {
       "source": "/e/:path*",
       "destination": "/api/event"
+    },
+    {
+      "source": "/cp/:path*",
+      "destination": "/api/checkpoint"
     }
   ],
   "functions": {
