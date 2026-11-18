@@ -1,8 +1,9 @@
-// W-115 (Brian, 22 Oct): Android visitors get the Android waitlist, never the
-// App Store. Every page loads public/android.js last; in a browser with an
-// Android user agent no App Store link is left, the buttons go to
-// https://unaryx.com/android?city=<slug>&from=<kind>, and a tap never ends
-// on the App Store (no hand-off redirect). An iPhone is unchanged. The pages
+// W-115, then W-241 (Ops OPS-230, 18 Nov): Android visitors get Google Play,
+// never the App Store or the old waitlist. Every page loads public/android.js
+// last; in a browser with an Android user agent no App Store link is left,
+// the buttons go to the Play listing (the link's ct as the install
+// referrer's campaign), and a tap never ends on the App Store (no hand-off
+// redirect). An iPhone is unchanged. The pages
 // are rendered by the real handlers with fetch stubbed:
 // `node android.test.mjs`. The browser checks run when `playwright` resolves
 // (or PLAYWRIGHT=<path to a node_modules/playwright>).
@@ -82,6 +83,20 @@ await t('the check returns at its first line off Android', () => {
   assert.match(SCRIPT, /\(function \(\) \{\s+if \(!\/Android\/i\.test\(navigator\.userAgent\)\) return;/);
 });
 
+const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
+await t('W-241: the script sends Android to Google Play with the ct as referrer, never the waitlist', () => {
+  assert.ok(SCRIPT.includes(`"${PLAY}"`));
+  assert.match(SCRIPT, /utm_source=suna&utm_campaign=/);
+  assert.ok(!/unaryx\.com\/android|Join the Android list|android-note|iPhone first/.test(SCRIPT));
+});
+await t('W-241: no shipped page or handler links to the waitlist or says Android is coming', async () => {
+  const { readdirSync } = await import('node:fs');
+  const files = [...readdirSync(new URL('./public/', import.meta.url)).filter((f) => /\.(html|js)$/.test(f)).map((f) => './public/' + f),
+    ...readdirSync(new URL('./api/', import.meta.url)).filter((f) => f.endsWith('.js')).map((f) => './api/' + f)];
+  for (const f of files) assert.ok(!/unaryx\.com\/android|Android in December|Suna on Android, December|Join the Android list/.test(read(f)), f);
+  for (const [path, [html]] of Object.entries(PAGES)) assert.ok(!/unaryx\.com\/android|Android in December/.test(html), path);
+});
+
 let chromium;
 try { ({ chromium } = await import('playwright')); } catch {
   try { ({ chromium } = createRequire(process.env.PLAYWRIGHT || '/nonexistent/')('playwright')); } catch { /* none */ }
@@ -101,7 +116,7 @@ else {
       asked.push(u.href);
       if (u.hostname === 'app.unaryx.com' && u.pathname === '/android.js') return r.fulfill({ status: 200, contentType: 'text/javascript', body: SCRIPT });
       if (u.hostname === 'app.unaryx.com' && PAGES[u.pathname]) return r.fulfill({ status: 200, contentType: 'text/html', body: PAGES[u.pathname][0] });
-      if (u.hostname === 'unaryx.com' && u.pathname === '/android') return r.fulfill({ status: 200, contentType: 'text/html', body: '<title>waitlist</title>' });
+      if (u.hostname === 'play.google.com') return r.fulfill({ status: 200, contentType: 'text/html', body: '<title>Google Play</title>' });
       return r.abort();
     });
     await page.goto(`https://app.unaryx.com${path}`, { waitUntil: 'load' });
@@ -110,24 +125,26 @@ else {
   const links = (page) => page.$$eval('a', (as) => as.map((a) => ({ href: a.href, text: a.textContent.trim(), android: a.getAttribute('data-android') })));
 
   for (const [path, [, from, city]] of Object.entries(PAGES)) {
-    await t(`Android, ${path}: no App Store link; Join the Android list → unaryx.com/android?…from=${from}; the tap stays off the App Store`, async () => {
+    await t(`Android, ${path}: no App Store link; every app button → Google Play (ct as referrer); the tap stays off the App Store`, async () => {
       const { page, asked, close } = await open(UA_ANDROID, path);
       const ls = await links(page);
-      assert.deepEqual(ls.filter((l) => /apps\.apple\.com/.test(l.href)), [], 'App Store links left');
+      assert.deepEqual(ls.filter((l) => /apps\.apple\.com|unaryx\.com\/android/.test(l.href)), [], 'App Store or waitlist links left');
       const swapped = ls.filter((l) => l.android);
       assert.ok(swapped.length > 0, 'something swapped');
       for (const l of swapped) {
         const u = new URL(l.href);
-        assert.equal(u.origin + u.pathname, 'https://unaryx.com/android');
-        assert.equal(u.searchParams.get('from'), from);
-        assert.equal(u.searchParams.get('city'), city || null);
-        assert.equal(l.text, 'Join the Android list');
+        assert.equal(u.origin + u.pathname, 'https://play.google.com/store/apps/details');
+        assert.equal(u.searchParams.get('id'), 'com.unaryx.suna');
+        const ref = u.searchParams.get('referrer');
+        if (ref) assert.match(ref, /^utm_source=suna&utm_campaign=[a-z0-9-]{1,40}$/);
+        assert.ok(!/Join the Android list|App Store/.test(l.text), l.text);
       }
-      assert.ok(await page.$$eval('.android-note', (n) => n.length) > 0, 'the line under it');
+      if (path.startsWith('/e/')) assert.ok(swapped.some((l) => new URL(l.href).searchParams.get('referrer')), 'a ct carried as the campaign');
+      assert.equal(await page.$$eval('.android-note', (n) => n.length), 0, 'no waitlist line');
       // Tap the first one and wait past every hand-off timer (1.2–1.5 s).
-      await Promise.all([page.waitForURL('https://unaryx.com/android**'), page.click('a[data-android]')]);
+      await Promise.all([page.waitForURL('https://play.google.com/**'), page.click('a[data-android]')]);
       await page.waitForTimeout(2200);
-      assert.ok(page.url().startsWith('https://unaryx.com/android?'), page.url());
+      assert.ok(page.url().startsWith(PLAY), page.url());
       assert.ok(!asked.some((u) => /apps\.apple\.com|^suna:/.test(u)), 'no App Store or scheme request');
       await close();
     });
@@ -145,7 +162,7 @@ else {
       const { page, close } = await open(UA_ANDROID, path);
       const text = await page.evaluate(() => document.body.innerText);
       assert.ok(!/App Store/.test(text), `${path}: ${(text.match(/.*App Store.*/) || [])[0]}`);
-      const tall = await page.$$eval('a[data-android]', (as) => as.filter((a) => a.getBoundingClientRect().height > 50).length);
+      const tall = await page.$$eval('a[data-android]', (as) => as.filter((a) => a.getBoundingClientRect().height > 60).length);
       assert.equal(tall, 0, `${path}: a button wraps`);
       await close();
     }

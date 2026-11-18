@@ -246,7 +246,7 @@ export function appCard(store, heading) {
     <div class="st">${PX('phone')}Walk past one and Suna gives you a nudge.</div>
     <div class="st">${PX('nightmarkets')}See what's on this weekend, checked by a person.</div>
     <a class="btn p app-store" href="${esc(store)}">${APPLE} Get Suna on the App Store</a>
-    <a class="and" href="https://unaryx.com/android?from=app-place">On Android? Join the list: Suna on Android, December</a></div>`;
+    <a class="and" href="https://play.google.com/store/apps/details?id=com.unaryx.suna&amp;referrer=utm_source%3Dsuna%26utm_campaign%3Dapp-place" target="_blank" rel="noopener">On Android? Get Suna on Google Play</a></div>`;
 }
 
 export const FOOT = '<footer class="foot"><b>Suna</b> · things to do near you<br><a href="https://unaryx.com/events">What\'s on</a> · <a href="https://unaryx.com/events/list">Organisers</a> · <a href="https://unaryx.com/partners">Partners</a> · <a href="https://unaryx.com/">unaryx.com</a></footer>';

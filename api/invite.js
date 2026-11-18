@@ -5,7 +5,8 @@
 // never reaches here. Without it there is no page (Brian, 24 Oct: a scan
 // should take them to download the app): a 302 by device, the way
 // unaryx.com/get answers. iPhone and iPad → the App Store, ct=invite-qr from
-// a code (?via=qr), else ct=invite-link; Android → the Android list; a
+// a code (?via=qr), else ct=invite-link; Android → Google Play (W-241), the same ct as its
+// install referrer campaign; a
 // computer → /get's QR page. The username is never shown, stored or put in
 // ct: the new user finds their friend in the app afterwards. A bad username
 // gets the same redirects. Never cached, since the answer depends on the phone.
@@ -14,6 +15,9 @@
 // with no storefront in it, so Apple opens the visitor's own country's store.
 const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${ct}&mt=8`;
 const CT = /^[a-z0-9-]{1,40}$/;
+// W-241: Suna is on Google Play; the campaign rides in the install referrer.
+export const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
+export const playURL = (ct) => CT.test(String(ct || '')) ? `${PLAY}&referrer=${encodeURIComponent(`utm_source=suna&utm_campaign=${ct}`)}` : PLAY;
 
 /** 'ios', 'android' or 'desktop'. Android first, as /get does. */
 export function deviceFrom(ua) {
@@ -37,7 +41,7 @@ export function ctFrom(rawURL) {
 
 export function targetFor(device, ct) {
   if (device === 'ios') return STORE(CT.test(ct) ? ct : 'invite-link');
-  if (device === 'android') return 'https://unaryx.com/android?from=invite';
+  if (device === 'android') return playURL(CT.test(ct) ? ct : 'invite-link');
   return 'https://unaryx.com/get?ct=invite-link';
 }
 
