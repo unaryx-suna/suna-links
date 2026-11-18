@@ -52,8 +52,24 @@
     var ref = "utm_source=suna" + (camp ? "&utm_campaign=" + camp : "") + (t ? "&suna_target=" + t : "");
     return PLAY + "&referrer=" + encodeURIComponent(ref);
   }
+  // W-246: Apple's link says the channel (partners / creators / print); Play keeps the
+  // FULL ct, from the page's data-ct or its own ?ct= / ?via= / ?src=, when it belongs
+  // to that channel.
+  function group(c) {
+    return /^partner-/.test(c) ? "partners" : /^creator-/.test(c) ? "creators" : (c === "checkpoint" || /^(print|sticker)(-|$)/.test(c)) ? "print" : c;
+  }
   function ctOf(a) {
-    try { return new URL(a.getAttribute("href") || "", location.href).searchParams.get("ct") || ""; } catch (e) { return ""; }
+    var ct = "";
+    try { ct = new URL(a.getAttribute("href") || "", location.href).searchParams.get("ct") || ""; } catch (e) { ct = ""; }
+    if (!/^(partners|creators|print)$/.test(ct)) return ct;
+    // The page's own ct (data-ct, only set by a page that owns one, e.g. a /c/ venue,
+    // whose partner-* card is print) wins; a query value must belong to the channel.
+    var own = document.documentElement.getAttribute("data-ct");
+    if (own && CLEAN.test(own)) return own;
+    var q = new URLSearchParams(location.search);
+    var cands = [q.get("ct"), q.get("via"), q.get("src")];
+    for (var i = 0; i < cands.length; i++) if (cands[i] && CLEAN.test(cands[i]) && group(cands[i]) === ct) return cands[i];
+    return ct;
   }
   // Swap "App Store" for "Google Play" in the label's text nodes only, so an
   // icon inside the button is kept.

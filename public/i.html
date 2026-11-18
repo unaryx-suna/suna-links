@@ -275,6 +275,9 @@
       var CT_OK = /^[a-z0-9][a-z0-9-]{0,39}$/;
       function storeURL() {
         var ct = (viaParam && CT_OK.test(viaParam)) ? viaParam : 'web-i';
+        // W-246: Apple's link carries the channel (api/_clip.js appleCt); android.js
+        // gives Play the full via back.
+        ct = /^partner-/.test(ct) ? 'partners' : /^creator-/.test(ct) ? 'creators' : (ct === 'checkpoint' || /^(print|sticker)(-|$)/.test(ct)) ? 'print' : ct;
         return 'https://apps.apple.com/app/id6759053765'
           + '?pt=128539200&ct=' + encodeURIComponent(ct) + '&mt=8';
       }

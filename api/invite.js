@@ -14,7 +14,9 @@
 
 // W-159: the one App Store link the sites use (unaryx.com/get, SITE-ALIGNMENT),
 // with no storefront in it, so Apple opens the visitor's own country's store.
-const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${ct}&mt=8`;
+// W-246: Apple's link carries the channel (creator-* → creators …); Play below keeps the full ct.
+import { appleCt } from './_clip.js';
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${appleCt(ct)}&mt=8`;
 const CT = /^[a-z0-9-]{1,40}$/;
 // W-241: Suna is on Google Play; the campaign rides in the install referrer.
 export const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';

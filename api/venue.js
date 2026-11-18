@@ -120,7 +120,8 @@ export function placeRow(p, taken = new Set()) {
 
 export function venueBody(venue, found, now, places = []) {
   const name = venue ? venue.name : null;
-  const store = storeURL(venue && venue.ct, 'web-c');
+  // W-246: a /c/ code is a printed card, so Apple's link says ct=print (the page's data-ct keeps the venue's own ct).
+  const store = venue && venue.ct ? storeURL('print', 'web-c') : storeURL(null, 'web-c');
   const mark = '<a href="https://unaryx.com/events"><span class="mark-dot" aria-hidden="true"></span>Suna</a>';
   let content;
   if (!venue) {
@@ -178,5 +179,5 @@ export default async function handler(req, res) {
     : 'Events tonight and places worth the detour, within a short walk. On Suna.';
   const canonical = `${ORIGIN}/c/${venue ? encodeURIComponent(venue.slug) : ''}`;
   // Five minutes at the edge: "on now" goes stale faster than an itinerary.
-  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' } }), 300);
+  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
 }

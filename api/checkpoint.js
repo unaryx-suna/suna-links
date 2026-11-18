@@ -18,7 +18,8 @@
 import { page, send, escapeHtml, segment } from './_clip.js';
 
 const ORIGIN = 'https://app.unaryx.com';
-const STORE = 'https://apps.apple.com/app/id6759053765?pt=128539200&ct=checkpoint&mt=8';
+// W-246: checkpoint cards are print, so Apple's link says ct=print; Play keeps campaign checkpoint.
+const STORE = 'https://apps.apple.com/app/id6759053765?pt=128539200&ct=print&mt=8';
 const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
 const RULES = 'https://unaryx.com/checkpoints';
 // What a card carries: letters, digits and dashes. Anything else gets the page without a target.

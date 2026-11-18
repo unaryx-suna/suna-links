@@ -147,9 +147,11 @@ await t('/c/: nothing this week anywhere → a link to the city\'s /events, stil
   assert.match(r.body, /Nothing listed nearby this week/);
   assert.match(r.body, /href="https:\/\/unaryx\.com\/events\/kuala-lumpur"/);
 });
-await t('/c/: Get Suna carries the venue\'s ct; Clip meta and og: tags present', async () => {
+// W-246: a /c/ code is a printed card, so Apple's link says ct=print; the page's data-ct keeps the venue's ct.
+await t('/c/: Get Suna says ct=print (W-246), the page keeps data-ct=<venue ct>; Clip meta and og: tags present', async () => {
   const r = await render(venue, '/c/worq-ttdi');
-  assert(r.body.includes(`href="${STORE('partner-worq-ttdi').replace(/&/g, '&amp;')}"`));
+  assert(r.body.includes(`href="${STORE('print').replace(/&/g, '&amp;')}"`));
+  assert(r.body.includes('<html lang="en" data-ct="partner-worq-ttdi">'));
   assert(r.body.includes(CLIP_META));
   assert.match(r.body, /<meta property="og:title" content="What&#39;s on near WORQ TTDI · Suna">/);
   assert.match(r.body, /<link rel="canonical" href="https:\/\/app\.unaryx\.com\/c\/worq-ttdi">/);
@@ -374,7 +376,7 @@ await t('W-48 (2) Save in Suna: store href with the page ct everywhere, the app 
   assert(r.body.includes(maps.PAGE_SCRIPT));
   state.events = [ev(U(1), 0.0045)];
   r = await render(venue, '/c/worq-ttdi');
-  assert(r.body.includes(`<a class="btn save-suna" data-scheme="suna://venue?slug=worq-ttdi" href="${STORE('partner-worq-ttdi').replace(/&/g, '&amp;')}">See it all in Suna</a>`));
+  assert(r.body.includes(`<a class="btn save-suna" data-scheme="suna://venue?slug=worq-ttdi" href="${STORE('print').replace(/&/g, '&amp;')}">See it all in Suna</a>`));
   assert.match(r.body, /<body class="has-bar">/);
   assert.equal((r.body.match(/class="btn[ "]/g) || []).length, 1, 'one sand button');
   r = await render(venue, '/c/nope');

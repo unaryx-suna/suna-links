@@ -25,6 +25,7 @@
 // views are worth counting, they get their own decision and their own rows.
 
 import { segmentAfter, tailOf } from './_slug.js';
+import { appleCt } from './_clip.js';
 import { MAPS_HEAD, PAGE_SCRIPT, hasPin } from './_maps.js';
 import { CSS, HEAD_FONTS, esc, tzFor, hoursInfo, km, placeBody, missingBody } from './_placepage.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
@@ -302,7 +303,8 @@ function cityFor(headers) {
   return CITIES.slice().sort((a, b) => km(lat, lng, a.lat, a.lng) - km(lat, lng, b.lat, b.lng))[0];
 }
 
-const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${encodeURIComponent(ct)}&mt=8`;
+// W-246: Apple's link carries the channel (partner-<slug> → partners); the page keeps the full ct.
+const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=${encodeURIComponent(appleCt(ct))}&mt=8`;
 
 function page({ tags, body, android }) {
   return `<!DOCTYPE html>

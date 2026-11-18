@@ -57,10 +57,23 @@ export const EVENT_SELECT = [
 const STORE = 'https://apps.apple.com/app/id6759053765';
 const CT = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
-/** The App Store link, always attributed; a `ct` that isn't a clean token falls back. */
+// W-246 (Ops OPS-236): App Store Connect lists a campaign only after 5 installs, so
+// Apple's link carries ONE ct per channel: partner-* → partners, creator-* → creators,
+// checkpoint / print* / sticker* → print (and /c/ codes, venue.js); everything else
+// unchanged. Our side keeps the full value (the page's data-ct, Play's utm_campaign).
+// unaryx.com has the same rule in api/_lib/asc.js.
+export function appleCt(ct) {
+  const s = String(ct == null ? '' : ct);
+  if (/^partner-/.test(s)) return 'partners';
+  if (/^creator-/.test(s)) return 'creators';
+  if (s === 'checkpoint' || /^(print|sticker)(-|$)/.test(s)) return 'print';
+  return s;
+}
+
+/** The App Store link, always attributed; a `ct` that isn't a clean token falls back. Apple sees the channel (W-246). */
 export function storeURL(ct, fallback) {
   const token = CT.test(String(ct || '')) ? ct : fallback;
-  return `${STORE}?pt=128539200&ct=${encodeURIComponent(token)}&mt=8`;
+  return `${STORE}?pt=128539200&ct=${encodeURIComponent(appleCt(token))}&mt=8`;
 }
 
 export async function rest(path) {
@@ -421,7 +434,7 @@ export function androidTag({ from = 'page', city = '' } = {}) {
   return `<script src="/android.js" data-from="${escapeHtml(from)}"${city ? ` data-city="${escapeHtml(city)}"` : ''}></script>`;
 }
 
-export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '', android = null }) {
+export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '', android = null, ct = null }) {
   const tags = [
     noindex ? '<meta name="robots" content="noindex">' : '',
     `<title>${escapeHtml(title)}</title>`,
@@ -441,7 +454,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` : '',
   ].filter(Boolean).join('\n  ');
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${ct && CT.test(String(ct)) ? ` data-ct="${ct}"` : ''}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
