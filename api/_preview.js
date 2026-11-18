@@ -413,7 +413,7 @@ function lockedBlock(count, dayCounts, shownDays) {
           <p class="lt">+${count} more stop${count === 1 ? '' : 's'} in the app</p>
           <p class="ls">${escapeHtml(where)}Copy the plan and Suna takes you through it, stop by stop.</p>
           ${copyButton()}
-          <p class="ls small">Free on iPhone · Android in December</p>
+          <p class="ls small">Free on iPhone and Android</p>
         </div>
       </div>
     </li>`;

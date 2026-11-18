@@ -414,7 +414,7 @@ export const MARK = '<a class="mark" href="https://unaryx.com/events"><span clas
  * surfaces the Clip card in Safari: both routes are registered experiences.
  */
 /**
- * W-115: on Android, App Store buttons become the Android waitlist
+ * W-115 / W-241: on Android, App Store buttons go to Google Play
  * (public/android.js). `from` is the page kind, `city` its slug if known.
  */
 export function androidTag({ from = 'page', city = '' } = {}) {

@@ -44,8 +44,11 @@ t('W-159: an allowed ct on the link goes through (the Ask Suna invite); anything
   assert.equal(call('/u/aina?ct=' + 'x'.repeat(40), UA.iphone).h.Location, STORE('x'.repeat(40)));
 });
 
-t('Android → /android?from=invite; a computer → /get?ct=invite-link', () => {
-  assert.equal(call('/u/aina?via=qr', UA.android).h.Location, 'https://unaryx.com/android?from=invite');
+t('Android → Google Play with the invite ct as its referrer campaign (W-241), the profile as suna_target (W-242); a computer → /get?ct=invite-link', () => {
+  const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna&referrer=';
+  assert.equal(call('/u/aina?via=qr', UA.android).h.Location, PLAY + encodeURIComponent('utm_source=suna&utm_campaign=invite-qr&suna_target=%2Fu%2Faina'));
+  assert.equal(call('/u/aina', UA.android).h.Location, PLAY + encodeURIComponent('utm_source=suna&utm_campaign=invite-link&suna_target=%2Fu%2Faina'));
+  assert.equal(call('/u/aina?ct=ask-invite', UA.android).h.Location, PLAY + encodeURIComponent('utm_source=suna&utm_campaign=ask-invite&suna_target=%2Fu%2Faina'));
   assert.equal(call('/u/aina', UA.mac).h.Location, 'https://unaryx.com/get?ct=invite-link');
   assert.equal(call('/u/aina', undefined).h.Location, 'https://unaryx.com/get?ct=invite-link');
 });
