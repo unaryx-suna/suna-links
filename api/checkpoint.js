@@ -29,19 +29,42 @@ const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 // The shape checkpoints.code has in the database (I-637's check constraint).
 const DB_CODE = /^[a-z0-9]{6,16}$/;
 
-/** The place's name for an active code, or null. Never throws. */
+// W-247 (iOS I-680): a printed sticker (print_codes kind sticker, unaryx.com/c/<code>) can BE a
+// checkpoint. unaryx.com/c/<code> sends a checkpoint sticker here as /cp/<sticker code>, so the
+// page names its place the same way. The sticker's row says which checkpoint; the checkpoint's own
+// code is never read or shown. Six characters, no 0/O/1/I (unaryx-site api/c.js ALPHABET).
+const STICKER = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+async function read(path, key) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(1500),
+  });
+  if (!r.ok) return null;
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+function nameOf(row) {
+  const name = row && row.landmarks && row.landmarks.name;
+  return typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : null;
+}
+
+/** The place's name for an active code (a /cp/ code first, then a checkpoint sticker), or null. Never throws. */
 export async function placeFor(code, key = process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!key) return null;
   const c = String(code || '').toLowerCase();
-  if (!DB_CODE.test(c) || !key) return null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/checkpoints?code=eq.${c}&active=is.true&select=landmarks(name)&limit=1`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(1500),
-    });
-    if (!r.ok) return null;
-    const rows = await r.json();
-    const name = rows && rows[0] && rows[0].landmarks && rows[0].landmarks.name;
-    return typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : null;
+    if (DB_CODE.test(c)) {
+      const name = nameOf(await read(`checkpoints?code=eq.${c}&active=is.true&select=landmarks(name)&limit=1`, key));
+      if (name) return name;
+    }
+    const s = String(code || '').toUpperCase();
+    if (!STICKER.test(s)) return null;
+    const pc = await read(`print_codes?code=eq.${s}&kind=eq.sticker&target_type=eq.checkpoint&select=target&limit=1`, key);
+    if (!pc || !UUID.test(String(pc.target || ''))) return null;
+    return nameOf(await read(`checkpoints?id=eq.${pc.target}&active=is.true&select=landmarks(name)&limit=1`, key));
   } catch { return null; }
 }
 
