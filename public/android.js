@@ -17,15 +17,40 @@
 // Play"; any other label stays. A caption about the App Store next to the
 // button says "Free on Google Play." instead.
 // unaryx.com has the same function in api/_lib/android.js.
+//
+// W-242 (Brian, 18 Nov; Android half A-167): the referrer also carries the
+// page itself, suna_target=<path>, so the app opens it after the install.
+// Only these path shapes: /i/<slug>, /e/<id>, /place/<slug>, /u/<username>,
+// /cp/<code>; never the query (a share token can sit there), never anything
+// else. Encoded, 200 characters at most, else left out (the link still
+// works). With no clean ct, the campaign is the page kind (data-from).
 (function () {
   if (!/Android/i.test(navigator.userAgent)) return;
   window.sunaIsAndroid = true;
   var PLAY = "https://play.google.com/store/apps/details?id=com.unaryx.suna";
   var SEL = 'a[href*="apps.apple.com"], a[data-app]';
+  var me = document.currentScript;
+  var KIND = (me && me.getAttribute("data-from")) || "";
+  var CLEAN = /^[a-z0-9-]{1,40}$/;
+  var SHAPES = [/^\/i\/[A-Za-z0-9-]{1,100}$/, /^\/e\/[A-Za-z0-9-]{1,64}$/, /^\/place\/[A-Za-z0-9-]{1,120}$/, /^\/u\/[A-Za-z0-9._]{1,40}$/, /^\/cp\/[A-Za-z0-9-]{1,40}$/];
+  // This page's path when it is one of the shapes, encoded; else "".
+  function target() {
+    var p = location.pathname.replace(/\/+$/, "");
+    for (var i = 0; i < SHAPES.length; i++) {
+      if (SHAPES[i].test(p)) { var e = encodeURIComponent(p); return e.length <= 200 ? e : ""; }
+    }
+    return "";
+  }
+  window.sunaPlayTarget = target;
 
-  // The Play link for one button: its original ct, if clean, as the campaign.
+  // The Play link for one button: its original ct (else the page kind) as
+  // the campaign, and this page as suna_target.
   function playHref(ct) {
-    return /^[a-z0-9-]{1,40}$/.test(ct || "") ? PLAY + "&referrer=" + encodeURIComponent("utm_source=suna&utm_campaign=" + ct) : PLAY;
+    var camp = CLEAN.test(ct || "") ? ct : (CLEAN.test(KIND) ? KIND : "");
+    var t = target();
+    if (!camp && !t) return PLAY;
+    var ref = "utm_source=suna" + (camp ? "&utm_campaign=" + camp : "") + (t ? "&suna_target=" + t : "");
+    return PLAY + "&referrer=" + encodeURIComponent(ref);
   }
   function ctOf(a) {
     try { return new URL(a.getAttribute("href") || "", location.href).searchParams.get("ct") || ""; } catch (e) { return ""; }

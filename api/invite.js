@@ -8,7 +8,8 @@
 // a code (?via=qr), else ct=invite-link; Android → Google Play (W-241), the same ct as its
 // install referrer campaign; a
 // computer → /get's QR page. The username is never shown, stored or put in
-// ct: the new user finds their friend in the app afterwards. A bad username
+// ct; since W-242 it rides in Play's install referrer (suna_target) so the
+// app can open the profile after the install. A bad username
 // gets the same redirects. Never cached, since the answer depends on the phone.
 
 // W-159: the one App Store link the sites use (unaryx.com/get, SITE-ALIGNMENT),
@@ -17,7 +18,23 @@ const STORE = (ct) => `https://apps.apple.com/app/id6759053765?pt=128539200&ct=$
 const CT = /^[a-z0-9-]{1,40}$/;
 // W-241: Suna is on Google Play; the campaign rides in the install referrer.
 export const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
-export const playURL = (ct) => CT.test(String(ct || '')) ? `${PLAY}&referrer=${encodeURIComponent(`utm_source=suna&utm_campaign=${ct}`)}` : PLAY;
+// W-242: the referrer also carries the profile (suna_target=/u/<username>,
+// encoded), so the app opens it after the install; only a clean username,
+// 200 encoded characters at most, else left out.
+const USER = /^[A-Za-z0-9._]{1,40}$/;
+export function targetFrom(rawURL) {
+  let p = '';
+  try { p = new URL(String(rawURL || ''), 'https://app.unaryx.com').pathname.replace(/\/+$/, ''); } catch { return ''; }
+  const m = p.match(/^\/u\/([^/]+)$/);
+  if (!m || !USER.test(m[1])) return '';
+  const e = encodeURIComponent(p);
+  return e.length <= 200 ? e : '';
+}
+export const playURL = (ct, target = '') => {
+  const camp = CT.test(String(ct || '')) ? ct : '';
+  if (!camp && !target) return PLAY;
+  return `${PLAY}&referrer=${encodeURIComponent(`utm_source=suna${camp ? `&utm_campaign=${camp}` : ''}${target ? `&suna_target=${target}` : ''}`)}`;
+};
 
 /** 'ios', 'android' or 'desktop'. Android first, as /get does. */
 export function deviceFrom(ua) {
@@ -39,14 +56,14 @@ export function ctFrom(rawURL) {
   return q.get('via') === 'qr' ? 'invite-qr' : 'invite-link';
 }
 
-export function targetFor(device, ct) {
+export function targetFor(device, ct, target = '') {
   if (device === 'ios') return STORE(CT.test(ct) ? ct : 'invite-link');
-  if (device === 'android') return playURL(CT.test(ct) ? ct : 'invite-link');
+  if (device === 'android') return playURL(CT.test(ct) ? ct : 'invite-link', target);
   return 'https://unaryx.com/get?ct=invite-link';
 }
 
 export default function handler(req, res) {
-  const to = targetFor(deviceFrom(req.headers && req.headers['user-agent']), ctFrom(req.url));
+  const to = targetFor(deviceFrom(req.headers && req.headers['user-agent']), ctFrom(req.url), targetFrom(req.url));
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.status(302).setHeader('Location', to).end();

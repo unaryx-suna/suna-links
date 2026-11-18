@@ -136,7 +136,7 @@ else {
         assert.equal(u.origin + u.pathname, 'https://play.google.com/store/apps/details');
         assert.equal(u.searchParams.get('id'), 'com.unaryx.suna');
         const ref = u.searchParams.get('referrer');
-        if (ref) assert.match(ref, /^utm_source=suna&utm_campaign=[a-z0-9-]{1,40}$/);
+        if (ref) assert.match(ref, /^utm_source=suna&utm_campaign=[a-z0-9-]{1,40}(&suna_target=%2F(i|e|place|u|cp)%2F[A-Za-z0-9._-]+)?$/);
         assert.ok(!/Join the Android list|App Store/.test(l.text), l.text);
       }
       if (path.startsWith('/e/')) assert.ok(swapped.some((l) => new URL(l.href).searchParams.get('referrer')), 'a ct carried as the campaign');
