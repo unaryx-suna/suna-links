@@ -6,10 +6,13 @@
 // SUNA, "You found a Suna checkpoint", the points card (5 points are waiting), the 24-hour
 // line, three steps, the rules link, and both stores at the bottom, on every device.
 //
-// It never logs a find. The place on the card: checkpoint codes can't be read by the web
-// (I-637's RLS: knowing a code is a free find), so until there is an approved way to look a
-// code's place up, the card says "This checkpoint" instead of the place name; `place` is the
-// slot for it. The code only goes into Play's install referrer (suna_target=/cp/<code>, W-242),
+// It never logs a find. The place on the card (Brian 18 Nov: "yes, place lookup"): checkpoint
+// codes stay unreadable to the public (I-637's RLS: knowing a code is a free find), so this
+// server looks the code up with the service key and puts ONLY the place's name on the page:
+// never the code list, the label, the partner or anything else. Only an active code of the
+// database's own shape (6-16 lowercase letters and digits) is looked up; the answer is cached
+// with the page (an hour at the CDN). Unknown, inactive, slow (1.5 s) or failed: the card says
+// "This checkpoint", the same page as any other code. The code only goes into Play's install referrer (suna_target=/cp/<code>, W-242),
 // so the app can open it after the install. Not for search engines.
 
 import { page, send, escapeHtml, segment } from './_clip.js';
@@ -20,6 +23,26 @@ const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
 const RULES = 'https://unaryx.com/checkpoints';
 // What a card carries: letters, digits and dashes. Anything else gets the page without a target.
 const CODE = /^[A-Za-z0-9-]{3,40}$/;
+
+const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
+// The shape checkpoints.code has in the database (I-637's check constraint).
+const DB_CODE = /^[a-z0-9]{6,16}$/;
+
+/** The place's name for an active code, or null. Never throws. */
+export async function placeFor(code, key = process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const c = String(code || '').toLowerCase();
+  if (!DB_CODE.test(c) || !key) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/checkpoints?code=eq.${c}&active=is.true&select=landmarks(name)&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const name = rows && rows[0] && rows[0].landmarks && rows[0].landmarks.name;
+    return typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : null;
+  } catch { return null; }
+}
 
 /** The code from `/cp/<code>`, or null when it isn't one a card could carry. */
 export function codeFrom(rawURL) {
@@ -88,11 +111,12 @@ export function checkpointBody(code, place = null) {
 
 export default async function handler(req, res) {
   const code = codeFrom(req.url);
+  const place = await placeFor(code);
   send(res, page({
     title: 'You found a Suna checkpoint',
     description: 'Get Suna and open this link again within 24 hours to keep the points. Most points each week wins a ticket to a Suna event, up to RM100.',
     canonical: `${ORIGIN}/cp/${code ? encodeURIComponent(code) : ''}`,
-    body: checkpointBody(code),
+    body: checkpointBody(code, place),
     noindex: true,
     android: { from: 'checkpoint' },
   }), 3600);

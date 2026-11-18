@@ -3,9 +3,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-let calls = 0;
-globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => [] }; };
-const { default: handler, codeFrom, checkpointBody } = await import('./api/checkpoint.js');
+// The place lookup (Brian 18 Nov: "yes, place lookup"): one read of checkpoints → landmarks(name).
+let calls = 0, seen = [], answer = () => ({ ok: true, status: 200, json: async () => [] });
+globalThis.fetch = async (url, opts) => { calls++; seen.push({ url: String(url), opts }); return answer(); };
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key-for-tests';
+const { default: handler, codeFrom, checkpointBody, placeFor } = await import('./api/checkpoint.js');
 async function call(url) {
   const o = { code: 0, hdr: {}, body: '' };
   const res = { status(c) { o.code = c; return this; }, setHeader(k, v) { o.hdr[k.toLowerCase()] = v; return this; }, send(b) { o.body = b; return this; }, end() { return this; } };
@@ -41,10 +43,32 @@ await t('W1 (Figma 3700:6631): SUNA, the headline, the 5-point card, the 24-hour
   assert.match(r.hdr['cache-control'], /s-maxage=3600/);
   for (const f of ['public/cp/coin-ring.svg', 'public/cp/coin-face.png']) assert.ok(readFileSync(f).length > 100, f);
 });
-await t('never reads the code or logs a find: no request at all, and no place is named', async () => {
+await t('place lookup: an active code shows its place name; the read asks only for the name, server-side, with a timeout', async () => {
+  seen = [];
+  answer = () => ({ ok: true, status: 200, json: async () => [{ landmarks: { name: 'Emspaced @ KL Sentral' } }] });
+  const r = await call('/cp/AbCdE12345');
+  assert.match(r.body, /<p class="cp-place">Emspaced @ KL Sentral<\/p>/);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, 'https://voogrbonwmvfwtgzzrxc.supabase.co/rest/v1/checkpoints?code=eq.abcde12345&active=is.true&select=landmarks(name)&limit=1');
+  assert.equal(seen[0].opts.headers.apikey, 'service-key-for-tests');
+  assert.ok(seen[0].opts.signal, 'a timeout');
+  assert.ok(!seen[0].opts.method || seen[0].opts.method === 'GET', 'a read, never a write');
+  assert.doesNotMatch(r.body, /service-key-for-tests/);
+  // A name is escaped.
+  answer = () => ({ ok: true, status: 200, json: async () => [{ landmarks: { name: '<b>x</b>' } }] });
+  assert.match((await call('/cp/abcde12345')).body, /<p class="cp-place">&lt;b&gt;x&lt;\/b&gt;<\/p>/);
+});
+await t('place lookup: unknown, inactive, failed, slow or no key → "This checkpoint"; a code not of the database\'s shape is never looked up; no find is ever logged', async () => {
+  for (const a of [() => ({ ok: true, status: 200, json: async () => [] }), () => ({ ok: false, status: 500, json: async () => ({}) }), () => { throw new Error('down'); }, () => ({ ok: true, status: 200, json: async () => [{ landmarks: null }] })]) {
+    answer = a;
+    assert.match((await call('/cp/abcde12345')).body, /<p class="cp-place">This checkpoint<\/p>/);
+  }
   calls = 0;
-  await call('/cp/KL-KWAI-01');
-  assert.equal(calls, 0);
+  for (const c of ['KL-KWAI-01', 'abc', 'a'.repeat(17), 'abc-def-12']) await call('/cp/' + c);
+  assert.equal(calls, 0, 'only 6-16 lowercase letters and digits are looked up');
+  assert.equal(await placeFor('abcde12345', ''), null, 'no key: no read');
+  for (const { url, opts } of seen) assert.doesNotMatch(url + JSON.stringify(opts || {}), /log_checkpoint_find|checkpoint_finds|rpc\//);
+  answer = () => ({ ok: true, status: 200, json: async () => [] });
 });
 await t('a code a card couldn\'t carry: the same page without a target, nothing echoed', async () => {
   assert.equal(codeFrom('/cp/%3Cscript%3E'), null);
