@@ -549,7 +549,7 @@
     <div class="fg fg-hide" id="sk-box" hidden>
       <label for="sk-code">Assign a sticker as a checkpoint</label>
       <p class="note" style="margin:0 0 8px">Type the 6-letter code printed under the sticker's QR. Scanning it then counts as finding this place: 5 points, once per person.</p>
-      <input id="sk-code" type="text" placeholder="Sticker code, e.g. 4FWGWV" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12">
+      <input id="sk-code" type="text" placeholder="Sticker code, e.g. K7M2PQ" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12">
       <input id="sk-label" type="text" placeholder="Label (optional), e.g. By the front door" autocomplete="off" maxlength="60" style="margin-top:8px">
       <button class="ghost" type="button" id="sk-assign" style="margin-top:8px">Assign sticker</button>
       <p class="note" id="sk-note" role="status" hidden></p>
@@ -8941,7 +8941,7 @@ function stickerError(err) {
   const m = String((err && err.message) || '');
   if (/admins only/.test(m)) return 'Only an admin can assign stickers.';
   if (/unknown code/.test(m)) return 'No sticker has that code. Check the letters under the QR.';
-  if (/not a sticker/.test(m)) return 'That code is a ' + ((m.match(/\(([^)]+)\)/) || [])[1] || 'card') + ', not a sticker.';
+  if (/not a sticker/.test(m)) return 'That code isn\'t a sticker (it\'s printed on: ' + ((m.match(/\(([^)]+)\)/) || [])[1] || 'something else') + ').';
   if (/already points at a/.test(m)) return 'That sticker already points at ' + (m.includes('partner') ? 'a partner' : m.includes('event') ? 'an event' : m.includes('place') ? 'a place page' : 'a page') + ', so it can\'t be a checkpoint.';
   if (/unknown place/.test(m)) return 'This place isn\'t on the server yet. Save it first.';
   return 'Could not assign the sticker: ' + (m || 'no answer') + '.';
@@ -8961,7 +8961,7 @@ $('sk-assign').onclick = async () => {
   const note = $('sk-note'), btn = $('sk-assign');
   const code = stickerCode($('sk-code').value);
   note.hidden = false;
-  if (!code) { note.textContent = 'A sticker code is 6 letters and digits, e.g. 4FWGWV.'; return; }
+  if (!code) { note.textContent = 'A sticker code is 6 letters and digits, e.g. K7M2PQ.'; return; }
   btn.disabled = true; note.textContent = 'Assigning…';
   try {
     const { data, error } = await db.rpc('assign_sticker_checkpoint', {
