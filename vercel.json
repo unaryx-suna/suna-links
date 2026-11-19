@@ -92,6 +92,10 @@
     {
       "source": "/cp/:path*",
       "destination": "/api/checkpoint"
+    },
+    {
+      "source": "/first-light",
+      "destination": "/api/first-light"
     }
   ],
   "functions": {

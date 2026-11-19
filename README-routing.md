@@ -38,3 +38,13 @@ line in `<head>` shows the Apple one on Apple devices. The split is in the
 browser because the pages are edge-cached by URL, not by device. Open in Suna
 (the `suna://` scheme, App Store fallback after 1.5 s) shows on iPhone only:
 a universal link never opens the app from a page on its own domain.
+
+## First Light email link (W-250)
+
+`/first-light` (exact path, `api/first-light.js`) is the button in the trial
+day-5 email (iOS I-687 (b)). With Suna installed the AASA entry opens the app,
+which shows the card; Android's `assetlinks.json` covers the whole host, so its
+path lives in the app's manifest (A-177). Without the app: one `noindex` page,
+"Open Suna on your phone to see your offer.", both stores (Apple
+`ct=first-light`; Play's referrer carries `suna_target=/first-light`). No
+prices, no sign-in, nothing read; not in the sitemap.

@@ -19,7 +19,7 @@ const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name);
 
 await t('the AASA claims /cp/* after the others, appclips unchanged; /cp/* is routed to the page; assetlinks unchanged (Android paths live in the app)', () => {
   const a = JSON.parse(readFileSync('public/.well-known/apple-app-site-association', 'utf8'));
-  assert.deepEqual(a.applinks.details[0].components.map((c) => c['/']).slice(-2), ['/u/*', '/cp/*']);
+  assert.deepEqual(a.applinks.details[0].components.map((c) => c['/']).slice(-3, -1), ['/u/*', '/cp/*']);
   assert.deepEqual(a.appclips, { apps: ['29XRVFHL4F.com.unaryx.TravelMug.Clip'] });
   const v = JSON.parse(readFileSync('vercel.json', 'utf8'));
   assert.deepEqual(v.rewrites.find((r) => r.source === '/cp/:path*'), { source: '/cp/:path*', destination: '/api/checkpoint' });
