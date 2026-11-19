@@ -38,7 +38,8 @@ await t('the page: 200, noindex, the one line, both stores; no price, no sign-in
     assert.match(r.body, /<meta name="robots" content="noindex">/);
     assert.match(r.body, /<link rel="canonical" href="https:\/\/app\.unaryx\.com\/first-light">/);
     assert.ok(r.body.includes('<h1>Open Suna on your phone to see your offer.</h1>'));
-    assert.ok(r.body.includes('>Download on the App Store</a>') && r.body.includes('>Get it on Google Play</a>'));
+    assert.match(r.body, /<img class="as" src="\/first-light\/app-store\.svg" alt="Download on the App Store"/);
+    assert.match(r.body, /<img class="gp" src="\/first-light\/google-play\.png" alt="Get it on Google Play"/);
     assert.doesNotMatch(r.body, /US\$|RM\s?\d|\$\d|per month|\/mo\b|sign[ -]?in|log[ -]?in|password/i);
     assert.doesNotMatch(r.body, /utm_source=email/, 'the query is not echoed');
   }
@@ -50,6 +51,24 @@ await t('store links: Apple ct=first-light with pt; Play referrer has the campai
   assert.equal(q.get('utm_source'), 'suna');
   assert.equal(q.get('utm_campaign'), 'first-light');
   assert.equal(q.get('suna_target'), '/first-light');
+});
+await t('W-252: the sunrise look: both hero vectors inline with unique ids, the sun rises once, reduced motion ends still; assets exist', () => {
+  const b = call('/first-light').body;
+  assert.equal((b.match(/<svg class="fl-sky fl-sky-p"/g) || []).length, 1);
+  assert.equal((b.match(/<svg class="fl-sky fl-sky-d"/g) || []).length, 1);
+  const ids = [...b.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(ids).size, ids.length, 'no duplicate ids');
+  for (const c of ['#140F2E', '#8A3E9A', '#F69B6E', '#FFF9D5', '#F6CB94', '#0C0A18']) assert.ok(b.includes(c), c);
+  assert.equal((b.match(/<g class="fl-sun">/g) || []).length, 2);
+  assert.match(b, /\.fl-sun \{ animation: fl-rise [^}]* both; \}/);
+  assert.doesNotMatch(b, /infinite/);
+  assert.match(b, /@media \(prefers-reduced-motion: reduce\) \{ \.fl-sun \{ animation: none; \} \}/);
+  assert.match(b, /family=Urbanist:wght@600;800/);
+  assert.doesNotMatch(b, /figma\.com/);
+  for (const f of ['suna-mark.svg', 'suna-wordmark.svg', 'app-store.svg', 'google-play.png']) {
+    assert.ok(b.includes(`/first-light/${f}`), f);
+    assert.ok(readFileSync(`public/first-light/${f}`).length > 500, f + ' on disk');
+  }
 });
 await t('not in the sitemap or robots allow-list', () => {
   assert.doesNotMatch(readFileSync('api/sitemap.js', 'utf8'), /first-light/);

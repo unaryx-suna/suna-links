@@ -47,4 +47,6 @@ which shows the card; Android's `assetlinks.json` covers the whole host, so its
 path lives in the app's manifest (A-177). Without the app: one `noindex` page,
 "Open Suna on your phone to see your offer.", both stores (Apple
 `ct=first-light`; Play's referrer carries `suna_target=/first-light`). No
-prices, no sign-in, nothing read; not in the sitemap.
+prices, no sign-in, nothing read; not in the sitemap. W-252 gives it Ops's
+sunrise look (Figma 3776:7272): the hero vector inline, the sun rising once in
+CSS (still under reduced motion); its files live in `public/first-light/`.
