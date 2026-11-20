@@ -212,6 +212,11 @@ async function bookingFor(id) {
 }
 
 /** `?src=partner-<slug>`, trimmed to the slug. Nothing is trusted yet. */
+/** W-261: the link came from a user's share in the app (utm_source=user_share). */
+export function userShare(url) {
+  try { return new URL(url, 'https://app.unaryx.com').searchParams.get('utm_source') === 'user_share'; } catch { return false; }
+}
+
 function claimedSlug(url) {
   const m = String(url || '').match(/[?&]src=partner-([a-z0-9][a-z0-9-]{0,29})\b/);
   return m ? m[1] : null;
@@ -423,7 +428,8 @@ export default async function handler(req, res) {
   ]);
   const claimed = claimedSlug(req.url);
   const campaign = (claimed && listing && listing.slug === claimed) ? `partner-${claimed}` : null;
-  const store = STORE(campaign || 'place-page');
+  // W-261 (Ops OPS-277): a place opened from a user's share in the app is ct=user-share (a verified partner wins).
+  const store = STORE(campaign || (userShare(req.url) ? 'user-share' : 'place-page'));
   const offer = offerLine(listing);
 
   const tags = [

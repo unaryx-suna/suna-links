@@ -230,6 +230,8 @@ export function ctFrom(url) {
     const q = new URL(url, 'https://app.unaryx.com').searchParams;
     const via = q.get('via') || '';
     if (via.length <= 40 && VIA_CT.test(via)) return via;
+    // W-261 (Ops OPS-277): opened from a user's share in the app: one channel ct, never the user's code.
+    if (q.get('utm_source') === 'user_share') return 'user-share';
     return q.get('src') === 'event-web' ? 'event-web' : 'web-e';
   } catch { return 'web-e'; }
 }
