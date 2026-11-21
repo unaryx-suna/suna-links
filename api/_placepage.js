@@ -308,7 +308,7 @@ ${chips ? `<div class="chips">${chips}</div>` : ''}
 <p class="hint">${BELL}<span>Save it, and Suna reminds you when you're walking past.</span></p>
 ${tipsHigh ? '' : tips}
 ${d.offer ? `<p class="offer">${esc(d.offer)}</p>` : ''}
-${d.booking ? `<p class="book"><a href="${esc(d.booking)}" target="_blank" rel="sponsored noopener">Book tickets ↗</a><small>Suna may earn a commission</small></p>` : ''}
+${d.booking ? `<p class="book"><a href="${esc(d.booking)}" target="_blank" rel="sponsored noopener">Book tickets ↗</a><small>Affiliate link: we may earn a commission.</small></p>` : ''}
 ${good ? `<h2>Good to know</h2><div class="card">${good}</div>` : ''}
 ${lede.length > 140 ? `<p class="body">${esc(lede)}</p>` : ''}
 ${d.events.length ? `<h2>On near here <small>this month</small></h2>${eventsCard(d.events, d.tz)}` : ''}

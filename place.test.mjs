@@ -97,7 +97,7 @@ await t('places.json down or malformed: page still renders, no link', async () =
 
 await t('the link markup: sponsored, new tab, commission line; absent without a link', async () => {
   const b = (await render(`/place/${LINKED}`)).body;
-  assert.match(b, /<p class="book"><a href="https:\/\/unaryx\.com\/go\/p-[^"]+" target="_blank" rel="sponsored noopener">Book tickets ↗<\/a><small>Suna may earn a commission<\/small><\/p>/);
+  assert.match(b, /<p class="book"><a href="https:\/\/unaryx\.com\/go\/p-[^"]+" target="_blank" rel="sponsored noopener">Book tickets ↗<\/a><small>Affiliate link: we may earn a commission\.<\/small><\/p>/);
   assert(!(await render(`/place/${PLAIN}`)).body.includes('class="book"'));
 });
 
