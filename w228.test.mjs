@@ -41,7 +41,7 @@ t('the server: only I-604\'s admin RPCs with this session (each checks is_admin)
   assert.match(html, /tkRpc\(TK_API\.list, \{ p_event_id: null \}\)/);
   assert.match(html, /tkRpc\(TK_API\.checkIn, \{ p_ticket: code \}\)/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
-  assert.equal(build, 'field-v51');
+  assert.equal(build, 'field-v52');
   assert.ok(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8').includes(`const CACHE_VERSION = '${build}';`));
 });
 
@@ -69,17 +69,17 @@ t('a Payments card: reference, amount, member (escaped), event; Mark paid and Re
   assert.match(said, /Mira &lt;Lee&gt;, mira@example\.com/);
   assert.match(said, /Suna Founders Night/);
   assert.match(said, /Says paid 10 min ago/);
-  assert.match(said, /data-tk="paid" data-ref="SUNA-7F3K">Mark paid</);
+  assert.match(said, /data-tk="paid" data-ref="SUNA-7F3K">Amount matches, mark paid</);
   assert.match(said, /data-tk="release" data-ref="SUNA-7F3K">Release</);
   assert.match(said, /data-tk="receipt" data-path="u1\/r\.jpg">Receipt</);
   const hold = L.tkCard(T, NOW);
-  assert.match(hold, /Hold until \d\d:\d\d/);
+  assert.match(hold, /Hold until \d{1,2}:\d\d [AP]M/);
   assert.doesNotMatch(hold, /data-tk="receipt"/);
   const paid = L.tkCard({ ...T, status: 'paid', paid_via: 'duitnow', amount_due: 22.5, seat_no: 7, checked_in_at: '2026-12-05T11:42:00Z' }, NOW);
   assert.match(paid, /No\. 007/);
   assert.match(paid, /Paid, duitnow/);
   assert.match(paid, /RM22\.50/);
-  assert.match(paid, /In at \d\d:\d\d/);
+  assert.match(paid, /In at \d{1,2}:\d\d [AP]M/);
   assert.match(paid, /data-tk="refunded"/);
   assert.doesNotMatch(paid, /data-tk="paid"|data-tk="release"/);
   const closed = L.tkCard({ ...T, status: 'refunded' }, NOW);

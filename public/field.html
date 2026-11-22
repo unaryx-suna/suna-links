@@ -434,6 +434,10 @@
   .dr-verdict.err { background: linear-gradient(160deg, #4A3A1F, #261E0F); }
   .dr-verdict .v-who { color: #CFE8DA; } .dr-verdict.no .v-who { color: #F2D2CE; }
   .dr-verdict button { background: #fff; color: var(--btn-ink); font-weight: 800; border-radius: 14px; min-height: 52px; }
+  .dr-verdict button:focus, .dr-verdict button:focus-visible { outline: none; }
+  .am-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .am-lane { flex: none; font: 700 13px/1 var(--font, inherit); color: var(--muted); }
+  #rv-wave { flex-wrap: wrap; overflow: visible; }
   .tk-result { border: 1px solid var(--line); } .tk-result.ok { background: #17301F; color: var(--ok); }
   .tk-result.warn { background: #3A2C1A; color: var(--warn); } .tk-result.no { background: #3A1E1C; color: var(--danger); }
   #dr-scan { min-height: 52px; }
@@ -756,12 +760,12 @@
   <div class="wrap" id="pane-events" hidden>
     <div id="ev-list-screen">
       <h1>Event photos</h1>
-      <p class="sub">Upcoming events. The ones with no photo of ours come first.</p>
+      <p class="sub">Upcoming events without our photo first.</p>
 
       <input id="ev-search" type="search" placeholder="Search by name" autocomplete="off">
       <div class="chips seg" style="margin-top:8px">
-        <button class="chip" id="ev-filter-missing" aria-pressed="false">Missing photo</button>
-        <button class="chip" id="ev-filter-all" aria-pressed="true">All</button>
+        <button class="chip" id="ev-filter-missing" aria-pressed="true">Missing photo</button>
+        <button class="chip" id="ev-filter-all" aria-pressed="false">All</button>
       </div>
 
       <div id="ev-list" style="margin-top:12px"></div>
@@ -826,7 +830,7 @@
        anyone else; the menu row is only shown to admins as a courtesy. -->
   <div class="wrap" id="pane-claims" hidden>
     <h1>Claims</h1>
-    <p class="sub">Each claim here has tapped its email link. Approve, ask for proof or turn down: the same emails go out as from Event Review.</p>
+    <p class="sub">They get an email with your answer.</p>
     <div id="cl-list"></div>
     <p class="sub" id="cl-note" hidden></p>
     <h2 class="cl-h">Approved recently</h2>
@@ -840,7 +844,7 @@
        The staff note is never shown to the buyer. Admin only. -->
   <div class="wrap" id="pane-orders" hidden>
     <h1>Orders</h1>
-    <p class="sub">One-off packages. Send the drafts link, mark it delivered, move a ready-by date or refund. The buyer is emailed at each step.</p>
+    <p class="sub">The buyer gets an email at each step.</p>
     <div id="or-list"></div>
     <p class="sub" id="or-note" hidden></p>
   </div>
@@ -853,7 +857,7 @@
        Admin only; the menu row is shown to admins as a courtesy. -->
   <div class="wrap" id="pane-payments" hidden>
     <h1>Payments</h1>
-    <p class="sub">Find the reference from your bank statement, check the amount, then Mark paid. The member gets their ticket by push and email.</p>
+    <p class="sub">Match the bank reference, then mark paid.</p>
     <div class="tk-counts" id="tk-counts"></div>
     <input id="tk-find" type="search" placeholder="Find a reference or a name" autocomplete="off" spellcheck="false">
     <p class="sub" id="tk-note" hidden></p>
@@ -899,7 +903,7 @@
     <label for="rv-city">City</label>
     <select id="rv-city"></select>
     <div class="chips" id="rv-wave">
-      <button class="chip" type="button" data-w="1" aria-pressed="true">Saved</button>
+      <button class="chip" type="button" data-w="1" aria-pressed="true">Saved by people</button>
       <button class="chip" type="button" data-w="2" aria-pressed="false">Event venues</button>
       <button class="chip" type="button" data-w="3" aria-pressed="false">Itinerary stops</button>
       <button class="chip" type="button" data-w="4" aria-pressed="false">The rest</button>
@@ -915,10 +919,8 @@
        function checks is_admin itself, and this screen is only in an admin's
        menu as well. -->
   <div class="wrap" id="pane-addplace" hidden>
-    <h1>Add from Google Maps link</h1>
-    <p class="sub">Paste a Google Maps link to one place. Preview asks Google
-      once, and Add uses that answer for 15 minutes, so a place costs one of
-      <span id="am-cap">today's Google calls</span>.</p>
+    <h1 class="am-h">Add from Google Maps link <span class="am-lane" id="am-lane" hidden></span></h1>
+    <p class="sub">Each preview uses one of <span id="am-cap">today's Google calls</span>.</p>
     <label for="am-link">Google Maps link or place id</label>
     <input id="am-link" type="search" placeholder="https://maps.app.goo.gl/…" autocomplete="off" autocapitalize="off" spellcheck="false">
 
@@ -952,8 +954,6 @@
 
   <div class="wrap" id="pane-country" hidden>
     <h1>Welcome to …</h1>
-    <p class="sub">229 countries are selectable. Two have a hero image, two have
-      apps, two have a food. This is the first screen of a trip.</p>
 
     <label>Country</label>
     <button class="opt" id="country-chip" style="margin:0">Waiting for a location…</button>
@@ -974,7 +974,7 @@
       </div>
       <input id="in-country-food" type="file" accept="image/*" hidden>
       <input id="c-food-name" type="text" placeholder="What is it called?" style="margin-top:10px">
-      <input id="c-food-note" type="text" placeholder="One line — where, or why" style="margin-top:8px">
+      <input id="c-food-note" type="text" placeholder="One line: where, or why" style="margin-top:8px">
       <button class="primary" id="btn-add-food" style="margin-top:10px">Add this food</button>
     </div>
 
@@ -1184,7 +1184,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v51';
+const BUILD = 'field-v52';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -6925,7 +6925,7 @@ async function renderCountryTab() {
 
   const chip = $('country-chip');
   if (!country) {
-    chip.textContent = 'Capture a place first — the country comes from its coordinate';
+    chip.textContent = 'Capture a place first. The country comes from its pin.';
     $('country-note').textContent = '';
     return;
   }
@@ -7192,7 +7192,7 @@ const EV_CITIES = [
 ];
 
 let evRows = [];            // the loaded upcoming events
-let evFilter = 'all';       // 'all' | 'missing'
+let evFilter = 'missing';       // 'all' | 'missing'
 let evCurrent = null;       // the event on the photo screen
 let evLoading = null;       // the in-flight load, so two callers share one
 let evBusy = false;         // a photo is being resized and queued
@@ -7287,7 +7287,7 @@ async function loadEventList(force) {
       renderEventList();
     } catch (err) {
       note.hidden = false;
-      note.textContent = 'Could not load events. ' + (err.message || '');
+      listFail(note, 'events', () => loadEventList());
     }
   })();
   try { await evLoading; } finally { evLoading = null; }
@@ -7738,7 +7738,7 @@ async function loadCreators() {
   note.hidden = false; note.textContent = 'Loading…';
   const { data, error } = await db.from('profiles').select(CR_COLS)
     .eq('is_creator', true).order('creator_since', { ascending: false, nullsFirst: false }).limit(200);
-  if (error) { note.textContent = 'Could not load creators. ' + error.message; return; }
+  if (error) { listFail(note, 'creators', () => loadCreators()); return; }
   crCurrent = data || [];
   note.hidden = crCurrent.length > 0;
   note.textContent = crCurrent.length ? '' : 'Nobody has the tag yet.';
@@ -7984,7 +7984,10 @@ async function amToken() {
 function amRender(view, body) {
   // The intro's number follows the cap the answer reports (W-67).
   const cap = view && view.cap != null ? view.cap : amCap(body);
-  if (cap != null) $('am-cap').textContent = 'today’s ' + cap;
+  if (cap != null) $('am-cap').textContent = 'today’s ' + cap + ' Google calls';
+  // Ops 23 Nov: the 'n of 100 today' count top right, from the answer's lane.
+  const lane = body && typeof body.lane === 'string' && /^\d+ of \d+$/.test(body.lane) ? body.lane + ' today' : '';
+  $('am-lane').textContent = lane; $('am-lane').hidden = !lane;
   const out = $('am-out');
   out.innerHTML = '';
   const card = document.createElement('div');
@@ -8475,12 +8478,34 @@ async function showApp(s) {
   }
 }
 
+/** Ops 23 Nov: a list that didn't load says so in words, never the raw error, and a tap retries. */
+function listFail(el, what, retry) {
+  el.hidden = false; el.textContent = 'Couldn’t load ' + what + '. Tap here to try again.';
+  el.style.cursor = 'pointer';
+  el.onclick = () => { el.onclick = null; el.style.cursor = ''; el.textContent = 'Loading…'; retry(); };
+}
+
 /* ── Orders (W-284, Ops OPS-326; I-740 oneoff-order) ──────────────────────────
    The list (due today counted by the server), and per order: Drafts sent (a link), Delivered (a
    link, a URL or a courier number), Set new ready-by date, Refund (Stripe, two taps), a private note. */
 /* ORDERS-LOGIC-START */
 const OR_STEP = { paid: 'Paid: waiting for details', details_in: 'Details in', drafts_sent: 'Drafts sent', changes: 'Changes asked', approved: 'Approved', delivered: 'Delivered', new_date_offered: 'New date offered', closed: 'Closed', refunded: 'Refunded' };
 const OR_SYM = { myr: 'RM', sgd: 'S$', aud: 'A$' };
+// The names the buyer saw at checkout (unaryx-site api/_lib/partner-plans.js EXTRAS).
+const OR_ITEM = { content_kit: 'Event content kit', qr_kit: 'Printed QR kit', sponsored_post: 'Sponsored post', sponsored_reel: 'Sponsored reel + story', cny_kit: 'Chinese New Year content kit' };
+const OR_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** '2026-11-23' -> '23 Nov' (the year only when it isn't this year). */
+function orDate(d, year = new Date().getFullYear()) {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(d || '');
+  return Number(m[3]) + ' ' + OR_MON[Number(m[2]) - 1] + (Number(m[1]) !== year ? ' ' + m[1] : '');
+}
+/** The one next step (white button): send drafts before they're out, then delivered. */
+function orNext(step) {
+  if (['paid', 'details_in', 'changes'].includes(step)) return 'drafts_sent';
+  if (['drafts_sent', 'approved'].includes(step)) return 'delivered';
+  return null;
+}
 function orDue(o, today = new Date().toISOString().slice(0, 10)) {
   if (['delivered', 'closed', 'refunded'].includes(o.step) || !o.ready_by) return false;
   return o.ready_by <= today;
@@ -8488,18 +8513,19 @@ function orDue(o, today = new Date().toISOString().slice(0, 10)) {
 /** One order's card: what it is, where it is, and its actions (all escaped). */
 function orCard(o, today) {
     const id = clEsc(o.session_id), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
-    const items = (o.items || []).map((i) => clEsc(i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ');
+    const items = (o.items || []).map((i) => clEsc(OR_ITEM[i.key] || i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ');
+    const next = orNext(o.step), cls = (a) => (a === next ? 'primary' : 'ghost');
     const row = (k, v) => v ? '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>' : '';
     return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
       + row('Items', items)
       + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ', ' + clEsc(o.country) : '') + (o.guarantee ? ', guarantee' : ''))
-      + row('Ready by', clEsc(o.ready_by || '')) + row('Event', clEsc(o.event_date || ''))
+      + row('Ready by', clEsc(orDate(o.ready_by))) + row('Event', clEsc(orDate(o.event_date)))
       + row('Rounds', o.rounds_used ? clEsc(String(o.rounds_used)) + ' used' + (o.extra_rounds_paid ? ', ' + o.extra_rounds_paid + ' paid' : '') : '')
       + row('Email', o.email ? '<a href="mailto:' + clEsc(o.email) + '">' + clEsc(o.email) + '</a>' : '')
       + row('Drafts', o.drafts_url ? '<a href="' + clEsc(o.drafts_url) + '" target="_blank" rel="noopener">open</a>' : '')
       + '<div class="cl-actions">'
-      + '<button type="button" class="ghost" data-or="drafts_sent" data-id="' + id + '">Drafts sent</button>'
-      + '<button type="button" class="ghost" data-or="delivered" data-id="' + id + '">Delivered</button>'
+      + '<button type="button" class="' + cls('drafts_sent') + '" data-or="drafts_sent" data-id="' + id + '">Send drafts</button>'
+      + '<button type="button" class="' + cls('delivered') + '" data-or="delivered" data-id="' + id + '">Mark delivered</button>'
       + '<button type="button" class="ghost" data-or="set_ready_by" data-id="' + id + '">New ready-by date</button>'
       + (o.step !== 'refunded' ? '<button type="button" class="danger" data-or="refund" data-id="' + id + '">Refund</button>' : '')
       + '</div><div id="or-form-' + id + '"></div>'
@@ -8522,7 +8548,7 @@ async function orCall(body) {
 async function loadOrders(render) {
   let out;
   try { out = await orCall({ action: 'list' }); }
-  catch (e) { if (render) { $('or-list').innerHTML = ''; $('or-note').hidden = false; $('or-note').textContent = e.message || 'Could not load orders.'; } return; }
+  catch (e) { if (render) { $('or-list').innerHTML = ''; $('or-note').hidden = false; listFail($('or-note'), 'orders', () => loadOrders(true)); } return; }
   orRows = out.orders || [];
   const n = Number(out.due_today) || 0;
   $('orders-count').textContent = String(n);
@@ -8530,6 +8556,7 @@ async function loadOrders(render) {
   if (render) renderOrders();
 }
 function renderOrders() {
+  $('or-note').onclick = null; $('or-note').style.cursor = '';
   $('or-note').hidden = orRows.length > 0;
   $('or-note').textContent = 'No orders yet. A paid /deals or join-flow order shows here.';
   // Due first (ready-by today or past, not finished), then the newest.
@@ -8816,7 +8843,7 @@ async function loadReview() {
     })).sort(rvSort);
     renderReview(true);
   } catch (e) {
-    list.innerHTML = '<p class="sub">Could not load: ' + escapeHtml(String(e.message || e)) + '</p>';
+    list.innerHTML = '<p class="sub"></p>'; listFail(list.firstChild, 'places', () => openReview());
   } finally { rvBusy = false; }
 }
 
@@ -8881,7 +8908,8 @@ function renderReview(reset) {
   if (reset) { list.innerHTML = ''; rvShown = 0; }
   const counts = [1, 2, 3, 4].map((w) => rvRows.filter((p) => rvWave(p) === w).length);
   for (const b of document.querySelectorAll('#rv-wave .chip')) {
-    b.textContent = b.textContent.replace(/ \(\d+\)$/, '') + ' (' + counts[Number(b.dataset.w) - 1] + ')';
+    if (!b.dataset.base) b.dataset.base = b.textContent;
+    b.textContent = b.dataset.base + ' ' + counts[Number(b.dataset.w) - 1];
   }
   const slice = rows.slice(rvShown, rvShown + RV_PAGE);
   rvShown += slice.length;
@@ -8893,7 +8921,7 @@ function renderReview(reset) {
     d.onclick = (e) => { if (!e.target.closest('.rv-card')) rvToggleCard(d, p); };
     list.appendChild(d);
   }
-  if (!rows.length) list.innerHTML = '<p class="sub">Nothing in this wave here.</p>';
+  if (!rows.length) list.innerHTML = '<p class="sub">Nothing to check here.</p>';
   $('rv-sub').textContent = rows.length ? 'Showing ' + rvShown + ' of ' + rows.length + ', most saved first.' : '';
   $('rv-more').hidden = rvShown >= rows.length;
 }
@@ -8901,7 +8929,7 @@ function renderReview(reset) {
 async function loadClaims(render) {
   let out;
   try { out = await clCall({ action: 'list' }); }
-  catch (e) { if (render) { $('cl-list').innerHTML = ''; $('cl-note').hidden = false; $('cl-note').textContent = e.message || 'Could not load claims.'; } return; }
+  catch (e) { if (render) { $('cl-list').innerHTML = ''; $('cl-note').hidden = false; listFail($('cl-note'), 'claims', () => loadClaims(true)); } return; }
   clRows = out.claims || []; clApproved = out.approved || [];
   const n = clRows.length;
   $('claims-count').textContent = String(n);
@@ -8910,6 +8938,7 @@ async function loadClaims(render) {
 }
 function renderClaims() {
   const now = Date.now();
+  $('cl-note').onclick = null; $('cl-note').style.cursor = '';
   $('cl-note').hidden = clRows.length > 0;
   $('cl-note').textContent = 'No claims waiting. A claim shows here once its email link is tapped.';
   $('cl-list').innerHTML = clRows.map((c) => clCard(c, now)).join('');
@@ -8995,7 +9024,7 @@ function tkParseCode(text) {
 }
 function tkTime(iso) {
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 function tkAgo(iso, now) {
   const m = Math.round((now - Date.parse(iso)) / 60000);
@@ -9050,7 +9079,7 @@ function tkCard(t, now) {
     : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ', ' + tkEsc(t.paid_via) : '') + '</span>' + (t.seat_no ? '<span class="cl-tag">No. ' + tkEsc(('00' + t.seat_no).slice(-3)) + '</span>' : '') + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
     : '<span class="cl-tag red">' + (t.status === 'refunded' ? 'Refunded' : t.status === 'cancelled' ? 'Released' : 'Hold ran out') + '</span>';
   const actions = s === 'claimed' || s === 'pending'
-    ? '<button type="button" class="primary" style="width:auto" data-tk="paid" data-ref="' + ref + '">Mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
+    ? '<button type="button" class="primary" style="width:auto" data-tk="paid" data-ref="' + ref + '">Amount matches, mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
     : s === 'paid' ? '<button type="button" class="ghost" data-tk="refunded" data-ref="' + ref + '">Mark refunded</button>' : '';
   const receipt = t.proof_path ? '<button type="button" class="ghost" data-tk="receipt" data-path="' + tkEsc(t.proof_path) + '">Receipt</button>' : '';
   return '<div class="card cl-card"><div class="cl-top"><b>' + (ref || 'No reference') + '</b><b>' + tkEsc(tkRM(t.amount_due)) + '</b></div>'
@@ -9120,7 +9149,7 @@ async function loadTickets(render) {
   let rows;
   try { rows = await tkRpc(TK_API.list, { p_event_id: null }); }
   catch (e) {
-    if (render === 'payments') { $('tk-note').hidden = false; $('tk-note').textContent = e.message || 'Could not load tickets.'; }
+    if (render === 'payments') { $('tk-note').hidden = false; listFail($('tk-note'), 'payments', () => { tkNote(''); loadTickets('payments'); }); }
     if (render === 'door') $('dr-counts').innerHTML = '';
     return;
   }
@@ -9146,7 +9175,7 @@ function renderPayments() {
     : html(by(['paid']), find ? 'No paid ticket matches that.' : 'None yet.');
   $('tk-closed').innerHTML = html(by(['closed']), 'None.');
 }
-function tkNote(text) { $('tk-note').hidden = !text; $('tk-note').textContent = text || ''; if (text) $('tk-note').scrollIntoView({ block: 'nearest' }); }
+function tkNote(text) { $('tk-note').onclick = null; $('tk-note').style.cursor = ''; $('tk-note').hidden = !text; $('tk-note').textContent = text || ''; if (text) $('tk-note').scrollIntoView({ block: 'nearest' }); }
 $('tk-find').oninput = () => renderPayments();
 $('pane-payments').addEventListener('click', async (e) => {
   const b = e.target.closest('button[data-tk]');
