@@ -14,10 +14,10 @@ const NOW = Date.parse('2026-12-05T12:00:00Z');
 const at = '2026-12-05T11:42:00Z', hhmm = L.tkTime(at);
 const paid = { id: 't1', buyer_name: 'Mira Lee', event_name: 'Suna Founders Night', status: 'paid', seat_no: 7, checked_in: true, already_used: false, checked_in_at: at };
 const unused = { ...paid, checked_in: false, checked_in_at: null };
-const WHO = 'Mira Lee · Suna Founders Night · No. 007';
+const WHO = 'Mira Lee, Suna Founders Night, No. 007';
 
 t('paid, first scan: green Valid with the name', () => {
-  assert.deepEqual(L.tkDoorResult(paid, null, NOW), ['ok', 'Valid', 'Mira Lee', `Suna Founders Night · No. 007 · in at ${hhmm}`]);
+  assert.deepEqual(L.tkDoorResult(paid, null, NOW), ['ok', 'Valid', 'Mira Lee', `Suna Founders Night, No. 007, in at ${hhmm}`]);
 });
 t('refunded: red Not valid, "Refunded"', () => {
   assert.deepEqual(L.tkDoorResult({ ...unused, status: 'refunded' }, null, NOW), ['no', 'Not valid', 'Refunded', WHO]);

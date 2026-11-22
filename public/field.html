@@ -428,10 +428,24 @@
   .featcard:has(#sk-box:not([hidden])) #f-featured { border-bottom: 1px solid var(--line); }
   #f-featured small { font-weight: 500; }
   #sk-box label { margin-top: 12px; }
+  /* M3/M4 Door: the full-screen verdict in the design's green and red; Next ticket is the white button. */
+  .dr-verdict.ok { background: linear-gradient(160deg, #1F4A33, #14261C); }
+  .dr-verdict.no { background: linear-gradient(160deg, #4A221F, #26130F); }
+  .dr-verdict.err { background: linear-gradient(160deg, #4A3A1F, #261E0F); }
+  .dr-verdict .v-who { color: #CFE8DA; } .dr-verdict.no .v-who { color: #F2D2CE; }
+  .dr-verdict button { background: #fff; color: var(--btn-ink); font-weight: 800; border-radius: 14px; min-height: 52px; }
+  .tk-result { border: 1px solid var(--line); } .tk-result.ok { background: #17301F; color: var(--ok); }
+  .tk-result.warn { background: #3A2C1A; color: var(--warn); } .tk-result.no { background: #3A1E1C; color: var(--danger); }
+  #dr-scan { min-height: 52px; }
   /* Segmented choice: a white pill on dark. */
   .seg { display: flex; background: #1A1C1B; border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 0; }
   .seg > * { flex: 1; min-height: 36px; border-radius: 9px; background: none; color: var(--muted); font-weight: 700; font-size: 13.5px; padding: 0 6px; border: 0; }
   .seg > [aria-pressed="true"], .seg > .on { background: #fff; color: var(--btn-ink); }
+  .seg.chips { overflow: visible; padding: 3px; } .seg > .chip { justify-content: center; height: 36px; border: 0; }
+  .seg > .chip[aria-pressed="true"] { background: #fff; color: var(--btn-ink); }
+  .cl-tag { display: inline-flex; align-items: center; height: 22px; border-radius: 6px; padding: 0 7px; font-weight: 700; font-size: 11.5px; background: #2A2C2B; color: #D5D8D6; }
+  .cl-tag.ok { background: #17301F; color: var(--ok); } .cl-tag.red { background: #3A1E1C; color: var(--danger); }
+  .cl-tag.warn { background: #3A2C1A; color: var(--warn); } .cl-tag.pur { background: #2A2350; color: #C9BFFF; }
 </style>
 </head>
 <body>
@@ -557,7 +571,7 @@
         <p class="note" id="cover-info" style="margin:6px 0 0"></p>
         <div class="row">
           <button class="ghost" id="cover-replace">Replace this image</button>
-          <button class="ghost" id="cover-reject">Not this place</button>
+          <button class="danger" id="cover-reject">Not this place</button>
           <button class="ghost" id="dupe-report">Same as another place</button>
         </div>
         <p class="note" id="flag-result" style="margin:6px 0 0" hidden></p>
@@ -698,7 +712,7 @@
   <!-- finish these -->
   <div class="wrap" id="pane-finish" hidden>
     <h1>Finish these</h1>
-    <p class="sub" id="finish-sub">Places missing data. Nearest first — tap one to fill it in.</p>
+    <p class="sub" id="finish-sub">Nearest first. Tap one to fill it in.</p>
 
     <!-- What counts as missing. Photo is the default because it is 8,658 of
          8,672: almost the whole catalogue. -->
@@ -745,7 +759,7 @@
       <p class="sub">Upcoming events. The ones with no photo of ours come first.</p>
 
       <input id="ev-search" type="search" placeholder="Search by name" autocomplete="off">
-      <div class="chips" style="margin-top:8px">
+      <div class="chips seg" style="margin-top:8px">
         <button class="chip" id="ev-filter-missing" aria-pressed="false">Missing photo</button>
         <button class="chip" id="ev-filter-all" aria-pressed="true">All</button>
       </div>
@@ -765,7 +779,7 @@
 
       <label>New photo</label>
       <div class="thumbs" id="ev-new-thumbs">
-        <button class="addphoto" id="btn-ev-camera">📷<br>Photograph</button>
+        <button class="addphoto" id="btn-ev-camera">Add a<br>photo</button>
         <button class="addphoto" id="btn-ev-upload">⬆<br>Upload</button>
       </div>
       <input id="in-ev-camera" type="file" accept="image/*" capture="environment" hidden>
@@ -885,10 +899,10 @@
     <label for="rv-city">City</label>
     <select id="rv-city"></select>
     <div class="chips" id="rv-wave">
-      <button class="chip" type="button" data-w="1" aria-pressed="true">1 · Saved</button>
-      <button class="chip" type="button" data-w="2" aria-pressed="false">2 · Event venues</button>
-      <button class="chip" type="button" data-w="3" aria-pressed="false">3 · Itinerary stops</button>
-      <button class="chip" type="button" data-w="4" aria-pressed="false">4 · The rest</button>
+      <button class="chip" type="button" data-w="1" aria-pressed="true">Saved</button>
+      <button class="chip" type="button" data-w="2" aria-pressed="false">Event venues</button>
+      <button class="chip" type="button" data-w="3" aria-pressed="false">Itinerary stops</button>
+      <button class="chip" type="button" data-w="4" aria-pressed="false">The rest</button>
     </div>
     <p class="sub" id="rv-sub"></p>
     <div id="rv-list"></div>
@@ -909,13 +923,13 @@
     <input id="am-link" type="search" placeholder="https://maps.app.goo.gl/…" autocomplete="off" autocapitalize="off" spellcheck="false">
 
     <label>Who goes there (optional)</label>
-    <div class="chips" id="am-mix">
+    <div class="chips seg" id="am-mix">
       <button class="chip" type="button" data-v="local" aria-pressed="false">Local</button>
       <button class="chip" type="button" data-v="mixed" aria-pressed="false">Mixed</button>
-      <button class="chip" type="button" data-v="visitor_heavy" aria-pressed="false">Visitor-heavy</button>
+      <button class="chip" type="button" data-v="visitor_heavy" aria-pressed="false">Mostly visitors</button>
     </div>
     <label>How big a draw (optional)</label>
-    <div class="chips" id="am-draw">
+    <div class="chips seg" id="am-draw">
       <button class="chip" type="button" data-v="everyday" aria-pressed="false">Everyday</button>
       <button class="chip" type="button" data-v="notable" aria-pressed="false">Notable</button>
       <button class="chip" type="button" data-v="landmark" aria-pressed="false">Landmark</button>
@@ -946,7 +960,7 @@
 
     <label>Hero photo</label>
     <div class="thumbs" id="country-hero-thumbs">
-      <button class="addphoto" id="btn-country-hero">📷<br>Hero</button>
+      <button class="addphoto" id="btn-country-hero">Hero<br>photo</button>
     </div>
     <input id="in-country-hero" type="file" accept="image/*" hidden>
 
@@ -956,7 +970,7 @@
     <label>Food to try</label>
     <div class="card" style="margin-bottom:10px">
       <div class="thumbs" id="country-food-thumbs">
-        <button class="addphoto" id="btn-country-food">📷<br>Dish</button>
+        <button class="addphoto" id="btn-country-food">Dish<br>photo</button>
       </div>
       <input id="in-country-food" type="file" accept="image/*" hidden>
       <input id="c-food-name" type="text" placeholder="What is it called?" style="margin-top:10px">
@@ -1170,7 +1184,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v50';
+const BUILD = 'field-v51';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1709,7 +1723,7 @@ function renderHours() {
       // Inherit is where the speed is: open-all-week is two pickers.
       const line = document.createElement('div');
       line.className = 'hinherit';
-      line.appendChild(document.createTextNode('↳ same as ' + DAY_SHORT[src] + ' · '));
+      line.appendChild(document.createTextNode('↳ same as ' + DAY_SHORT[src] + ', '));
       const b = document.createElement('button');
       b.textContent = 'set its own';
       b.onclick = () => {
@@ -1820,25 +1834,25 @@ function renderLocation() {
   line.classList.remove('warn');
   if (cap.lat == null) {
     line.classList.add('warn');
-    text.innerHTML = '⚠ No location yet'
+    text.innerHTML = 'No location yet'
       + '<span class="why">Tap to set it — search by name, GPS, a map link, or coordinates.</span>';
   } else {
     const co = cap.lat.toFixed(5) + ', ' + cap.lon.toFixed(5);
     if (cap.locFrom === 'exif') {
       const when = cap.locTakenAt ? new Date(cap.locTakenAt).toLocaleString() : 'unknown time';
-      text.innerHTML = '📍 From photo · ' + co + '<span class="why">Taken ' + when + ' · Tap to change</span>';
+      text.innerHTML = 'From photo, ' + co + '<span class="why">Taken ' + when + ', Tap to change</span>';
     } else if (cap.locFrom === 'gps') {
-      text.innerHTML = '📍 Live GPS · ' + co
-        + '<span class="why">±' + Math.round(cap.locAccuracy || 0) + 'm · Tap to change</span>';
+      text.innerHTML = 'Live GPS, ' + co
+        + '<span class="why">±' + Math.round(cap.locAccuracy || 0) + 'm, Tap to change</span>';
     } else if (cap.locFrom === 'search') {
-      text.innerHTML = '📍 From search · ' + co + '<span class="why">Not verified · Tap to change</span>';
+      text.innerHTML = 'From search, ' + co + '<span class="why">Not verified, Tap to change</span>';
     } else if (cap.locFrom === 'google') {
-      text.innerHTML = '📍 From Google · ' + co
-        + '<span class="why">The catalogue\u2019s own pin · Tap to change</span>';
+      text.innerHTML = 'From Google, ' + co
+        + '<span class="why">The catalogue\u2019s own pin, Tap to change</span>';
     } else if (cap.locFrom === 'link') {
-      text.innerHTML = '📍 From link · ' + co + '<span class="why">Not verified · Tap to change</span>';
+      text.innerHTML = 'From link, ' + co + '<span class="why">Not verified, Tap to change</span>';
     } else {
-      text.innerHTML = '📍 Edited by hand · ' + co + '<span class="why">Not verified · Tap to change</span>';
+      text.innerHTML = 'Edited by hand, ' + co + '<span class="why">Not verified, Tap to change</span>';
     }
   }
   renderCity();
@@ -1881,7 +1895,7 @@ function watchGPS() {
     if (cap.lat == null && liveFix.accuracy <= GPS_ACCURACY_LIMIT_M) {
       setLocation(liveFix.lat, liveFix.lon, 'gps', { accuracy: liveFix.accuracy });
     } else if (cap.lat == null) {
-      $('loc-text').innerHTML = '⚠ Waiting for a better fix'
+      $('loc-text').innerHTML = 'Waiting for a better fix'
         + '<span class="why">±' + Math.round(liveFix.accuracy) + 'm is too coarse to place a pin. '
         + 'Tap to search for it by name instead.</span>';
     }
@@ -2035,14 +2049,14 @@ function renderCity() {
   // W-91: 25-100 km on an admin's new place: no city, in the server's words.
   if (!cap.cityId && cap.farCity) {
     el.className = 'opt known';
-    el.innerHTML = 'No city yet ▾<small>' + escapeHtml(farLine(cap.farCity)) + ' · tap to choose one</small>';
+    el.innerHTML = 'No city yet ▾<small>' + escapeHtml(farLine(cap.farCity)) + ', tap to choose one</small>';
     return;
   }
   if (!cap.cityId) {
     el.className = 'opt warn';
     el.textContent = (cap.cityDistanceKm != null)
       ? 'No city within ' + CITY_MAX_KM + ' km — nearest is '
-        + Math.round(cap.cityDistanceKm) + ' km away · tap to choose'
+        + Math.round(cap.cityDistanceKm) + ' km away, tap to choose'
       : 'No city found — tap to choose';
     return;
   }
@@ -2055,12 +2069,12 @@ function renderCity() {
   // form that was only partly filled. Found while testing the origin fix
   // against a real catalogue row.
   if (!cap.cityName) {
-    el.innerHTML = 'City set ▾<small>not in the offline list · tap to change</small>';
+    el.innerHTML = 'City set ▾<small>not in the offline list, tap to change</small>';
     return;
   }
   const km = (typeof cap.cityDistanceKm === 'number')
     ? cap.cityDistanceKm.toFixed(1) + ' km from the pin' : 'distance unknown';
-  el.innerHTML = escapeHtml(cap.cityName) + ' ▾<small>' + km + ' · tap to change</small>';
+  el.innerHTML = escapeHtml(cap.cityName) + ' ▾<small>' + km + ', tap to change</small>';
 }
 
 $('city-chip').onclick = () => {
@@ -2103,7 +2117,7 @@ function renderCityOptions(filter) {
     b.className = 'opt';
     b.innerHTML = escapeHtml(c.name) + '<small>'
       + (c.km < 1000 ? c.km.toFixed(1) + ' km' : Math.round(c.km) + ' km')
-      + ' · ' + escapeHtml(c.country_code || '') + '</small>';
+      + ', ' + escapeHtml(c.country_code || '') + '</small>';
     b.onclick = () => {
       cap.cityId = c.id; cap.cityName = c.name; cap.cityDistanceKm = c.km;
       cap.farCity = null;   // W-91: his pick is the city, and it's sent
@@ -2227,7 +2241,7 @@ function renderCentreLine() {
           : (liveFix || lastSavedFix) ? 'Searching near me' : 'Searching anywhere — no fix yet';
   }
   el.innerHTML = escapeHtml(where)
-    + ' · <button class="linkish" id="centre-change" style="font-size:12px;padding:0">change</button>';
+    + ', <button class="linkish" id="centre-change" style="font-size:12px;padding:0">change</button>';
   $('centre-change').onclick = () => {
     const p = $('centre-picker');
     p.hidden = !p.hidden;
@@ -2257,7 +2271,7 @@ function resolveCentrePlace(text) {
   searchCentrePlace = exact || starts[0] || byCode[0] || null;
   $('centre-hint').textContent = searchCentrePlace
     ? ('Centred on ' + searchCentrePlace.name
-       + (searchCentrePlace.country_code ? ' · ' + searchCentrePlace.country_code : ''))
+       + (searchCentrePlace.country_code ? ', ' + searchCentrePlace.country_code : ''))
     : 'No city by that name in the list — searching anywhere instead.';
   renderCentreLine();
   const s = $('opt-search').value.trim();
@@ -2545,7 +2559,7 @@ function renderSearchResults(rows, centre) {
     const dist = r.km == null ? ''
       : (r.km < 1 ? Math.round(r.km * 1000) + ' m away' : r.km.toFixed(1) + ' km away');
     b.innerHTML = escapeHtml(r.name)
-      + '<small>' + escapeHtml(r.address || 'no address') + (dist ? ' · ' + dist : '') + '</small>';
+      + '<small>' + escapeHtml(r.address || 'no address') + (dist ? ', ' + dist : '') + '</small>';
     b.onclick = () => chooseSearchResult(r);
     box.appendChild(b);
     buttons.push({ row: r, el: b });
@@ -2734,7 +2748,7 @@ async function offerOSMHours(lat, lon) {
       const parsed = parseOSMHours(raw);
       if (!parsed) continue;                 // unmodellable: say nothing at all
       const btn = $('osm-hours');
-      btn.textContent = 'OSM says ' + raw + ' · use it';
+      btn.textContent = 'OSM says ' + raw + ', use it';
       btn.hidden = false;
       btn.onclick = () => {
         markTouched('hours');
@@ -3061,7 +3075,7 @@ async function addStockPhoto(link) {
     renderThumbs();
     renderSaveState();
     stockNote(photographer
-      ? ('Added — ' + capitalise(provider) + ' · ' + photographer)
+      ? ('Added — ' + capitalise(provider) + ', ' + photographer)
       : ('Added from ' + capitalise(provider) + '. No photographer name came back; the id is stored so it can be credited later.'));
     return true;
   } catch {
@@ -3175,7 +3189,7 @@ function freshIfUntouched() {
 function sayShotSource(kind, detail) {
   const el = $('shot-source');
   const text = {
-    photo: 'Location from the photo' + (detail ? ' · ' + detail : ''),
+    photo: 'Location from the photo' + (detail ? ', ' + detail : ''),
     gps: 'The photo carried no location. Using the live fix' + (detail ? ', ' + detail : '') + '.',
     none: 'The photo carried no location and there is no usable fix yet — set it below.',
   }[kind];
@@ -3297,7 +3311,7 @@ function sunaRow(r) {
   const bits = [metres(r.km)];
   if (r.category) bits.push(escapeHtml(r.category));
   bits.push(r.cover_image_url ? 'has a cover' : '<b>no cover yet</b>');
-  b.innerHTML = escapeHtml(r.name || 'Unnamed') + '<small>' + bits.join(' · ') + '</small>';
+  b.innerHTML = escapeHtml(r.name || 'Unnamed') + '<small>' + bits.join(', ') + '</small>';
   b.onclick = () => pickExistingPlace(r.id);
   return b;
 }
@@ -3311,7 +3325,7 @@ function appleRow(p) {
   if (p.localName) second.push(escapeHtml(p.localName));
   else if (p.address) second.push(escapeHtml(p.address));
   if (util) second.push('may not belong in the catalogue');
-  b.innerHTML = escapeHtml(p.name) + '<small>' + second.join(' · ') + '</small>';
+  b.innerHTML = escapeHtml(p.name) + '<small>' + second.join(', ') + '</small>';
   b.onclick = () => pickAppleResult(p);
   return b;
 }
@@ -3623,7 +3637,7 @@ function renderThumbs() {
       const cr = document.createElement('div');
       cr.className = 'credit';
       cr.textContent = capitalise(p.stock.provider)
-        + (p.stock.photographer ? ' · ' + p.stock.photographer : '');
+        + (p.stock.photographer ? ', ' + p.stock.photographer : '');
       cr.title = cr.textContent;
       d.appendChild(cr);
     }
@@ -3940,9 +3954,9 @@ function renderNameResults(ours, theirs, q, stillLooking) {
     // hidden row out before this sees it. It is here so the label exists the
     // day that policy gains an owner branch, not as a claim that it shows.
     if (r.is_hidden) bits.push('unfinished');
-    b.innerHTML = (picking ? '<strong>Report as the same place</strong> · ' : '<strong>Already in Suna</strong> · ')
+    b.innerHTML = (picking ? '<strong>Report as the same place</strong>, ' : '<strong>Already in Suna</strong>, ')
       + escapeHtml(r.name || 'Unnamed')
-      + '<small>' + escapeHtml(bits.join(' · ')) + '</small>';
+      + '<small>' + escapeHtml(bits.join(', ')) + '</small>';
     b.onclick = () => {
       if (picking) { reportDuplicate(r); return; }
       // **Ours OPENS. It does not prefill.** Choosing a place we already hold
@@ -3961,7 +3975,7 @@ function renderNameResults(ours, theirs, q, stillLooking) {
     const b = document.createElement('button');
     b.className = 'opt';
     b.innerHTML = escapeHtml(r.name)
-      + '<small>' + escapeHtml(r.address || 'no address') + ' · from Apple Maps</small>';
+      + '<small>' + escapeHtml(r.address || 'no address') + ', from Apple Maps</small>';
     b.onclick = () => chooseNameMapResult(r);
     box.appendChild(b);
   });
@@ -4060,7 +4074,7 @@ function showDuplicateSheet() {
   dupeCandidates.slice(0, 6).forEach((r) => {
     const b = document.createElement('button');
     b.className = 'opt';
-    b.innerHTML = (r.name || 'Unnamed') + '<small>' + Math.round(r.km * 1000) + 'm away · '
+    b.innerHTML = (r.name || 'Unnamed') + '<small>' + Math.round(r.km * 1000) + 'm away, '
       + (r.cover_image_url ? 'has a cover' : 'no cover — worth a photo') + '</small>';
     b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
     $('dupe-options').appendChild(b);
@@ -4757,9 +4771,9 @@ function manualOutcome(status, body) {
   }
   if (status === 409) return { error: 'Not added: an admin hid or rejected this place before, so it stays out.', final: true };
   // 401 keeps the word, so the queue parks as signed out and spends nothing.
-  if (status === 401) return { error: 'admin-add-place · 401 · sign in again' };
+  if (status === 401) return { error: 'admin-add-place, 401, sign in again' };
   if (status === 403) return { error: 'Only admins can add places this way.', final: true };
-  return { error: 'admin-add-place · ' + (status || 'no answer') + ' · ' + (body.error || 'no details'), final: status === 400 };
+  return { error: 'admin-add-place, ' + (status || 'no answer') + ', ' + (body.error || 'no details'), final: status === 400 };
 }
 // W-88 logic end
 
@@ -4892,7 +4906,7 @@ async function uploadOne(item) {
     const op = item.editing ? 'update-on-conflict' : 'insert';
     const { error: rowErr } = await db.from('landmarks').upsert(row, { onConflict: 'id' });
     if (rowErr) {
-      throw new Error('landmarks · ' + op + ' · ' + rowErr.message);
+      throw new Error('landmarks, ' + op + ', ' + rowErr.message);
     }
   }
 
@@ -4966,8 +4980,8 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
 
   const { data: current, error: readErr } = await db.from('landmarks')
     .select('cover_image_url').eq('id', row.id).maybeSingle();
-  if (readErr) throw new Error('landmarks · read · ' + readErr.message);
-  if (!current) throw new Error('landmarks · read · that place no longer exists');
+  if (readErr) throw new Error('landmarks, read, ' + readErr.message);
+  if (!current) throw new Error('landmarks, read, that place no longer exists');
 
   const hasCover = !!(current.cover_image_url || '').trim();
 
@@ -4979,7 +4993,7 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
     const path = uid + '/' + row.id + '/' + p.photoId + '.jpg';
     const { error: uErr } = await db.storage.from('user-landmark-photos')
       .upload(path, p.blob, { contentType: 'image/jpeg', upsert: true });
-    if (uErr) throw new Error('user-landmark-photos · upload · ' + uErr.message);
+    if (uErr) throw new Error('user-landmark-photos, upload, ' + uErr.message);
     const url = db.storage.from('user-landmark-photos').getPublicUrl(path).data.publicUrl;
     const { error: mErr } = await db.from('landmark_media').upsert({
       id: p.photoId,                          // same id on a retry — idempotent
@@ -4992,7 +5006,7 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
       width: p.width,
       height: p.height,
     }, { onConflict: 'id' });
-    if (mErr) throw new Error('landmark_media · insert · ' + mErr.message);
+    if (mErr) throw new Error('landmark_media, insert, ' + mErr.message);
   }
 
   if (hasCover) return;                       // never replace one
@@ -5001,7 +5015,7 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
   const { error: cErr } = await db.storage.from('landmark-covers')
     .upload(coverPath, photos[0].blob, { contentType: 'image/jpeg', upsert: true });
   if (cErr && !(await coverAlreadyLanded(cErr, coverPath, photos[0].blob))) {
-    throw new Error('landmark-covers · upload · ' + cErr.message);
+    throw new Error('landmark-covers, upload, ' + cErr.message);
   }
   const coverURL = db.storage.from('landmark-covers').getPublicUrl(coverPath).data.publicUrl;
 
@@ -5019,7 +5033,7 @@ async function uploadPhotosToExistingPlace(item, row, photos, uid) {
   if (!stockCover && profile.username) patch.photographer_name = profile.username;
   const { error: upErr } = await db.from('landmarks')
     .update(patch).eq('id', row.id).is('cover_image_url', null);
-  if (upErr) throw new Error('landmarks · update cover · ' + upErr.message);
+  if (upErr) throw new Error('landmarks, update cover, ' + upErr.message);
 }
 
 /** **Did the cover actually land?**
@@ -5284,7 +5298,7 @@ function openMenu() {
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
     $('menu-queue-sub').textContent = !items.length ? 'Nothing waiting'
-      : failed ? (plural(items.length, 'item') + ' waiting · ' + failed + ' stopped')
+      : failed ? (plural(items.length, 'item') + ' waiting, ' + failed + ' stopped')
                : plural(items.length, 'item') + ' waiting to upload';
   }).catch(() => {});
   $('menu-sheet').hidden = false;
@@ -5595,8 +5609,8 @@ function renderFinishSlice(list) {
 
     // Distance is the reason this list is usable, so it leads the line.
     const where = (r.km == null) ? ''
-      : (r.km < 1 ? Math.round(r.km * 1000) + ' m · ' : r.km.toFixed(r.km < 10 ? 1 : 0) + ' km · ');
-    const provenance = r.origin === 'user' ? '' : ' · catalogue';
+      : (r.km < 1 ? Math.round(r.km * 1000) + ' m, ' : r.km.toFixed(r.km < 10 ? 1 : 0) + ' km, ');
+    const provenance = r.origin === 'user' ? '' : ', catalogue';
 
     const d = document.createElement('div');
     d.className = 'item';
@@ -5626,12 +5640,12 @@ function buildFinishScope() {
   const seen = new Set();
   cities.forEach((c) => { if (c.country_code) seen.add(c.country_code); });
   [...seen].sort().forEach((cc) => {
-    opts.push('<option value="country:' + cc + '">Country · ' + escapeHtml(cc) + '</option>');
+    opts.push('<option value="country:' + cc + '">Country, ' + escapeHtml(cc) + '</option>');
   });
 
   const near = (fix && fix.lat != null) ? nearestCities(fix.lat, fix.lon, 12) : cities.slice(0, 12);
   near.forEach((c) => {
-    opts.push('<option value="city:' + c.id + '">City · ' + escapeHtml(c.name) + '</option>');
+    opts.push('<option value="city:' + c.id + '">City, ' + escapeHtml(c.name) + '</option>');
   });
 
   sel.innerHTML = opts.join('');
@@ -5740,7 +5754,7 @@ function renderRunCount() {
   if (!runActive()) return;
   const total = finishServerPaged ? (finishRows.length + '+') : finishRows.length;
   $('run-count').textContent = (runAt + 1) + ' of ' + total
-    + (runDone ? ' · ' + runDone + ' done' : '');
+    + (runDone ? ', ' + runDone + ' done' : '');
 }
 
 /** The next row that has not been skipped, fetching another page at the end of
@@ -5840,7 +5854,7 @@ function queueWhat(item) {
     // A place with photographs is mostly a photo upload, and saying so makes
     // "cover upload: Load failed" legible rather than mysterious.
     const n = item.photos ? item.photos.length : 0;
-    return n ? 'Place · ' + plural(n, 'photo') : 'Place';
+    return n ? 'Place, ' + plural(n, 'photo') : 'Place';
   }
   return QUEUE_WHAT[kind] || kind;
 }
@@ -5928,7 +5942,7 @@ function renderQueueList(items) {
     const h = document.createElement('h3');
     // **Never a dangling separator.** The separator belongs to the label, so no
     // label means no separator rather than "Tip or hint · ".
-    h.textContent = queueWhat(item) + (label ? ' · ' + label : '');
+    h.textContent = queueWhat(item) + (label ? ', ' + label : '');
     d.appendChild(h);
 
     const st = document.createElement('p');
@@ -5987,7 +6001,7 @@ function renderQueueList(items) {
     const drop = document.createElement('button');
     drop.className = 'linkish';
     drop.textContent = 'Discard';
-    drop.onclick = () => askDiscard(item.id, queueWhat(item) + (label ? ' · ' + label : ''));
+    drop.onclick = () => askDiscard(item.id, queueWhat(item) + (label ? ', ' + label : ''));
     acts.appendChild(drop);
 
     d.appendChild(acts);
@@ -6246,7 +6260,7 @@ function renderCoverInfo() {
   if (cap.photographer) bits.push('by ' + cap.photographer);
   if (cap.coverSourceRef) bits.push(cap.coverSourceRef);
   line.textContent = bits.length
-    ? 'Cover: ' + bits.join(' · ')
+    ? 'Cover: ' + bits.join(', ')
     : 'Cover: nothing records where this one came from.';
 }
 
@@ -6928,7 +6942,7 @@ async function renderCountryTab() {
         ? 'Hero image set.' : 'No hero image yet.';
     }
   }
-  chip.innerHTML = country.name + ' ▾<small>From the place\u2019s coordinate · tap to change</small>';
+  chip.innerHTML = country.name + ' ▾<small>From the place\u2019s coordinate, tap to change</small>';
   document.querySelector('#pane-country h1').textContent = 'Welcome to ' + country.name;
   await loadCountryApps();
 }
@@ -6941,7 +6955,7 @@ $('country-chip').onclick = () => {
     const code = (c.country_code || '').toUpperCase();
     const b = document.createElement('button');
     b.className = 'opt';
-    b.innerHTML = code + '<small>nearest city ' + escapeHtml(c.name) + ' · ' + c.km.toFixed(0) + ' km</small>';
+    b.innerHTML = code + '<small>nearest city ' + escapeHtml(c.name) + ', ' + c.km.toFixed(0) + ' km</small>';
     b.onclick = () => {
       country = { code, name: code };
       $('country-sheet').hidden = true;
@@ -7331,7 +7345,7 @@ function renderEventList() {
     const name = document.createElement('strong');
     name.textContent = row.name || '(unnamed)';
     const line = document.createElement('small');
-    line.textContent = [evDateLine(row), evCityName(row)].filter(Boolean).join(' · ');
+    line.textContent = [evDateLine(row), evCityName(row)].filter(Boolean).join(', ');
     const state = document.createElement('small');
     state.className = 'evstate';
     // No Event Review link in the list: the row is a button, and a link
@@ -7408,7 +7422,7 @@ function openEventPhoto(id) {
   evBusy = false;
   $('ev-name').textContent = row.name || '(unnamed)';
   $('ev-meta').textContent = [evDateLine(row), evCityName(row), row.venue]
-    .filter(Boolean).join(' · ');
+    .filter(Boolean).join(', ');
   evRenderState($('ev-state'), evPhotoState(row), row, true);
   $('ev-credit').value = row.image_credit || '';
   const cur = $('ev-current-thumbs');
@@ -7577,7 +7591,7 @@ function evShowDone(blob, width) {
   const size = width ? width + '\u00a0px wide' : '';
   const next = evRows.find((r) => !evHasOurPhoto(r));
 
-  $('ev-done-name').textContent = name + (size ? ' · ' + size : '')
+  $('ev-done-name').textContent = name + (size ? ', ' + size : '')
     + (next ? '' : ' — that\'s all of them.');
   $('ev-next').hidden = !next;
   $('ev-next').onclick = () => { if (next) openEventPhoto(next.id); };
@@ -8047,7 +8061,7 @@ async function amSearchFill() {
   for (const r of data) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
     const s = document.createElement('strong'); s.textContent = r.name;
-    const sm = document.createElement('small'); sm.textContent = (r.address || 'No address') + (r.google_place_id ? ' · already has a place id' : '');
+    const sm = document.createElement('small'); sm.textContent = (r.address || 'No address') + (r.google_place_id ? ', already has a place id' : '');
     b.append(s, sm);
     b.onclick = () => {
       amFillPick = { id: r.id, name: r.name };
@@ -8197,7 +8211,7 @@ function renderBuildStamp() {
     const theirs = e.data && e.data.version;
     if (!theirs || theirs === BUILD) return;
     el.classList.add('stale');
-    el.textContent = short + ' · sw ' + String(theirs).replace('field-', '');
+    el.textContent = short + ', sw ' + String(theirs).replace('field-', '');
     el.title = 'This page is ' + BUILD + ' but the service worker is ' + theirs + '.';
     showUpdateBar(theirs);
   };
@@ -8476,9 +8490,9 @@ function orCard(o, today) {
     const id = clEsc(o.session_id), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
     const items = (o.items || []).map((i) => clEsc(i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ');
     const row = (k, v) => v ? '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>' : '';
-    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ' · due' : '') + '</span></div>'
+    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
       + row('Items', items)
-      + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ' · ' + clEsc(o.country) : '') + (o.guarantee ? ' · guarantee' : ''))
+      + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ', ' + clEsc(o.country) : '') + (o.guarantee ? ', guarantee' : ''))
       + row('Ready by', clEsc(o.ready_by || '')) + row('Event', clEsc(o.event_date || ''))
       + row('Rounds', o.rounds_used ? clEsc(String(o.rounds_used)) + ' used' + (o.extra_rounds_paid ? ', ' + o.extra_rounds_paid + ' paid' : '') : '')
       + row('Email', o.email ? '<a href="mailto:' + clEsc(o.email) + '">' + clEsc(o.email) + '</a>' : '')
@@ -8581,13 +8595,13 @@ function clCard(c, now) {
     ? '<a href="' + clEsc(c.proof) + '" target="_blank" rel="noopener noreferrer">' + clEsc(String(c.proof).replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, '')) + '</a>'
     : clEsc(c.proof || '');
   const email = c.email_full
-    ? clEsc(c.email_full) + ' (confirmed) · <a href="mailto:' + clEsc(c.email_full) + '?subject=' + encodeURIComponent('Your claim for ' + c.event.name + ' on Suna') + '">Reply</a>'
+    ? clEsc(c.email_full) + ' (confirmed), <a href="mailto:' + clEsc(c.email_full) + '?subject=' + encodeURIComponent('Your claim for ' + c.event.name + ' on Suna') + '">Reply</a>'
     : clEsc(c.email) + ' (confirmed)';
   return '<div class="card cl-card" id="cl-' + clEsc(c.id) + '">'
     + '<div class="cl-top"><strong>' + (c.status === 'dispute' ? '<span class="cl-tag red">Dispute</span> ' : '') + clEsc(c.event.name) + '</strong>'
     + '<span class="sub" style="margin:0">' + clAgo(c.created_at, now) + '</span></div>'
-    + row('When', clEsc([clDay(c.event.start_time), c.event.city].filter(Boolean).join(' · ')))
-    + row('Claimant', clEsc(c.name) + ' · ' + clEsc(String(c.role || '').charAt(0).toUpperCase() + String(c.role || '').slice(1)))
+    + row('When', clEsc([clDay(c.event.start_time), c.event.city].filter(Boolean).join(', ')))
+    + row('Claimant', clEsc(c.name) + ', ' + clEsc(String(c.role || '').charAt(0).toUpperCase() + String(c.role || '').slice(1)))
     + row('Email', email)
     + row('Proof', proof)
     + (c.message ? row('Message', '“' + clEsc(c.message) + '”') : '')
@@ -8603,8 +8617,8 @@ function clCard(c, now) {
 /** Approved in the last 60 days, with Resend where the function allows it (never Me-You Market or Intrigue Summit). */
 function clApprovedRow(c) {
   const never = /me\W*you\W*market|intrigue\W*summit/i.test(c.event.name);
-  return '<div class="cl-row"><span class="k">' + clEsc(clDay(c.decided_at || c.created_at)) + '</span><span><strong>' + clEsc(c.event.name) + '</strong> · ' + clEsc(c.email_full || c.email)
-    + (c.resend && !never ? ' · <button type="button" class="linkish" data-cl="resend" data-id="' + clEsc(c.id) + '">Resend</button>' : ' · <span class="sub" style="margin:0">emailed by hand</span>') + '</span></div>';
+  return '<div class="cl-row"><span class="k">' + clEsc(clDay(c.decided_at || c.created_at)) + '</span><span><strong>' + clEsc(c.event.name) + '</strong>, ' + clEsc(c.email_full || c.email)
+    + (c.resend && !never ? ', <button type="button" class="linkish" data-cl="resend" data-id="' + clEsc(c.id) + '">Resend</button>' : ', <span class="sub" style="margin:0">emailed by hand</span>') + '</span></div>';
 }
 /**
  * The request body for a decision, or { error } to show instead of sending.
@@ -8705,10 +8719,10 @@ function rvWhen(iso) {
 function rvLine(p) {
   const miss = rvMissing(p);
   return (p.saves || 0) + ((p.saves || 0) === 1 ? ' save' : ' saves')
-    + (p.itinStops ? ' · ' + p.itinStops + ' in plans' : '') + (p.visits ? ' · ' + p.visits + ' visits' : '')
-    + ' · verified ' + rvWhen(p.last_verified_at)
-    + ' · hours ' + (p.hours_source || '—')
-    + ' · ' + (miss.length ? 'needs ' + miss.join(', ') : 'nothing missing');
+    + (p.itinStops ? ', ' + p.itinStops + ' in plans' : '') + (p.visits ? ', ' + p.visits + ' visits' : '')
+    + ', verified ' + rvWhen(p.last_verified_at)
+    + ', hours ' + (p.hours_source || '—')
+    + ', ' + (miss.length ? 'needs ' + miss.join(', ') : 'nothing missing');
 }
 /** Sort: most saves first, then never-verified before verified, then by name. */
 function rvSort(a, b) {
@@ -8874,7 +8888,7 @@ function renderReview(reset) {
   for (const p of slice) {
     const d = document.createElement('div');
     d.className = 'item';
-    d.innerHTML = '<h3>' + escapeHtml(p.name || 'Unnamed') + (p.business_status && p.business_status !== 'OPERATIONAL' ? ' <small>· ' + escapeHtml(p.business_status.toLowerCase().replace('_', ' ')) + '</small>' : '') + '</h3>'
+    d.innerHTML = '<h3>' + escapeHtml(p.name || 'Unnamed') + (p.business_status && p.business_status !== 'OPERATIONAL' ? ' <small>, ' + escapeHtml(p.business_status.toLowerCase().replace('_', ' ')) + '</small>' : '') + '</h3>'
       + '<p>' + escapeHtml(rvLine(p)) + '</p>';
     d.onclick = (e) => { if (!e.target.closest('.rv-card')) rvToggleCard(d, p); };
     list.appendChild(d);
@@ -9013,7 +9027,7 @@ function tkSesTime(iso) {
 function tkSesName(t) {
   if (!t || !t.session_starts_at) return t && t.session_label ? String(t.session_label) : '';
   const at = tkSesTime(t.session_starts_at), label = String(t.session_label || '').trim();
-  return label && label.replace(/\s/g, '').toLowerCase() !== at.replace(/\s/g, '').toLowerCase() ? at + ' · ' + label : at;
+  return label && label.replace(/\s/g, '').toLowerCase() !== at.replace(/\s/g, '').toLowerCase() ? at + ', ' + label : at;
 }
 /**
  * W-236: rows grouped by session, earliest first; tickets with no session in one group first
@@ -9032,15 +9046,15 @@ function tkBySession(rows) {
 function tkCard(t, now) {
   const s = tkState(t, now), ref = tkEsc(t.pay_ref || '');
   const tag = s === 'claimed' ? '<span class="cl-tag ok">Says paid ' + tkEsc(tkAgo(t.claimed_paid_at, now)) + '</span>'
-    : s === 'pending' ? '<span class="cl-tag">Hold until ' + tkEsc(tkTime(t.expires_at)) + '</span>'
-    : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ' · ' + tkEsc(t.paid_via) : '') + '</span>' + (t.seat_no ? '<span class="cl-tag">No. ' + tkEsc(('00' + t.seat_no).slice(-3)) + '</span>' : '') + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
+    : s === 'pending' ? '<span class="cl-tag warn">Hold until ' + tkEsc(tkTime(t.expires_at)) + '</span>'
+    : s === 'paid' ? '<span class="cl-tag ok">Paid' + (t.paid_via ? ', ' + tkEsc(t.paid_via) : '') + '</span>' + (t.seat_no ? '<span class="cl-tag">No. ' + tkEsc(('00' + t.seat_no).slice(-3)) + '</span>' : '') + (t.checked_in_at ? '<span class="cl-tag">In at ' + tkEsc(tkTime(t.checked_in_at)) + '</span>' : '')
     : '<span class="cl-tag red">' + (t.status === 'refunded' ? 'Refunded' : t.status === 'cancelled' ? 'Released' : 'Hold ran out') + '</span>';
   const actions = s === 'claimed' || s === 'pending'
     ? '<button type="button" class="primary" style="width:auto" data-tk="paid" data-ref="' + ref + '">Mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
     : s === 'paid' ? '<button type="button" class="ghost" data-tk="refunded" data-ref="' + ref + '">Mark refunded</button>' : '';
   const receipt = t.proof_path ? '<button type="button" class="ghost" data-tk="receipt" data-path="' + tkEsc(t.proof_path) + '">Receipt</button>' : '';
   return '<div class="card cl-card"><div class="cl-top"><b>' + (ref || 'No reference') + '</b><b>' + tkEsc(tkRM(t.amount_due)) + '</b></div>'
-    + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.buyer_name || 'No name') + (t.buyer_email ? ' · ' + tkEsc(t.buyer_email) : '') + '</span></div>'
+    + '<div class="cl-row"><span class="k">Member</span><span>' + tkEsc(t.buyer_name || 'No name') + (t.buyer_email ? ', ' + tkEsc(t.buyer_email) : '') + '</span></div>'
     + '<div class="cl-row"><span class="k">Event</span><span>' + tkEsc(t.event_name || '') + '</span></div>'
     + (tkSesName(t) ? '<div class="cl-row"><span class="k">Session</span><span>' + tkEsc(tkSesName(t)) + '</span></div>' : '')
     + '<div class="cl-tags">' + tag + '</div>'
@@ -9062,7 +9076,7 @@ function tkDoorResult(r, row, now) {
   const no = r.seat_no ? 'No. ' + ('00' + r.seat_no).slice(-3) : '';
   // W-236: the ticket's session, from the Door's list (check_in_ticket's answer doesn't carry it).
   const ses = row && row.session_starts_at ? tkSesTime(row.session_starts_at) + ' session' : '';
-  const who = [r.buyer_name, r.event_name, ses, no].filter(Boolean).join(' · ');
+  const who = [r.buyer_name, r.event_name, ses, no].filter(Boolean).join(', ');
   const bad = (reason, line) => ['no', 'Not valid', reason, line != null ? line : who];
   if (r.error === 'not_a_ticket') return bad('Not a Suna ticket', 'That code isn\'t one of ours.');
   if (r.error === 'not_found') return bad('Unknown code', 'No ticket has this code. Check the reference, or scan again.');
@@ -9076,7 +9090,7 @@ function tkDoorResult(r, row, now) {
     return bad('Not paid yet');
   }
   if (r.checked_in && r.already_used) return bad('Already used at ' + tkTime(r.checked_in_at));
-  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, ses, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(' · ')];
+  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, ses, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(', ')];
   return ['err', 'Couldn\'t check', 'That didn\'t work. Try again.', 'This says nothing about the ticket.'];
 }
 function tkCountsHTML(c, door) {
@@ -9090,7 +9104,7 @@ function tkDoorCountsHTML(rows, now) {
   if (!groups.some((g) => g.key)) return all;
   return all + '<div class="tk-ses-counts">' + groups.map((g) => {
     const c = tkCounts(g.rows, now);
-    return '<p><b>' + tkEsc(g.key ? g.name : 'No session') + '</b><span>' + c.paid + ' paid · ' + c.in + ' in</span></p>';
+    return '<p><b>' + tkEsc(g.key ? g.name : 'No session') + '</b><span>' + c.paid + ' paid, ' + c.in + ' in</span></p>';
   }).join('') + '</div>';
 }
 /* TICKETS-LOGIC-END */
