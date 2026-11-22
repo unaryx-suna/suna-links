@@ -144,6 +144,10 @@
   .badge.zero { background: rgba(255,255,255,.12); color: var(--dim); }
   /* §3 — "stopped" must not read as a quieter "waiting". */
   .badge.failed { background: var(--danger); color: #fff; }
+  /* W-284: Orders (one-off packages, I-740) */
+  .or-step { font-size: 12px; border-radius: 999px; padding: 3px 9px; background: rgba(140,123,234,.22); color: #cfc6ff; }
+  .or-step.due { background: rgba(255,107,107,.18); color: var(--danger); }
+  .or-note { width: 100%; min-height: 60px; }
   /* W-202: Claims */
   .cl-card { margin-bottom: 12px; }
   .cl-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -732,6 +736,18 @@
     <div id="cl-approved"></div>
   </div>
 
+  <!-- ════ Orders (W-284, Ops OPS-326 D7; server I-740 oneoff-order) ═══════
+       One-off packages from /deals and the join flow. Every action goes through
+       oneoff-order's admin actions, which check is_admin against this session's
+       own token; the buyer gets one email line + their order link on each step.
+       The staff note is never shown to the buyer. Admin only. -->
+  <div class="wrap" id="pane-orders" hidden>
+    <h1>Orders</h1>
+    <p class="sub">One-off packages. Send the drafts link, mark it delivered, move a ready-by date or refund. The buyer is emailed at each step.</p>
+    <div id="or-list"></div>
+    <p class="sub" id="or-note" hidden></p>
+  </div>
+
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
        Tickets to events Suna hosts, paid by DuitNow or bank transfer with a
        reference. Brian checks his bank, finds the reference here and marks
@@ -984,6 +1000,7 @@
     <button class="opt" id="menu-addplace" hidden>Add from Google Maps link<small>A tipped place, straight from Google Maps</small></button>
     <button class="opt" id="menu-review" hidden>Review places<small>Keep every place's details current, the most used first</small></button>
     <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
+    <button class="opt" id="menu-orders" hidden>Orders <span class="badge zero" id="orders-count">0</span><small>One-off packages: due today first</small></button>
     <button class="opt" id="menu-payments" hidden>Payments <span class="badge zero" id="payments-count">0</span><small>Tickets waiting to be marked paid</small></button>
     <button class="opt" id="menu-door" hidden>Door<small>Scan tickets in at a Suna event</small></button>
     <button class="opt" id="menu-signout">Sign out</button>
@@ -1070,7 +1087,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v49';
+const BUILD = 'field-v50';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5180,6 +5197,7 @@ function openMenu() {
   $('menu-claims').hidden = !(profile && profile.is_admin);
   $('menu-review').hidden = !(profile && profile.is_admin);
   $('menu-payments').hidden = !(profile && profile.is_admin);
+  $('menu-orders').hidden = !(profile && profile.is_admin);
   $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
@@ -5204,12 +5222,13 @@ $('menu-addplace').onclick = () => { closeMenu(); switchTab('addplace'); };
 $('menu-claims').onclick = () => { closeMenu(); switchTab('claims'); };
 $('menu-review').onclick = () => { closeMenu(); switchTab('review'); };
 $('menu-payments').onclick = () => { closeMenu(); switchTab('payments'); };
+$('menu-orders').onclick = () => { closeMenu(); switchTab('orders'); };
 $('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door']) {
+  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
@@ -5226,6 +5245,7 @@ function switchTab(which) {
   if (which === 'claims') loadClaims(true);
   if (which === 'review') openReview();
   if (which === 'payments') loadTickets('payments');
+  if (which === 'orders') loadOrders(true);
   if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
@@ -8165,10 +8185,12 @@ async function loadProfile() {
   $('menu-claims').hidden = !profile.is_admin;
   $('menu-review').hidden = !profile.is_admin;
   $('menu-payments').hidden = !profile.is_admin;
+  $('menu-orders').hidden = !profile.is_admin;
   $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
   if (profile.is_admin) loadTickets(null).catch(() => {});
+  if (profile.is_admin) loadOrders(false).catch(() => {});   // W-284: the due-today badge
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -8297,6 +8319,96 @@ async function showApp(s) {
     if (location.hash === '#door') switchTab('door');
   }
 }
+
+/* ── Orders (W-284, Ops OPS-326; I-740 oneoff-order) ──────────────────────────
+   The list (due today counted by the server), and per order: Drafts sent (a link), Delivered (a
+   link, a URL or a courier number), Set new ready-by date, Refund (Stripe, two taps), a private note. */
+/* ORDERS-LOGIC-START */
+const OR_STEP = { paid: 'Paid: waiting for details', details_in: 'Details in', drafts_sent: 'Drafts sent', changes: 'Changes asked', approved: 'Approved', delivered: 'Delivered', new_date_offered: 'New date offered', closed: 'Closed', refunded: 'Refunded' };
+const OR_SYM = { myr: 'RM', sgd: 'S$', aud: 'A$' };
+function orDue(o, today = new Date().toISOString().slice(0, 10)) {
+  if (['delivered', 'closed', 'refunded'].includes(o.step) || !o.ready_by) return false;
+  return o.ready_by <= today;
+}
+/** One order's card: what it is, where it is, and its actions (all escaped). */
+function orCard(o, today) {
+    const id = clEsc(o.session_id), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
+    const items = (o.items || []).map((i) => clEsc(i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ');
+    const row = (k, v) => v ? '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>' : '';
+    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ' · due' : '') + '</span></div>'
+      + row('Items', items)
+      + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ' · ' + clEsc(o.country) : '') + (o.guarantee ? ' · guarantee' : ''))
+      + row('Ready by', clEsc(o.ready_by || '')) + row('Event', clEsc(o.event_date || ''))
+      + row('Rounds', o.rounds_used ? clEsc(String(o.rounds_used)) + ' used' + (o.extra_rounds_paid ? ', ' + o.extra_rounds_paid + ' paid' : '') : '')
+      + row('Email', o.email ? '<a href="mailto:' + clEsc(o.email) + '">' + clEsc(o.email) + '</a>' : '')
+      + row('Drafts', o.drafts_url ? '<a href="' + clEsc(o.drafts_url) + '" target="_blank" rel="noopener">open</a>' : '')
+      + '<div class="cl-actions">'
+      + '<button type="button" class="ghost" data-or="drafts_sent" data-id="' + id + '">Drafts sent</button>'
+      + '<button type="button" class="ghost" data-or="delivered" data-id="' + id + '">Delivered</button>'
+      + '<button type="button" class="ghost" data-or="set_ready_by" data-id="' + id + '">New ready-by date</button>'
+      + (o.step !== 'refunded' ? '<button type="button" class="danger" data-or="refund" data-id="' + id + '">Refund</button>' : '')
+      + '</div><div id="or-form-' + id + '"></div>'
+      + '<div class="cl-form"><label>Note (never shown to the buyer)</label><textarea class="or-note" id="or-n-' + id + '" maxlength="2000">' + clEsc(o.staff_note || '') + '</textarea>'
+      + '<div class="cl-actions"><button type="button" class="ghost" data-or-go="note" data-id="' + id + '">Save note</button></div></div></div>';
+}
+/* ORDERS-LOGIC-END */
+let orRows = [];
+async function orCall(body) {
+  const token = await amToken();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/oneoff-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (token || SUPABASE_ANON_KEY) },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || (json.error === 'step' ? 'Not at this step (it is ' + (OR_STEP[json.step] || json.step) + ').' : json.error) || ('oneoff-order ' + res.status));
+  return json;
+}
+async function loadOrders(render) {
+  let out;
+  try { out = await orCall({ action: 'list' }); }
+  catch (e) { if (render) { $('or-list').innerHTML = ''; $('or-note').hidden = false; $('or-note').textContent = e.message || 'Could not load orders.'; } return; }
+  orRows = out.orders || [];
+  const n = Number(out.due_today) || 0;
+  $('orders-count').textContent = String(n);
+  $('orders-count').classList.toggle('zero', n === 0);
+  if (render) renderOrders();
+}
+function renderOrders() {
+  $('or-note').hidden = orRows.length > 0;
+  $('or-note').textContent = 'No orders yet. A paid /deals or join-flow order shows here.';
+  // Due first (ready-by today or past, not finished), then the newest.
+  const rows = orRows.slice().sort((a, b) => (orDue(b) - orDue(a)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  $('or-list').innerHTML = rows.map((o) => orCard(o)).join('');
+}
+function orForm(id, action) {
+  const slot = $('or-form-' + id);
+  const o = orRows.find((x) => x.session_id === id); if (!o || !slot) return;
+  const field = action === 'drafts_sent' ? '<label>Drafts link (https://…)</label><input id="or-v-' + id + '" placeholder="https://drive.google.com/…" autocapitalize="off">'
+    : action === 'delivered' ? '<label>Delivered: a link, a URL or a courier number</label><input id="or-v-' + id + '" autocapitalize="off">'
+    : action === 'set_ready_by' ? '<label>New ready-by date (the buyer may cancel for a full refund)</label><input id="or-v-' + id + '" type="date">'
+    : '<p class="sub" style="margin:0">Refund ' + (OR_SYM[String(o.currency).toLowerCase()] || '') + (Number(o.amount_total || 0) / 100) + ' in full through Stripe? This can\'t be undone here.</p>';
+  slot.innerHTML = '<div class="cl-form">' + field + '<div class="cl-actions"><button type="button" class="' + (action === 'refund' ? 'danger' : 'primary') + '" style="width:auto" data-or-go="' + action + '" data-id="' + clEsc(id) + '">'
+    + ({ drafts_sent: 'Send the drafts link', delivered: 'Mark delivered', set_ready_by: 'Set the date', refund: 'Yes, refund' }[action]) + '</button><button type="button" class="ghost" data-or-cancel="' + clEsc(id) + '">Cancel</button></div></div>';
+}
+async function orGo(id, action) {
+  const v = $('or-v-' + id) ? $('or-v-' + id).value.trim() : '';
+  const body = { action, session_id: id };
+  if (action === 'drafts_sent') { if (!/^https:\/\//.test(v)) return orLine('Give the drafts link (https://…).'); body.url = v; }
+  if (action === 'delivered') { if (!v) return orLine('Give the link, URL or courier number.'); body.ref = v; }
+  if (action === 'set_ready_by') { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return orLine('Pick the date.'); body.date = v; }
+  if (action === 'note') body.text = $('or-n-' + id).value;
+  try { await orCall(body); } catch (e) { orLine(e.message); return; }
+  orLine({ drafts_sent: 'Drafts sent: the buyer is emailed the link.', delivered: 'Marked delivered.', set_ready_by: 'New date set: the buyer is told.', refund: 'Refunded through Stripe.', note: 'Note saved.' }[action]);
+  await loadOrders(true);
+}
+function orLine(text) { $('or-note').hidden = false; $('or-note').textContent = text; $('or-note').scrollIntoView({ block: 'nearest' }); }
+$('pane-orders').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.or) orForm(b.dataset.id, b.dataset.or);
+  else if (b.dataset.orGo) orGo(b.dataset.id, b.dataset.orGo);
+  else if (b.dataset.orCancel) { const s = $('or-form-' + b.dataset.orCancel); if (s) s.innerHTML = ''; }
+});
 
 /* ── Claims (W-202, Ops OPS-138) ───────────────────────────────────────────
    W-184's Event Review panel, for the Panel Brian carries. The list, the

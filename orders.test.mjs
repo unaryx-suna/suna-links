@@ -1,0 +1,43 @@
+// W-284 (b) (Ops OPS-326; server I-740 oneoff-order): Orders in the Panel, app.unaryx.com/field.
+// Like claims.test.mjs: the logic between the ORDERS markers runs with no browser (clEsc from the
+// Claims block), plus the markup checks. `node orders.test.mjs`.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
+const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
+const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP };')();
+let bad = 0;
+const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
+const O = { session_id: 'cs_test_abc123def456', country: 'MY', currency: 'myr', items: [{ key: 'cny_kit', qty: 1 }, { key: 'sponsored_post', qty: 2 }], step: 'details_in',
+  ready_by: '2027-02-07', event_date: '2027-02-14', rounds_used: 1, extra_rounds_paid: 0, guarantee: true, drafts_url: null, email: 'aiman@kopiping.example', business: 'Kopi <Ping>', amount_total: 35300, staff_note: 'Call first' };
+console.log('orders');
+t('markup: an admin-only menu row with the due-today count, the Orders pane, on the tab switch; build and worker bumped together', () => {
+  assert.match(html, /<button class="opt" id="menu-orders" hidden>Orders <span class="badge zero" id="orders-count">0<\/span>/);
+  assert.match(html, /<div class="wrap" id="pane-orders" hidden>/);
+  assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
+  assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
+  assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
+  assert.match(html, /const BUILD = 'field-v50';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v50'/);
+});
+t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
+  assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/oneoff-order', \{[\s\S]{0,200}Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
+  assert.match(html, /const n = Number\(out\.due_today\) \|\| 0;/);
+  for (const a of ['list', 'drafts_sent', 'delivered', 'set_ready_by', 'refund', 'note']) assert.ok(html.includes(`'${a}'`) || html.includes(`action: '${a}'`), a);
+});
+t('due: ready-by today or past and not finished', () => {
+  assert.equal(L.orDue(O, '2027-02-07'), true); assert.equal(L.orDue(O, '2027-02-06'), false);
+  assert.equal(L.orDue({ ...O, step: 'delivered' }, '2027-03-01'), false); assert.equal(L.orDue({ ...O, ready_by: null }, '2027-03-01'), false);
+});
+t('the card: escaped business, items with counts, paid amount + country + guarantee, ready-by, rounds, email, the note; Refund until refunded', () => {
+  const h = L.orCard(O, '2027-02-07');
+  assert.match(h, /<b>Kopi &lt;Ping&gt;<\/b><span class="or-step due">Details in · due<\/span>/);
+  assert.match(h, /Items<\/span><span>cny_kit, sponsored_post × 2</);
+  assert.match(h, /Paid<\/span><span>RM353 · MY · guarantee</);
+  assert.match(h, /Ready by<\/span><span>2027-02-07</); assert.match(h, /Rounds<\/span><span>1 used</);
+  assert.match(h, />Call first<\/textarea>/);
+  assert.deepEqual([...h.matchAll(/data-or="(\w+)"/g)].map((m) => m[1]), ['drafts_sent', 'delivered', 'set_ready_by', 'refund']);
+  assert.doesNotMatch(L.orCard({ ...O, step: 'refunded' }, '2027-02-07'), /data-or="refund"/);
+});
+console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
+process.exit(bad ? 1 : 0);
