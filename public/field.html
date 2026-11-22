@@ -358,6 +358,66 @@
 /* W-214: the review card under a place in Review places. */
 .rv-card { margin: 12px 0 4px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.04); display: grid; gap: 8px; cursor: default; }
 .rv-card label { margin: 6px 0 0; }
+
+  /* ── W-288 Panel v2 (Ops - Design, claude/design/panel-v2/; Brian 23 Nov 01:35 "yes that works") ──
+     Look only: one block, last, so every token of the redesign is here. Primary buttons are WHITE with
+     ink; sand is never a button. Selected chips, toggles and counts are the purple gradient; segmented
+     choices are a white pill on dark; status tags are amber (missing), green (done), red (failed) and
+     lilac (in between). Destructive actions are the red button, never white. */
+  @font-face { font-family: Urbanist; src: url(/fonts/urbanist-medium.woff2) format("woff2"); font-weight: 400 600; font-display: swap; }
+  @font-face { font-family: Urbanist; src: url(/fonts/urbanist-bold.woff2) format("woff2"); font-weight: 700 900; font-display: swap; }
+  :root {
+    --ink: #111312; --card: #1B1C1C; --line: #2C2E2D; --muted: #A7ACA9; --dim: #6E7471;
+    --danger: #FF7A70; --ok: #8FD3A8; --warn: #F5B971; --btn-ink: #140F2E;
+    --sel: linear-gradient(135deg, #5A44C8, #3A288C);
+    --sand: #F5B971;   /* left only for amber "needs attention" text; never a button */
+  }
+  body { font-family: Urbanist, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-weight: 500; }
+  h1 { font-size: 28px; font-weight: 800; line-height: 1.1; margin: 14px 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 14px; font-weight: 500; }
+  label { color: var(--muted); font-size: 13px; font-weight: 700; margin: 16px 0 7px; }
+  button { font-weight: 700; }
+  .primary { background: #fff; color: var(--btn-ink); font-weight: 800; border-radius: 14px; min-height: 52px; font-size: 16px; }
+  .ghost { background: #242625; color: #fff; border: 1px solid var(--line); border-radius: 14px; }
+  .linkish { color: var(--muted); font-weight: 700; text-decoration: none; }
+  .danger, button.danger { background: #2A1A19; color: var(--danger); border: 1px solid #4A2B28; border-radius: 14px; }
+  .chip { background: #1F2120; border: 1px solid var(--line); font-weight: 700; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; }
+  .chip[aria-pressed="true"] { background: var(--sel); border-color: transparent; color: #fff; font-weight: 700; }
+  .card, .opt { background: var(--card); border-color: var(--line); border-radius: 16px; }
+  .opt { font-weight: 700; font-size: 16px; }
+  .opt small { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .chev { color: var(--dim); font-weight: 700; }
+  .badge { background: var(--sel); color: #fff; font-weight: 800; min-width: 26px; text-align: center; border-radius: 12px; }
+  .badge.zero { background: #2A2C2B; color: #fff; }
+  .topbar { background: var(--ink); border-bottom-color: var(--line); }
+  .tab[aria-selected="true"] { background: none; }
+  .sheet > div { background: #1A1C1B; border-top: 1px solid var(--line); border-radius: 22px 22px 0 0; }
+  .qbar { background: #3A2C1A; border-color: #5A4428; color: var(--warn); }
+  .qbar.stuck { background: #3A1E1C; border-color: #5C2E2A; color: var(--danger); }
+  .cl-row a, .evstate a, details summary, .hinherit button, .hadd { color: #fff; }
+  .shoot { background: #fff; color: var(--btn-ink); border-radius: 16px; font-weight: 800; }
+  .shoot.alt { background: #242625; color: #fff; border: 1px solid var(--line); }
+  .hday input[type=checkbox] { accent-color: #5A44C8; }
+  .opt.known { border-color: #5A44C8; } .opt.known small { color: #C9BFFF; }
+  .cityline { color: var(--muted); }
+  /* Status tags (one vocabulary for the whole Panel). */
+  .tag { display: inline-flex; align-items: center; height: 22px; border-radius: 6px; padding: 0 7px; font-weight: 700; font-size: 11.5px; background: #2A2C2B; color: #D5D8D6; }
+  .tag.warn { background: #3A2C1A; color: var(--warn); } .tag.ok { background: #17301F; color: var(--ok); }
+  .tag.bad { background: #3A1E1C; color: var(--danger); } .tag.pur { background: #2A2350; color: #C9BFFF; }
+  /* P0 home list. */
+  #tab-capture { display: none; }
+  .back-home { color: var(--muted); font-weight: 700; font-size: 15px; padding: 8px 0; }
+  .home-h { font-weight: 800; font-size: 13px; letter-spacing: .8px; text-transform: uppercase; color: var(--dim); margin: 22px 0 10px; }
+  .home-list { padding: 0; overflow: hidden; }
+  .home-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; color: #fff; text-align: left; font-family: inherit; }
+  .home-row:last-child { border-bottom: 0; }
+  .home-t b { display: block; font-weight: 700; font-size: 16px; } .home-t small { display: block; margin-top: 2px; color: var(--muted); font-weight: 500; font-size: 13px; }
+  .home-end { margin-left: auto; display: flex; align-items: center; gap: 8px; } .home-end .chev { font-size: 18px; }
+  #pane-home .primary { margin: 4px 0 6px; }
+  /* Segmented choice: a white pill on dark. */
+  .seg { display: flex; background: #1A1C1B; border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 0; }
+  .seg > * { flex: 1; min-height: 36px; border-radius: 9px; background: none; color: var(--muted); font-weight: 700; font-size: 13.5px; padding: 0 6px; border: 0; }
+  .seg > [aria-pressed="true"], .seg > .on { background: #fff; color: var(--btn-ink); }
 </style>
 </head>
 <body>
@@ -391,6 +451,7 @@
        and the queue badge WHEN there is something in it. Everything else —
        Finish these, Country, Sign out, the build — is behind the menu. -->
   <div class="topbar">
+    <button class="tab back-home" id="back-home" type="button" hidden>‹ Panel</button>
     <button class="tab" id="tab-capture" aria-selected="true"
             style="font-weight:700;font-size:15px">Suna Panel</button>
     <div class="row">
@@ -414,6 +475,15 @@
        he is on, which is the whole point of it. -->
   <div class="wrap" style="padding-bottom:0" id="queue-bar-wrap" hidden>
     <button class="qbar" id="queue-bar" type="button"></button>
+  </div>
+
+  <!-- W-288 P0: the Panel's home. One grouped list, one row per tool; each row mirrors its menu entry
+       (same admin rule, same count), built by renderHome(). "Add a place" opens the capture form. -->
+  <div class="wrap" id="pane-home" hidden>
+    <h1>Suna Panel</h1>
+    <p class="sub" id="home-sub"></p>
+    <button class="primary" id="home-add" type="button">Add a place</button>
+    <div id="home-groups"></div>
   </div>
 
   <!-- capture -->
@@ -5173,7 +5243,7 @@ window.addEventListener('online', drainQueue);
    ════════════════════════════════════════════════════════════════════════ */
 
 // The title is the way back to the job.
-$('tab-capture').onclick = () => switchTab('capture');
+$('tab-capture').onclick = () => switchTab('home');
 
 /* ── §4 — the menu ──────────────────────────────────────────────────────
  *
@@ -5228,10 +5298,13 @@ $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders']) {
+  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders']) {
     $('pane-' + t).hidden = t !== which;
   }
-  $('tab-capture').setAttribute('aria-selected', String(which === 'capture'));
+  $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
+  // W-288: every tool has "‹ Panel" back to the home list.
+  $('back-home').hidden = which === 'home';
+  if (which === 'home') renderHome();
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
   // Re-querying on every visit would lose the run's place in the list, its
@@ -5250,6 +5323,55 @@ function switchTab(which) {
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
 }
+
+/* ── W-288 P0: the home list ─────────────────────────────────────────────────
+   Built from the menu's own entries, so a row shows exactly when its menu entry does (the admin
+   rule lives in one place) and its count is the menu badge's. A count turns purple when > 0. */
+const HOME_GROUPS = [
+  ['Places', [['finish', 'Finish these', 'Missing a photo, hours or a description'], ['review', 'Review places', 'Keep details current, the most used first'],
+              ['addplace', 'Add from Google Maps link', 'A tipped place, straight from Google Maps'], ['queue', 'Upload queue', 'Places still uploading from this phone']]],
+  ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'],
+                             ['creators', 'Creators', 'The purple Creator tag']]],
+  ['Money and tickets', [['orders', 'Orders', 'Packages to deliver'], ['payments', 'Payments', 'Tickets waiting for payment'], ['door', 'Door', 'Scan tickets at the event']]],
+  ['Country screens', [['country', 'Welcome to (country)', 'Hero photo, foods to try, essential apps']]],
+];
+const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count' };
+async function renderHome() {
+  const box = $('home-groups'); if (!box) return;
+  let queued = 0;
+  try { queued = (await idbAll('queue')).length; } catch (e) { /* no store yet */ }
+  const city = (typeof cap !== 'undefined' && cap && cap.cityName) ? cap.cityName : '';
+  $('home-sub').textContent = city ? city + ', near you' : '';
+  box.replaceChildren();
+  for (const [title, rows] of HOME_GROUPS) {
+    const shown = rows.filter(([t]) => { const m = $('menu-' + t); return m && !m.hidden; });
+    if (!shown.length) continue;
+    const h = document.createElement('h2'); h.className = 'home-h'; h.textContent = title; box.appendChild(h);
+    const list = document.createElement('div'); list.className = 'card home-list';
+    for (const [t, name, hint] of shown) {
+      const n = t === 'queue' ? queued : HOME_COUNT[t] ? Number($(HOME_COUNT[t]).textContent) || 0 : null;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'home-row'; b.dataset.go = t;
+      const txt = document.createElement('span'); txt.className = 'home-t';
+      const nm = document.createElement('b'); nm.textContent = name;
+      const sm = document.createElement('small'); sm.textContent = hint;
+      txt.append(nm, sm);
+      const end = document.createElement('span'); end.className = 'home-end';
+      if (n !== null && n > 0) { const c = document.createElement('span'); c.className = 'badge'; c.textContent = String(n); end.appendChild(c); }
+      const ch = document.createElement('span'); ch.className = 'chev'; ch.textContent = '›'; end.appendChild(ch);
+      b.append(txt, end);
+      b.onclick = () => switchTab(t);
+      list.appendChild(b);
+    }
+    box.appendChild(list);
+  }
+}
+// Counts arrive after the list is drawn (claims, orders, payments load on their own): redraw then.
+for (const id of Object.values(HOME_COUNT)) {
+  const el = document.getElementById(id);
+  if (el) new MutationObserver(() => { if (!$('pane-home').hidden) renderHome(); }).observe(el, { childList: true, characterData: true, subtree: true });
+}
+$('home-add').onclick = () => switchTab('capture');
+$('back-home').onclick = () => switchTab('home');
 
 /* ── "Finish these" — places missing data, nearest first ────────────────────
 
@@ -8295,6 +8417,9 @@ async function showApp(s) {
   $('login').hidden = true;
   $('app').hidden = false;
   await Promise.all([loadProfile(), loadCategories(), loadCities()]);
+  // W-288 P0: the first screen is the home list (once per page load: signing back in mid-walk keeps
+  // whatever pane was open, so a form in progress stays in front).
+  if (!window.__homeShown) { window.__homeShown = true; switchTab('home'); }
   renderCategories();
   renderHours();
   renderHintKinds();

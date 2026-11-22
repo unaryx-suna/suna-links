@@ -38,6 +38,8 @@ const SHELL = [
   '/field.html',
   '/field-manifest.json',
   '/field-icon.svg',
+  '/fonts/urbanist-medium.woff2',
+  '/fonts/urbanist-bold.woff2',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
 ];
 
