@@ -414,6 +414,20 @@
   .home-t b { display: block; font-weight: 700; font-size: 16px; } .home-t small { display: block; margin-top: 2px; color: var(--muted); font-weight: 500; font-size: 13px; }
   .home-end { margin-left: auto; display: flex; align-items: center; gap: 8px; } .home-end .chev { font-size: 18px; }
   #pane-home .primary { margin: 4px 0 6px; }
+  /* P1/P2 Add a place. */
+  .doors { flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 240px; margin: 14px 0 6px; border: 1.5px dashed #3A3D3C; border-radius: 18px; background: #161817; }
+  .doors .shoot { flex: none; width: 220px; min-height: 52px; padding: 0; border-radius: 14px; font-size: 16px; text-align: center; }
+  .nophoto .row > button { flex: 1; min-height: 40px; padding: 0 8px; font-size: 13.5px; border-radius: 12px; white-space: nowrap; }
+  .addphoto { font-weight: 700; color: var(--dim); }
+  .tog { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: #2F3231; }
+  .tog::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 11px; background: #8A8F8C; transition: left .15s; }
+  [aria-pressed="true"] > .tog { background: var(--sel); } [aria-pressed="true"] > .tog::after { left: 21px; background: #fff; }
+  .featcard { margin-top: 16px; padding: 4px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  .featcard .fg { margin: 0; }
+  #f-featured { display: flex; align-items: center; gap: 12px; margin: 0 !important; padding: 14px 0; background: none; border: 0; border-radius: 0; }
+  .featcard:has(#sk-box:not([hidden])) #f-featured { border-bottom: 1px solid var(--line); }
+  #f-featured small { font-weight: 500; }
+  #sk-box label { margin-top: 12px; }
   /* Segmented choice: a white pill on dark. */
   .seg { display: flex; background: #1A1C1B; border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 0; }
   .seg > * { flex: 1; min-height: 36px; border-radius: 9px; background: none; color: var(--muted); font-weight: 700; font-size: 13.5px; padding: 0 6px; border: 0; }
@@ -507,17 +521,15 @@
          shoots; at a desk he has an image already. Making upload a smaller
          option inside the camera flow would make the desk case a second-class
          path, and the desk case is how a day's photographs get filed. -->
+    <h1 class="cap-h">Add a place</h1>
+    <p class="sub cap-h">Take a photo there. Its location fills the pin and city.</p>
     <div class="doors">
-      <button class="shoot" id="btn-shoot" type="button">
-        <span class="ico">📷</span>
-        Photograph a place
-        <small>The photo says where you are</small>
-      </button>
-      <button class="shoot alt" id="btn-upload" type="button">
-        <span class="ico">🖼</span>
-        Upload an image
-        <small>Choose, paste or drop one</small>
-      </button>
+      <button class="shoot" id="btn-shoot" type="button">Take a photo</button>
+      <button class="shoot alt" id="btn-upload" type="button">Upload an image</button>
+    </div>
+    <div class="nophoto cap-h">
+      <label>No photo yet?</label>
+      <div class="row"><button class="ghost" id="cap-pin" type="button">Drop a pin near me</button><button class="ghost" id="cap-gmaps" type="button">Paste a Google Maps link</button></div>
     </div>
     <p class="shotsrc" id="shot-source" hidden></p>
     <!-- §4 — shown before the photos send, whenever this capture is going onto
@@ -536,29 +548,7 @@
     </div>
 
     <div class="fg">
-      <label for="f-name">Name</label>
-      <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
-      <!-- NAME-FIRST §1 — the name IS the search. Results appear here, ours
-           first, so the link and the address stop being the toll gate. -->
-      <div id="name-results" hidden></div>
-      <p class="note" id="name-results-note" style="margin:4px 0 0" hidden></p>
-      <!-- The name search is off while a row is open, deliberately. This is
-           the way back out of that, and it is a button rather than a trick
-           with an empty field, because nobody discovers a trick. -->
-      <button class="linkish" id="leave-editing" style="margin:6px 0 0" hidden></button>
-    </div>
-
-    <!-- §2 — one disclosure for everything the photo run is not editing. -->
-    <button class="linkish" id="run-more" hidden style="margin:4px 0 6px">More — everything else about this place</button>
-
-    <div class="fg fg-hide">
-      <label>Category</label>
-      <div class="chips" id="f-categories"></div>
-      <p class="note" id="category-hint" style="margin:0 0 4px" hidden></p>
-    </div>
-
-    <div class="fg">
-      <label>Photos <span style="color:var(--dim)">— the first becomes the cover</span></label>
+      <label>Photos (the first is the cover)</label>
       <!-- NAME-FIRST §2 — what the place already holds, and where it came
            from. Until now the only way to find out a cover was wrong was to
            notice it in the app. -->
@@ -573,8 +563,8 @@
         <p class="note" id="flag-result" style="margin:6px 0 0" hidden></p>
       </div>
       <div class="thumbs" id="f-thumbs">
-        <button class="addphoto" id="btn-camera">📷<br>Camera</button>
-        <button class="addphoto" id="btn-library">🖼<br>Library</button>
+        <button class="addphoto" id="btn-camera">Camera</button>
+        <button class="addphoto" id="btn-library">Add<br>photo</button>
       </div>
       <input id="in-camera" type="file" accept="image/*" capture="environment" multiple hidden>
       <input id="in-library" type="file" accept="image/*" multiple hidden>
@@ -589,8 +579,30 @@
            can see. -->
       <input id="stock-link" type="text" inputmode="url" autocomplete="off"
              autocapitalize="off" style="margin-top:8px"
-             placeholder="…or paste a Pexels or Unsplash link">
+             placeholder="Or paste a Pexels or Unsplash link">
       <p class="note" id="stock-note" style="margin:6px 0 0" hidden></p>
+    </div>
+
+    <div class="fg">
+      <label for="f-name">Name</label>
+      <input id="f-name" type="text" autocapitalize="words" autocomplete="off" placeholder="What is this place called?">
+      <!-- NAME-FIRST §1 — the name IS the search. Results appear here, ours
+           first, so the link and the address stop being the toll gate. -->
+      <div id="name-results" hidden></div>
+      <p class="note" id="name-results-note" style="margin:4px 0 0" hidden></p>
+      <!-- The name search is off while a row is open, deliberately. This is
+           the way back out of that, and it is a button rather than a trick
+           with an empty field, because nobody discovers a trick. -->
+      <button class="linkish" id="leave-editing" style="margin:6px 0 0" hidden></button>
+    </div>
+
+    <!-- §2 — one disclosure for everything the photo run is not editing. -->
+    <button class="linkish" id="run-more" hidden style="margin:4px 0 6px">More: everything else about this place</button>
+
+    <div class="fg fg-hide">
+      <label>Category</label>
+      <div class="chips" id="f-categories"></div>
+      <p class="note" id="category-hint" style="margin:0 0 4px" hidden></p>
     </div>
 
     <div class="fg fg-hide">
@@ -606,37 +618,13 @@
       <button class="opt" id="city-chip" style="margin:0">Waiting for a location…</button>
     </div>
 
-    <!-- §2 — the star lives on the CAPTURE form, not the country tab: it is a
-         property of this place, and the id has to exist before it can be
-         appended to `countries.featured_landmark_ids`. -->
-    <div class="fg fg-hide">
-    <button class="opt" id="f-featured" style="margin:18px 0 0" aria-pressed="false">
-      ☆ Feature this place on its country screen
-      <small>Fills the Top Places block. Added after the place uploads.</small>
-    </button>
-    </div>
-
-    <!-- W-247 (Ops OPS-240; iOS I-680): point one of our printed stickers
-         (unaryx.com/c/<code>) at this place, so scanning it is a Suna
-         checkpoint find. Admin only, and only on a place that is already on
-         the server (it needs the place's id). assign_sticker_checkpoint checks
-         is_admin itself; this box only calls it. -->
-    <div class="fg fg-hide" id="sk-box" hidden>
-      <label for="sk-code">Assign a sticker as a checkpoint</label>
-      <p class="note" style="margin:0 0 8px">Type the 6-letter code printed under the sticker's QR. Scanning it then counts as finding this place: 5 points, once per person.</p>
-      <input id="sk-code" type="text" placeholder="Sticker code, e.g. K7M2PQ" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12">
-      <input id="sk-label" type="text" placeholder="Label (optional), e.g. By the front door" autocomplete="off" maxlength="60" style="margin-top:8px">
-      <button class="ghost" type="button" id="sk-assign" style="margin-top:8px">Assign sticker</button>
-      <p class="note" id="sk-note" role="status" hidden></p>
-    </div>
-
     <div class="fg fg-hide">
     <label for="f-note">A line about this place</label>
     <!-- **One box, because there is one column.** `f-note` and `f-desc` both
          landed in `landmarks.description` and buildRow wrote
          `description.trim() || note.trim()`, so the second box silently won and
          the first was discarded without saying so. It grows instead. -->
-    <textarea id="f-note" placeholder="What is it, in one line? Longer is fine — it grows."></textarea>
+    <textarea id="f-note" placeholder="What is it, in one line? Longer is fine, it grows."></textarea>
 
     <!-- Item 3. Outside <details> because a chip nobody opens is a chip nobody
          sees; tapping it opens More with the grid already filled in. Hidden
@@ -646,7 +634,7 @@
 
     <div class="fg fg-hide">
     <details>
-      <summary>More</summary>
+      <summary>Address, hours, building and tips</summary>
       <label for="f-address">Address</label>
       <input id="f-address" type="text" autocomplete="off">
       <label>Opening hours</label>
@@ -667,7 +655,7 @@
       <!-- Item 5. 131 authored hints already exist; for a given kind they are a
            better prompt than an empty box. -->
       <div id="hint-starters" style="margin:2px 0 8px"></div>
-      <textarea id="hint-body" placeholder="One short line — 3 to 200 characters."></textarea>
+      <textarea id="hint-body" placeholder="One short line, 3 to 200 characters."></textarea>
       <div class="row" style="justify-content:space-between;margin-top:6px">
         <span class="note" id="hint-count" style="margin:0">0/200</span>
         <button class="ghost" id="btn-add-hint" style="padding:9px 16px;font-size:13px">Add hint</button>
@@ -677,6 +665,31 @@
     </details>
     </div>
 
+    <div class="fg fg-hide featcard">
+    <!-- §2 — the star lives on the CAPTURE form, not the country tab: it is a
+         property of this place, and the id has to exist before it can be
+         appended to `countries.featured_landmark_ids`. -->
+    <div class="fg fg-hide">
+    <button class="opt" id="f-featured" style="margin:18px 0 0" aria-pressed="false">
+      <span>Feature on its Welcome to screen<small>Fills the Top Places block. Added after the place uploads.</small></span><i class="tog" aria-hidden="true"></i>
+    </button>
+    </div>
+
+    <!-- W-247 (Ops OPS-240; iOS I-680): point one of our printed stickers
+         (unaryx.com/c/<code>) at this place, so scanning it is a Suna
+         checkpoint find. Admin only, and only on a place that is already on
+         the server (it needs the place's id). assign_sticker_checkpoint checks
+         is_admin itself; this box only calls it. -->
+    <div class="fg fg-hide" id="sk-box" hidden>
+      <label for="sk-code">Assign a sticker as a checkpoint</label>
+      <p class="note" style="margin:0 0 8px">Type the 6-letter code printed under the sticker's QR. Scanning it then counts as finding this place: 5 points, once per person.</p>
+      <input id="sk-code" type="text" placeholder="Sticker code, e.g. K7M2PQ" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12">
+      <input id="sk-label" type="text" placeholder="Label (optional), e.g. By the front door" autocomplete="off" maxlength="60" style="margin-top:8px">
+      <button class="ghost" type="button" id="sk-assign" style="margin-top:8px">Assign sticker</button>
+      <p class="note" id="sk-note" role="status" hidden></p>
+    </div>
+
+    </div>
     <p class="err" id="dupe-note" hidden></p>
     <p class="err" id="save-error" hidden></p>
     <p class="cityline" id="save-cityline" hidden></p>
@@ -4412,8 +4425,7 @@ function resetForm() {
   document.querySelectorAll('#f-categories .chip')
     .forEach((c) => c.setAttribute('aria-pressed', 'false'));
   $('f-featured').setAttribute('aria-pressed', 'false');
-  $('f-featured').innerHTML = '☆ Feature this place on its country screen'
-    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+  $('f-featured').innerHTML = featuredHTML();
   categoryHint('');
   stockNote('');
   $('stock-link').value = '';
@@ -5304,6 +5316,7 @@ function switchTab(which) {
   $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
   // W-288: every tool has "‹ Panel" back to the home list.
   $('back-home').hidden = which === 'home';
+  $('cap-gmaps').hidden = $('menu-addplace').hidden;
   if (which === 'home') renderHome();
   // The save bar belongs to the capture form only.
   $('savebar').hidden = which !== 'capture';
@@ -5336,6 +5349,10 @@ const HOME_GROUPS = [
   ['Country screens', [['country', 'Welcome to (country)', 'Hero photo, foods to try, essential apps']]],
 ];
 const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count' };
+/** W-288: the feature row is a toggle (the purple switch shows aria-pressed), no star glyph. */
+function featuredHTML() {
+  return '<span>Feature on its Welcome to screen<small>Fills the Top Places block. Added after the place uploads.</small></span><i class="tog" aria-hidden="true"></i>';
+}
 async function renderHome() {
   const box = $('home-groups'); if (!box) return;
   let queued = 0;
@@ -5371,6 +5388,9 @@ for (const id of Object.values(HOME_COUNT)) {
   if (el) new MutationObserver(() => { if (!$('pane-home').hidden) renderHome(); }).observe(el, { childList: true, characterData: true, subtree: true });
 }
 $('home-add').onclick = () => switchTab('capture');
+// P1 "No photo yet?": the pin opens the location editor; the Maps link is the admin tool (hidden without it).
+$('cap-pin').onclick = () => $('loc-line').click();
+$('cap-gmaps').onclick = () => switchTab('addplace');
 $('back-home').onclick = () => switchTab('home');
 
 /* ── "Finish these" — places missing data, nearest first ────────────────────
@@ -6088,9 +6108,7 @@ async function openQueued(id) {
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
     c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
   $('f-featured').setAttribute('aria-pressed', String(cap.featured));
-  $('f-featured').innerHTML = (cap.featured ? '★' : '☆')
-    + ' Feature this place on its country screen'
-    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+  $('f-featured').innerHTML = featuredHTML();
 
   if (cap.cityId) {
     const c = cities.find((x) => x.id === cap.cityId);
@@ -8066,9 +8084,7 @@ async function queueCountryWork(item, label, id) {
 $('f-featured').onclick = () => {
   cap.featured = !cap.featured;
   $('f-featured').setAttribute('aria-pressed', String(cap.featured));
-  $('f-featured').innerHTML = (cap.featured ? '★' : '☆')
-    + ' Feature this place on its country screen'
-    + '<small>Fills the Top Places block. Added after the place uploads.</small>';
+  $('f-featured').innerHTML = featuredHTML();
 };
 
 /* ════════════════════════════════════════════════════════════════════════
