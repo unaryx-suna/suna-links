@@ -272,6 +272,7 @@
   }
   .evrow .evthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .evrow .evbody { min-width: 0; flex: 1; }
+  #ev-note.ev-bad { color: #b3261e; font-weight: 600; background: #fdecea; border-radius: 10px; padding: 10px 12px; }
   .evrow strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evrow .badge { float: right; margin-left: 8px; }
   /* W-9: the photo and the event are two states, shown as two. Brian saved
@@ -682,7 +683,7 @@
       </div>
       <input id="in-ev-camera" type="file" accept="image/*" capture="environment" hidden>
       <input id="in-ev-upload" type="file" accept="image/*" hidden>
-      <p class="sub" style="margin-top:4px">Or paste an image. At least 600&nbsp;px wide.</p>
+      <p class="sub" style="margin-top:4px">Or paste an image. At least 600&nbsp;px wide (smaller ones are refused, with a message).</p>
 
       <label for="ev-credit">Photo credit (optional)</label>
       <input id="ev-credit" type="text" placeholder="Who took it, or where it came from" autocomplete="off">
@@ -1069,7 +1070,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v48';
+const BUILD = 'field-v49';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -7284,10 +7285,17 @@ function showEventScreen(which) {
   }
 }
 
-function evNote(msg) {
+// W-278 (c) (Ops OPS-328): a refused photo (under 600 px wide, unreadable, not a photo) used to
+// show in this small grey line below the credit field, off screen on a phone, so it looked
+// accepted with nothing saved. A refusal is now a red alert, scrolled into view.
+function evNote(msg, ok) {
   const n = $('ev-note');
   n.hidden = false;
   n.textContent = msg;
+  const bad = !ok && !/^Preparing/.test(msg);
+  n.classList.toggle('ev-bad', bad);
+  n.setAttribute('role', bad ? 'alert' : 'status');
+  if (bad) try { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
 }
 
 /** How long a photo may take to open before we say so. A HEIC the browser
@@ -7474,7 +7482,17 @@ async function evOpenFromHash() {
   const id = decodeURIComponent(m[1]).trim();
   switchTab('events');
   await loadEventList();
-  const row = evRows.find((r) => r.id === id);
+  let row = evRows.find((r) => r.id === id);
+  // W-278 (b) (Ops OPS-328): the list is the next 400 events, so a later one (anything past about
+  // 15 Jan) or one that's over isn't in it. Ask for that one event by id, any date or status.
+  if (!row && /^[0-9a-f-]{36}$/i.test(id)) {
+    try {
+      const { data } = await db.from('world_events')
+        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude')
+        .eq('id', id).maybeSingle();
+      if (data) { evRows.push(data); row = data; }
+    } catch (e) { /* falls through to the message */ }
+  }
   if (!row) {
     showEventScreen('list');
     const note = $('ev-list-note');
