@@ -416,7 +416,7 @@ export async function eventsAround(lat, lng, { km, days = 7, now = new Date(), l
 /** The line at the foot of every page; the commission note only where a page links to tickets. */
 export function footer({ tickets = false } = {}) {
   return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a> · events and places within a short walk'
-    + (tickets ? '<br>Suna may earn a commission on some ticket links' : '') + '</footer>';
+    + (tickets ? '<br>Affiliate links: we may earn a commission on some ticket links.' : '') + '</footer>';
 }
 
 /** The Suna mark, top left, back to unaryx.com/events (Ops's W1). */

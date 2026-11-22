@@ -227,7 +227,7 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.match(r.body, new RegExp(`<a class="btn" href="https://unaryx\\.com/go/e-${U(4)}" target="_blank" rel="nofollow noopener">Get tickets ↗</a><a class="btn btn-outline half" id="directions"`));
   assert.match(r.body, /<a class="btn btn-outline half save-suna" data-scheme="suna:\/\/event\?id=4444/);
   assert.doesNotMatch(r.body, /Get tickets ↗<\/a><p/, 'no line under Get tickets');
-  assert.match(r.body, /Suna may earn a commission on some ticket links/);
+  assert.match(r.body, /Affiliate links: we may earn a commission on some ticket links\./);
   assert.doesNotMatch(r.body, /Open in Suna|Get Suna|class="bar"/);
   assert(r.body.includes(CLIP_META));
   assert(r.body.includes(`href="${`${STORE('web-e')}&ppid=fec2691e-4d4c-4e48-8520-eda55592bfe1`.replace(/&/g, '&amp;')}"`))  // W-172: /e/ adds the event ppid;
