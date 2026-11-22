@@ -91,12 +91,12 @@ t('a Payments card: reference, amount, member (escaped), event; Mark paid and Re
   assert.equal(L.tkMatches(T, 'MIRA@EX'), true);
 });
 
-t('the Door: first scan shows the name and Paid; a second says "Already checked in at"; unpaid and unknown are refused in words; release and refund need a second tap', () => {
+t('the Door: first scan shows the name and Paid; a second says "Already used" and when it was first scanned (W-288); unpaid and unknown are refused in words; release and refund need a second tap', () => {
   const at = '2026-12-05T11:42:00Z', hhmm = L.tkTime(at);
   const R = { buyer_name: 'Mira Lee', event_name: 'Suna Founders Night', status: 'paid', seat_no: 7, checked_in: true, already_used: false, checked_in_at: at };
   // W-235 replaced these answers; w235.test.mjs checks each status.
-  assert.deepEqual(L.tkDoorResult(R), ['ok', 'Valid', 'Mira Lee', `Suna Founders Night, No. 007, in at ${hhmm}`]);
-  assert.deepEqual(L.tkDoorResult({ ...R, already_used: true }), ['no', 'Not valid', `Already used at ${hhmm}`, 'Mira Lee, Suna Founders Night, No. 007']);
+  assert.deepEqual(L.tkDoorResult(R), ['ok', 'Checked in', 'Mira Lee', `Suna Founders Night, No. 007, in at ${hhmm}`]);
+  assert.deepEqual(L.tkDoorResult({ ...R, already_used: true }), ['no', 'Already used', 'Mira Lee', `First scanned at ${hhmm}`]);
   assert.deepEqual(L.tkDoorResult({ ...R, status: 'pending', checked_in: false, checked_in_at: null }).slice(0, 3), ['no', 'Not valid', 'Not paid yet']);
   assert.deepEqual(L.tkDoorResult({ ...R, status: 'refunded', checked_in: false, checked_in_at: null }).slice(0, 3), ['no', 'Not valid', 'Refunded']);
   assert.deepEqual(L.tkDoorResult({ error: 'not_found' }).slice(0, 3), ['no', 'Not valid', 'Unknown code']);

@@ -9089,8 +9089,9 @@ function tkDoorResult(r, row, now) {
     if (t.expires_at && Date.parse(t.expires_at) <= now) return bad('Hold expired', who);
     return bad('Not paid yet');
   }
-  if (r.checked_in && r.already_used) return bad('Already used at ' + tkTime(r.checked_in_at));
-  if (r.checked_in) return ['ok', 'Valid', r.buyer_name || 'Checked in', [r.event_name, ses, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(', ')];
+  // W-288 (Ops - Design M4): "Already used", the name, then when it was first scanned.
+  if (r.checked_in && r.already_used) return ['no', 'Already used', r.buyer_name || 'No name', 'First scanned at ' + tkTime(r.checked_in_at) + (ses ? ', ' + ses : '')];
+  if (r.checked_in) return ['ok', 'Checked in', r.buyer_name || 'No name', [r.event_name, ses, no, 'in at ' + tkTime(r.checked_in_at)].filter(Boolean).join(', ')];
   return ['err', 'Couldn\'t check', 'That didn\'t work. Try again.', 'This says nothing about the ticket.'];
 }
 function tkCountsHTML(c, door) {

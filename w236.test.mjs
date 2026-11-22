@@ -42,8 +42,8 @@ t('the Door\'s answer names the session (from its list), green and red alike', (
   const ans = { status: 'paid', checked_in: true, already_used: false, buyer_name: 'Mira', event_name: 'Founders Night', checked_in_at: '2026-12-05T06:41:00Z' };
   const v = L.tkDoorResult(ans, row('a', S3), NOW);
   assert.equal(v[0], 'ok'); assert.match(nb(v[3]), /^Founders Night, 2:40 PM session, in at /);
-  assert.equal(nb(L.tkDoorResult({ ...ans, already_used: true }, row('a', S3), NOW)[3]), 'Mira, Founders Night, 2:40 PM session');
-  assert.equal(L.tkDoorResult({ ...ans, already_used: true }, null, NOW)[3], 'Mira, Founders Night');
+  assert.match(nb(L.tkDoorResult({ ...ans, already_used: true }, row('a', S3), NOW)[3]), /^First scanned at .+, 2:40 PM session$/);   // W-288
+  assert.match(L.tkDoorResult({ ...ans, already_used: true }, null, NOW)[3], /^First scanned at [^,]+$/);
 });
 t('wiring: Payments groups the paid list; the Door paints the per-session counts', () => {
   assert.match(html, /const paidGroups = tkBySession\(by\(\['paid'\]\)\);/);
