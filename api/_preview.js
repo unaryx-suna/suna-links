@@ -85,7 +85,7 @@ export function creditFor(landmark) {
   const name = String(landmark.photographer_name || '').trim();
   if (!name || name.toLowerCase() === 'suna' || landmark.cover_source === 'google_places') return null;
   const licence = LICENCE[landmark.cover_source] || '';
-  return `Photo: ${name}${licence ? ` · ${licence}` : ''}`;
+  return `Photo: ${name}${licence ? `, ${licence}` : ''}`;
 }
 /**
  * W-232 (iOS I-627 (2d)): the plan cover's own credit, from the published
@@ -100,7 +100,7 @@ export function planCoverCredit(it) {
   if (!name) return null;
   const licence = String(it.cover_licence || '').trim();
   if (licence.toLowerCase() === 'business') return `Image: ${name}`;
-  return `Photo: ${name}${licence ? ` · ${licence}` : ''}`;
+  return `Photo: ${name}${licence ? `, ${licence}` : ''}`;
 }
 
 // Signed moment URLs last an hour; the page's cache stays well inside that.
@@ -320,7 +320,7 @@ export function summaryLine(it, stops) {
   if (it.resolved_city_name) parts.push(it.resolved_city_name);
   if (stops.length) parts.push(`${Math.max(days.size, 1)} day${days.size > 1 ? 's' : ''}`);
   parts.push(`${stops.length} stop${stops.length === 1 ? '' : 's'}`);
-  return parts.join(' · ');
+  return parts.join(', ');   // QA 24 Nov: no middots (W-296 rule) on app.unaryx.com too
 }
 
 function stopImage(image, name, credit) {
@@ -358,7 +358,7 @@ function stopBlock(s, n, image, credit) {
   // A viewer can't delete a stop on the web, so E2's Delete has no place here.
   const state = eventState(s);
   const pill = state ? `<p class="over-pill">${state === 'cancelled' ? 'Cancelled' : 'Ended'}</p>` : '';
-  const meta = [time, readableDuration(s.duration_label)].filter(Boolean).join(' · ');
+  const meta = [time, readableDuration(s.duration_label)].filter(Boolean).join(', ');
   const note = String(s.creator_note || '').trim();
   const name = s.place_name || 'Stop';
   // W-197: one Directions link (Google Maps) for a stop with a pin that isn't over.
@@ -426,9 +426,9 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .cover{height:400px}
 .fade-bottom{top:auto;bottom:0;height:280px;background:linear-gradient(180deg,rgba(15,17,16,0) 0%,rgba(15,17,16,.85) 60%,#0f1110 100%)}
 .intro.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.more{background:none;border:0;padding:0;margin:4px 0 0;color:#f6cb94;font:700 14px var(--font);cursor:pointer}
+.more{background:none;border:0;padding:0;margin:4px 0 0;color:#B3A6FF;font:700 14px var(--font);cursor:pointer}
 .cover-text{bottom:18px}
-.cover-text .kick{margin:0;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#f6cb94}
+.cover-text .kick{margin:0;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.65)}
 .cover-text h1{font-size:32px;line-height:1.08;font-weight:800}
 .cover-sub{font-size:16px;line-height:1.4;color:#d9d5cc}
 .daychips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 16px 0}
@@ -447,10 +447,10 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}
 .sc .stop-name{font-size:16.5px;font-weight:800;line-height:1.2}
 .sc .stop-note{border:0;padding:0;margin:2px 0 0;font-size:14px;line-height:1.4;color:#cfcbc2}
-.sc .dir{font-size:13.5px;color:#f6cb94;font-weight:700;margin-top:6px;text-decoration:none}
+.sc .dir{font-size:13.5px;color:#B3A6FF;font-weight:700;margin-top:6px;text-decoration:none}
 .photo-credit{display:none}
 .cover-credit{margin:6px 16px 0;font-size:11px;line-height:1.3;color:#a3a8a4;text-align:right}
-.day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:#f6cb94}
+.day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:rgba(255,255,255,.65)}
 .stop-locked{list-style:none;margin:4px 0 0 -34px}
 .lock{position:relative;border-radius:20px;overflow:hidden;border:1px solid #2a2f2c;background:#181b19;min-height:300px}
 .ghost{padding:14px;filter:blur(5px);opacity:.55}
@@ -462,7 +462,7 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .lt{font-size:20px;font-weight:800;margin:12px 0 0}
 .ls{font-size:14px;color:#a3a8a4;margin:6px 0 0;line-height:1.4}
 .ls.small{font-size:12.5px;margin-top:8px}
-a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;min-height:52px;border-radius:26px;background:#f6cb94;color:#1d1408;font-weight:700;font-size:16px;padding:0 20px}
+a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;min-height:52px;border-radius:26px;background:#fff;color:#140F2E;font-weight:700;font-size:16px;padding:0 20px}
 .after{padding:4px 16px 0}
 .bar{display:none}
 </style>`;
@@ -544,7 +544,7 @@ export function previewBody(data, cover, variants, mascot) {
     }
     return head + stopBlock(s, i + 1, images.get(s), credits.get(s));
   }).join('\n    ') + lockedBlock(lockedCount, dayCounts, shown.map(stopDay).filter((d) => d !== null));
-  const kicker = ['Plan', it.resolved_city_name].filter(Boolean).join(' · ');
+  const kicker = ['Plan', it.resolved_city_name].filter(Boolean).join(', ');
 
   return `${W197_CSS}<main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">
@@ -563,7 +563,7 @@ export function previewBody(data, cover, variants, mascot) {
     ${byline}
     ${intro ? `<p class="intro${intro.length > 220 ? ' clamp' : ''}" id="intro-text">${escapeHtml(intro)}</p>${intro.length > 220 ? '<button class="more" type="button" onclick="document.getElementById(\'intro-text\').classList.remove(\'clamp\');this.remove()">More</button>' : ''}` : ''}
   </section>` : ''}
-  ${multiDay && dayCounts.length > 1 ? `<div class="daychips">${dayCounts.map((d) => `<span>Day ${d.day} · ${d.n}</span>`).join('')}</div>` : ''}
+  ${multiDay && dayCounts.length > 1 ? `<div class="daychips">${dayCounts.map((d) => `<span>Day ${d.day}, ${d.n}</span>`).join('')}</div>` : ''}
   ${shown.length ? `<h2 class="route-head">The route</h2>
   <ol class="route">
     ${items}

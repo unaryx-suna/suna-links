@@ -412,7 +412,7 @@
             document.title = it.name + ' — Suna';
           }
           var bits = [it.resolved_city_name, it.recommended_timing].filter(Boolean);
-          if (bits.length) document.getElementById('eyebrow').textContent = bits.join(' · ');
+          if (bits.length) document.getElementById('eyebrow').textContent = bits.join(', ');
           if (it.intro_story) document.getElementById('intro').textContent = it.intro_story;
 
           // A PARTNER'S NAME REPLACES THE CREATOR'S, it does not join it.
