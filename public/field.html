@@ -276,7 +276,7 @@
   }
   .evrow .evthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .evrow .evbody { min-width: 0; flex: 1; }
-  #ev-note.ev-bad { color: #b3261e; font-weight: 600; background: #fdecea; border-radius: 10px; padding: 10px 12px; }
+  #ev-gal-note.ev-bad, #ev-note.ev-bad { color: #b3261e; font-weight: 600; background: #fdecea; border-radius: 10px; padding: 10px 12px; }
   .evrow strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evrow .badge { float: right; margin-left: 8px; }
   /* W-9: the photo and the event are two states, shown as two. Brian saved
@@ -450,6 +450,14 @@
   .cl-tag { display: inline-flex; align-items: center; height: 22px; border-radius: 6px; padding: 0 7px; font-weight: 700; font-size: 11.5px; background: #2A2C2B; color: #D5D8D6; }
   .cl-tag.ok { background: #17301F; color: var(--ok); } .cl-tag.red { background: #3A1E1C; color: var(--danger); }
   .cl-tag.warn { background: #3A2C1A; color: var(--warn); } .cl-tag.pur { background: #2A2350; color: #C9BFFF; }
+  /* W-290: the event's More photos strip. */
+  .evgal { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 6px 0 4px; }
+  .evgal-item { display: grid; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+  .evgal-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block; }
+  .evgal-item input { font-size: 16px; padding: 8px 10px; }
+  .evgal-item { position: relative; }
+  .evgal-item .evgal-rm { position: absolute; top: 12px; right: 12px; z-index: 1; min-height: 0; padding: 4px 8px; border: 0; border-radius: 8px; background: rgba(17,19,18,.85); color: var(--danger); font-size: 12.5px; font-weight: 700; width: auto; }
+  .evgal .addphoto { width: auto; height: auto; min-height: 120px; }
   /* ════ W-288 DESKTOP (Ops - Design 09:0x, claude/design/panel-v2/desktop/): above 900 px a 260 px sidebar on every
      tool, a desktop Home, tables for Payments and Orders, Finish these beside its editor, Add a place in two
      columns. Under 900 px nothing here applies: the phone Panel is unchanged. */
@@ -865,16 +873,23 @@
       <label>New photo</label>
       <div class="thumbs" id="ev-new-thumbs">
         <button class="addphoto" id="btn-ev-camera">Add a<br>photo</button>
-        <button class="addphoto" id="btn-ev-upload">⬆<br>Upload</button>
+        <button class="addphoto" id="btn-ev-upload">Upload</button>
       </div>
       <input id="in-ev-camera" type="file" accept="image/*" capture="environment" hidden>
       <input id="in-ev-upload" type="file" accept="image/*" hidden>
-      <p class="sub" style="margin-top:4px">Or paste an image. At least 600&nbsp;px wide (smaller ones are refused, with a message).</p>
+      <p class="sub" style="margin-top:4px">Or paste an image, at least 600&nbsp;px wide.</p>
 
       <label for="ev-credit">Photo credit (optional)</label>
       <input id="ev-credit" type="text" placeholder="Who took it, or where it came from" autocomplete="off">
 
       <p class="sub" id="ev-note" hidden></p>
+      <!-- W-290 (Ops OPS-339): up to 4 more photos, shown under About on the event page
+           (world_events.gallery, [{url, path, credit}], as the list form writes it). -->
+      <label>More photos (up to 4)</label>
+      <p class="sub" id="ev-gal-who" style="margin:0 0 6px">Show on Partner events only.</p>
+      <div class="evgal" id="ev-gal"></div>
+      <input id="in-ev-gal" type="file" accept="image/*" hidden>
+      <p class="sub" id="ev-gal-note" hidden></p>
     </div>
 
     <div id="ev-done-screen" hidden>
@@ -1267,7 +1282,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v53';
+const BUILD = 'field-v54';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -7360,7 +7375,7 @@ async function loadEventList(force) {
       // Admins see pending rows through "Admins have full access"; everyone
       // else gets approved ones only, which is why the menu entry is hidden.
       const { data, error } = await db.from('world_events')
-        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude')
+        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude,gallery,organiser:organisers(name,plan)')
         .gte('end_time', new Date().toISOString())
         .in('status', ['pending', 'approved'])
         .order('start_time', { ascending: true })
@@ -7529,10 +7544,68 @@ function openEventPhoto(id) {
   if (label.textContent) cur.appendChild(label);
   $('ev-new-thumbs').querySelectorAll('img').forEach((n) => n.remove());
   $('ev-note').hidden = true;
+  evRenderGallery();
   showEventScreen('photo');
   // The address names the event, so a reload or a share lands back here.
   try { history.replaceState(null, '', '#event=' + row.id); } catch (e) {}
 }
+
+/* ── W-290: the event's gallery (More photos) ─────────────────────────────────
+   Straight to the server, not the queue: it's a desk job, and each change is one
+   row update. The photo goes through evResize (1600 px JPEG from a canvas, which
+   drops EXIF and its GPS tag), to event-photos/events/<id>-g<time>.jpg; the
+   _w sizes come from the variants sweep, as for every event photo. Removing one
+   takes it off the page; the file stays (no DELETE policy, and a page may be
+   rendering it). */
+const EV_GAL_MAX = 4;
+function evGallery() { return Array.isArray(evCurrent && evCurrent.gallery) ? evCurrent.gallery.filter((g) => g && g.url) : []; }
+function evGalNote(msg, bad) { const n = $('ev-gal-note'); n.hidden = !msg; n.textContent = msg || ''; n.classList.toggle('ev-bad', !!bad); }
+async function evSaveGallery(next, okMsg) {
+  const id = evCurrent.id;
+  const { data, error } = await db.from('world_events').update({ gallery: next.length ? next : null }).eq('id', id).select('id,gallery');
+  if (error) { evGalNote('Couldn’t save: ' + error.message, true); return false; }
+  if (!data || !data.length) { evGalNote('Couldn’t save: the event was not updated (not found, or not allowed).', true); return false; }
+  evCurrent.gallery = data[0].gallery;
+  const row = evRows.find((x) => x.id === id); if (row) row.gallery = data[0].gallery;
+  evRenderGallery(); evGalNote(okMsg || '');
+  return true;
+}
+function evRenderGallery() {
+  const box = $('ev-gal'); if (!box) return;
+  box.replaceChildren();
+  // W-291: the gallery is a Partner benefit (organisers.plan = 'partner'); say when it won't show yet.
+  const org = evCurrent && evCurrent.organiser;
+  $('ev-gal-who').textContent = org && org.plan !== 'partner' ? 'Hidden until ' + (org.name || 'the organiser') + ' is a Partner.'
+    : !org ? 'Show on Partner events only. This event has no organiser yet.' : 'Show on Partner events only.';
+  const gal = evGallery();
+  gal.forEach((g, i) => {
+    const card = document.createElement('div'); card.className = 'evgal-item';
+    const im = document.createElement('img'); im.src = g.url; im.alt = ''; im.loading = 'lazy';
+    const credit = document.createElement('input'); credit.type = 'text'; credit.value = g.credit || ''; credit.placeholder = 'Credit (optional)'; credit.autocomplete = 'off';
+    credit.onchange = () => { const next = evGallery().map((x, n) => n === i ? Object.assign({}, x, { credit: credit.value.trim() || null }) : x); evSaveGallery(next, 'Credit saved.'); };
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'evgal-rm'; rm.textContent = 'Remove';
+    rm.onclick = () => evSaveGallery(evGallery().filter((x, n) => n !== i), 'Removed from the event page.');
+    card.append(rm, im, credit); box.appendChild(card);
+  });
+  if (gal.length < EV_GAL_MAX) {
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'addphoto'; add.textContent = 'Add photo';
+    add.onclick = () => $('in-ev-gal').click(); box.appendChild(add);
+  }
+}
+async function evAddGallery(file) {
+  if (!evCurrent || !file) return;
+  if (evGallery().length >= EV_GAL_MAX) { evGalNote('That’s 4 already. Remove one first.', true); return; }
+  evGalNote('Preparing…');
+  try {
+    const { blob } = await evResize(file);
+    const path = 'events/' + evCurrent.id + '-g' + Date.now() + '.jpg';
+    const { error } = await db.storage.from('event-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw new Error('upload: ' + error.message);
+    const url = db.storage.from('event-photos').getPublicUrl(path).data.publicUrl;
+    await evSaveGallery(evGallery().concat([{ url, path, credit: null }]), 'Added. Give it a credit above if it needs one.');
+  } catch (e) { evGalNote(e.message || 'Couldn’t add that photo.', true); }
+}
+$('in-ev-gal').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; evAddGallery(f); };
 
 function showEventScreen(which) {
   $('ev-list-screen').hidden = which !== 'list';
@@ -7746,7 +7819,7 @@ async function evOpenFromHash() {
   if (!row && /^[0-9a-f-]{36}$/i.test(id)) {
     try {
       const { data } = await db.from('world_events')
-        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude')
+        .select('id,name,start_time,end_time,status,image_url,storage_path,image_credit,venue,latitude,longitude,gallery,organiser:organisers(name,plan)')
         .eq('id', id).maybeSingle();
       if (data) { evRows.push(data); row = data; }
     } catch (e) { /* falls through to the message */ }
