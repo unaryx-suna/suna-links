@@ -122,8 +122,8 @@ await t('(2) the old SVG Suna is drawn by no page: no api file imports suna-face
 });
 
 await t('(3) creditFor: name and licence; the "Suna" marker, no name and Google never', () => {
-  assert.equal(P.creditFor({ photographer_name: 'Ana Lee', cover_source: 'pexels' }), 'Photo: Ana Lee · Pexels License');
-  assert.equal(P.creditFor({ photographer_name: 'Ana Lee', cover_source: 'unsplash' }), 'Photo: Ana Lee · Unsplash License');
+  assert.equal(P.creditFor({ photographer_name: 'Ana Lee', cover_source: 'pexels' }), 'Photo: Ana Lee, Pexels License');
+  assert.equal(P.creditFor({ photographer_name: 'Ana Lee', cover_source: 'unsplash' }), 'Photo: Ana Lee, Unsplash License');
   assert.equal(P.creditFor({ photographer_name: '@booak55', cover_source: 'user' }), 'Photo: @booak55');
   assert.equal(P.creditFor({ photographer_name: 'Suna', cover_source: null }), null);
   assert.equal(P.creditFor({ photographer_name: null, cover_source: 'commons' }), null);
@@ -134,7 +134,7 @@ await t('(3) creditFor: name and licence; the "Suna" marker, no name and Google 
 await t('(3) on /i/: the credit sits under the stop\'s real photo, only when that photo is the landmark\'s cover', async () => {
   const withPexels = [{ ...STOPS[2], place_image_url: PEXELS, moment_path: null }];
   const h = await render('creator', { withStops: withPexels, lms: [{ id: L(3), cover_image_url: PEXELS, photographer_name: 'Ana <Lee>', cover_source: 'pexels' }] });
-  assert.match(h, /<\/div><p class="photo-credit">Photo: Ana &lt;Lee&gt; · Pexels License<\/p>/, 'escaped credit under the photo');
+  assert.match(h, /<\/div><p class="photo-credit">Photo: Ana &lt;Lee&gt;, Pexels License<\/p>/, 'escaped credit under the photo');
   assert(asked.some((u) => /\/rest\/v1\/landmarks\?id=in\.\(/.test(u) && /select=id,cover_image_url,photographer_name,cover_source/.test(u)));
   const other = await render('creator', { withStops: withPexels, lms: [{ id: L(3), cover_image_url: REAL, photographer_name: 'Ana Lee', cover_source: 'pexels' }] });
   assert(!/<p class="photo-credit"/.test(other), 'a credit for a different photo');
@@ -159,7 +159,7 @@ await t('(3) place pages: the cover\'s credit in the JSON-LD as an ImageObject; 
   const { _placeLD: placeLD } = await import('./api/place.js');
   const ld = (place, cover) => JSON.parse(placeLD({ name: 'Maha Vihara', category: 'Sacred Space', latitude: 3.13, longitude: 101.68, ...place }, 'https://app.unaryx.com/place/x', cover).replace(/^<script[^>]*>|<\/script>$/g, ''));
   assert.deepEqual(ld({ photographer_name: 'Ana Lee', cover_source: 'pexels' }, PEXELS).image,
-    { '@type': 'ImageObject', url: PEXELS, creditText: 'Ana Lee · Pexels License', creator: { '@type': 'Person', name: 'Ana Lee' } });
+    { '@type': 'ImageObject', url: PEXELS, creditText: 'Ana Lee, Pexels License', creator: { '@type': 'Person', name: 'Ana Lee' } });
   assert.equal(ld({ photographer_name: 'Suna', cover_source: null }, PEXELS).image, PEXELS, 'the bootstrap marker is no credit');
   assert.equal(ld({ photographer_name: null, cover_source: 'commons' }, REAL).image, REAL);
   assert.equal(ld({ photographer_name: 'Ana Lee', cover_source: 'pexels' }, null).image, undefined, 'no cover, no image');

@@ -27,8 +27,8 @@ await t('stopDay: the snapshot day as is; else "Day N · " + 1 (the prefix is 0-
 });
 
 await t('summaryLine: "Da Nang · 4 days · 13 stops" (was "1 day"); a one-day plan stays "1 day"', () => {
-  assert.equal(summaryLine(IT, stops), 'Da Nang · 4 days · 13 stops');
-  assert.equal(summaryLine({ resolved_city_name: 'Kuala Lumpur' }, stops.slice(0, 3)), 'Kuala Lumpur · 1 day · 3 stops');
+  assert.equal(summaryLine(IT, stops), 'Da Nang, 4 days, 13 stops');
+  assert.equal(summaryLine({ resolved_city_name: 'Kuala Lumpur' }, stops.slice(0, 3)), 'Kuala Lumpur, 1 day, 3 stops');
 });
 
 async function render(answerStops) {
@@ -50,14 +50,14 @@ async function render(answerStops) {
 await t('the page asks for `day`, and says 4 days, with Day 1 over the first stops', async () => {
   const { html, asked } = await render(() => ({ ok: true, status: 200, json: async () => stops }));
   assert.match(asked[0], /select=[^&]*,day&/);
-  assert.match(html, /4 days · 13 stops/);
-  assert.doesNotMatch(html, /1 day · 13 stops/);
+  assert.match(html, /4 days, 13 stops/);
+  assert.doesNotMatch(html, /1 day, 13 stops/);
   assert.match(html, /<h3 class="day-label">Day 1<\/h3>/);
 });
 
 await t('W-197 teaser: day chips with counts, ONE locked card ("+10 more stops in the app", "2 more on day 1, then days 2 to 4"), stops 4+ never sent, a pixel tile for a stop with no photo', async () => {
   const { html } = await render(() => ({ ok: true, status: 200, json: async () => stops }));
-  for (const c of ['Day 1 · 5', 'Day 2 · 2', 'Day 3 · 4', 'Day 4 · 2']) assert(html.includes(`<span>${c}</span>`), c);
+  for (const c of ['Day 1, 5', 'Day 2, 2', 'Day 3, 4', 'Day 4, 2']) assert(html.includes(`<span>${c}</span>`), c);
   assert.match(html, /<p class="lt">\+10 more stops in the app<\/p>/);
   assert.match(html, /<p class="ls">2 more on day 1, then days 2 to 4\. Copy the plan/);
   assert.equal((html.match(/<div class="lock">/g) || []).length, 1);

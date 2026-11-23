@@ -35,7 +35,7 @@ async function render(row, coverResolves = true) {
 
 await t('the wording: Photo: <name> · <licence>; business is Image: <name>; name only; nothing without a name', () => {
   assert.equal(planCoverCredit({ cover_credit_name: 'Photo Dharma from Sadao, Thailand', cover_licence: 'CC BY 2.0' }),
-    'Photo: Photo Dharma from Sadao, Thailand · CC BY 2.0');
+    'Photo: Photo Dharma from Sadao, Thailand, CC BY 2.0');
   assert.equal(planCoverCredit({ cover_credit_name: 'Poppy Kat', cover_licence: 'business' }), 'Image: Poppy Kat');
   assert.equal(planCoverCredit({ cover_credit_name: '  Ana  ', cover_licence: null }), 'Photo: Ana');
   assert.equal(planCoverCredit({ cover_credit_name: null, cover_licence: null }), null);
@@ -51,7 +51,7 @@ await t('the columns come with the one itinerary read (no second query)', async 
 
 await t('Ipoh: the credit sits right under the cover', async () => {
   const html = await render(plan({ cover_credit_name: 'Photo Dharma from Sadao, Thailand', cover_licence: 'CC BY 2.0' }));
-  assert.match(html, /<\/header>\s*<p class="cover-credit">Photo: Photo Dharma from Sadao, Thailand · CC BY 2\.0<\/p>/);
+  assert.match(html, /<\/header>\s*<p class="cover-credit">Photo: Photo Dharma from Sadao, Thailand, CC BY 2\.0<\/p>/);
 });
 
 await t('Pet cafés: Image: Poppy Kat', async () => {
@@ -72,7 +72,7 @@ await t('the plan cover does not resolve (first stop photo stands in): no plan c
 
 await t('the credit is escaped', async () => {
   const html = await render(plan({ cover_credit_name: '<b>Ana</b> & co', cover_licence: 'CC BY 2.0' }));
-  assert.match(html, /cover-credit">Photo: &lt;b&gt;Ana&lt;\/b&gt; &amp; co · CC BY 2\.0</);
+  assert.match(html, /cover-credit">Photo: &lt;b&gt;Ana&lt;\/b&gt; &amp; co, CC BY 2\.0</);
 });
 
 process.exit(bad ? 1 : 0);
