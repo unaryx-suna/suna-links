@@ -559,6 +559,7 @@
   </div>
 
   <div id="g-note" class="note" hidden></div>
+  <div id="g-captcha" style="margin-top:12px;min-height:65px"></div>
   <div id="g-err" class="err"></div>
 </div>
 
@@ -897,6 +898,7 @@ function sending(on) {
 /// actually hit gets a sentence that says what to DO.
 function readableAuthError(message) {
   const m = String(message ?? '');
+  if (/captcha/i.test(m)) return { text: "The human check didn't go through. Wait a moment and try again.", retry: true };
   if (/signups? not allowed/i.test(m)) {
     return { text: "This email isn't on the lab yet. Ask Brian to add you.", retry: false };
   }
@@ -959,14 +961,34 @@ function showEmailStep() {
   $('#g-email').focus();
 }
 
+/// W-299: Supabase Auth has captcha on; the code request carries a Cloudflare Turnstile token (the
+/// website's public site key). Single-use, so the widget resets after every request.
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFay9knWDeL40c-a';
+let captchaId = null;
+function captchaReady() {
+  if (captchaId !== null || !window.turnstile || !document.getElementById('g-captcha')) return;
+  captchaId = window.turnstile.render('#g-captcha', { sitekey: TURNSTILE_SITE_KEY, theme: 'dark', size: 'flexible' });
+}
+window.onTurnstileLoad = captchaReady;
+(function loadCaptcha() {
+  const sc = document.createElement('script');
+  sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+  sc.async = true; sc.defer = true; document.head.appendChild(sc);
+})();
+function captchaToken() { try { return captchaId !== null ? window.turnstile.getResponse(captchaId) || '' : ''; } catch { return ''; } }
+function captchaReset() { try { if (captchaId !== null) window.turnstile.reset(captchaId); } catch {} }
+
 /// Ask for a code. `resend` only changes what we say afterwards.
 async function requestCode(email, { resend = false } = {}) {
   gateErr('');
+  const captcha = captchaToken();
+  if (!captcha) { gateErr('One moment: the human check is still loading. Try again in a few seconds.'); captchaReady(); return false; }
   if (!resend) sending(true);
   try {
     // shouldCreateUser:false is half the allow-list; the other half is having
     // a lab_testers row, which only the Testers panel creates.
-    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false, captchaToken: captcha } });
+    captchaReset();
     if (error) {
       const e = readableAuthError(error.message);
       gateErr(e.text);
@@ -976,6 +998,7 @@ async function requestCode(email, { resend = false } = {}) {
       return false;
     }
   } catch (err) {
+    captchaReset();
     gateErr(readableAuthError(err?.message).text);
     sending(false);
     return false;
