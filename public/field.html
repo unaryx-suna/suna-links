@@ -515,7 +515,12 @@
     body.dk-split #app > #pane-capture { margin-left: 512px; max-width: none; min-height: 100vh; background: #151716; border-left: 1px solid var(--line); padding: 28px 32px 140px; }
     body.dk-split .savebar { left: 772px; }
     #finish-list .item.on { background: #20222A; border-color: #5A44C8; }
-    body.dk-split #pane-capture .cap-h, body.dk-split #pane-capture .doors { display: none !important; }
+    body.dk-split #pane-capture .cap-h, body.dk-split:not([data-dk-miss="photo"]) #pane-capture .doors { display: none !important; }
+    body.dk-split #app > #pane-capture { display: flex; flex-direction: column; }
+    body.dk-split #pane-capture > * { order: 0; } body.dk-split #pane-capture > #run-bar { order: -2; } body.dk-split #pane-capture > .dk-first { order: -1; margin-bottom: 8px; }
+    /* (3) the run bar as a neutral card on desktop: Skip grey, Back to list as text. */
+    .runbar { background: var(--card); border-color: var(--line); color: #fff; }
+    .runbar .count { color: #fff; }
     #install-hint { display: none !important; }
     /* D1: Add a place in two columns */
     .dk-cap { display: flex; gap: 32px; align-items: flex-start; }
@@ -744,10 +749,7 @@
       <label for="f-building">Building name</label>
       <input id="f-building" type="text" autocomplete="off">
       <label>Suna Tips &amp; Hints</label>
-      <p class="note" style="margin:0 0 8px">
-        Six kinds, and "what to order" is only one of them. "Skip" has never been
-        used once and is the thing a local knows best.
-      </p>
+      <p class="note" style="margin:0 0 8px">One short tip, 3 to 200 characters.</p>
       <div class="chips" id="hint-kinds"></div>
       <!-- Item 5. 131 authored hints already exist; for a given kind they are a
            better prompt than an empty box. -->
@@ -9500,8 +9502,10 @@ async function renderDkHome() {
   box.replaceChildren(dkEl('h1', 'dk-h1', hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'), dkEl('p', 'dk-sub', 'Here’s what’s waiting.'));
   if (admin) {
     const stats = dkEl('div', 'dk-stats');
-    stats.append(stat(waiting.length, 'tickets waiting for payment'), stat(open.length, 'orders to deliver'),
-      stat(Number($('claims-count').textContent) || 0, 'claims to answer'), stat(dkVerified, 'places checked this week'));
+    // One source with the sidebar and the phone home (Ops - Design 09:3x): HOME_COUNT's elements.
+    const hc = (t) => Number($(HOME_COUNT[t]).textContent) || 0;
+    stats.append(stat(hc('payments'), 'tickets waiting for payment'), stat(hc('orders'), 'orders to deliver'),
+      stat(hc('claims'), 'claims to answer'), stat(dkVerified, 'places checked this week'));
     box.appendChild(stats);
     const two = dkEl('div', 'dk-two');
     const pay = dkEl('div', 'card dk-box'); pay.appendChild(dkEl('b', '', 'Payments waiting'));
@@ -9624,11 +9628,22 @@ function dkCapture(on) {
   }
 }
 
+/** D2: the editor opens on what the Finish filter says is missing (Ops - Design 09:3x): a description
+ *  puts the one-line field first and focused, hours puts the (opened) hours editor first, a photo shows
+ *  the photo doors. Nothing moves in the DOM: only a CSS order. */
+function dkMissing(split) {
+  for (const el of document.querySelectorAll('#pane-capture .dk-first')) el.classList.remove('dk-first');
+  document.body.dataset.dkMiss = split ? finishMissing : '';
+  if (!split) return;
+  if (finishMissing === 'desc') { const fg = $('f-note').closest('.fg'); fg.classList.add('dk-first'); setTimeout(() => $('f-note').focus(), 0); }
+  if (finishMissing === 'hours') { const det = $('hours-grid').closest('details'); if (det) { det.open = true; det.closest('.fg').classList.add('dk-first'); } }
+}
 function dkAfter(which) {
   dkTab = which;
   const split = DK.matches && which === 'capture' && runActive();
   document.body.classList.toggle('dk-split', split);
   if (split) $('pane-finish').hidden = false;
+  dkMissing(split);
   for (const it of document.querySelectorAll('#finish-list .item')) it.classList.toggle('on', split && Number(it.dataset.at) === runAt);
   dkCapture(DK.matches && !split);
   if (!DK.matches) return;
