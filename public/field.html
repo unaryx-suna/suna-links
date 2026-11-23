@@ -457,6 +457,87 @@
   .evgal-item input { font-size: 16px; padding: 8px 10px; }
   .evgal-item button { min-height: 36px; padding: 0 10px; font-size: 13.5px; border-radius: 10px; }
   .evgal .addphoto { width: auto; height: auto; min-height: 120px; }
+  /* ════ W-288 DESKTOP (Ops - Design 09:0x, claude/design/panel-v2/desktop/): above 900 px a 260 px sidebar on every
+     tool, a desktop Home, tables for Payments and Orders, Finish these beside its editor, Add a place in two
+     columns. Under 900 px nothing here applies: the phone Panel is unchanged. */
+  .dk-only, .dk-side { display: none; }
+  @media (min-width: 900px) {
+    .dk-only { display: block; }
+    .ph-only { display: none !important; }
+    #app { padding-left: 260px; }
+    #app > .topbar { display: none; }
+    .dk-side { display: flex; flex-direction: column; position: fixed; z-index: 7; top: 0; bottom: 0; left: 0; width: 260px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--ink); padding: 22px 14px; }
+    .dk-side .brand { font: 800 20px/1.2 Urbanist, system-ui, sans-serif; padding: 0 10px; color: #fff; }
+    .dk-side .city { font-size: 13px; color: var(--muted); padding: 2px 10px 16px; min-height: 18px; }
+    .dk-side .add { min-height: 44px; border-radius: 12px; font-size: 15px; margin-bottom: 10px; }
+    .dk-side h4 { font-weight: 800; font-size: 11.5px; letter-spacing: .8px; text-transform: uppercase; color: var(--dim); margin: 16px 10px 6px; }
+    .dk-nav { display: flex; align-items: center; width: 100%; min-height: 38px; border: 0; border-radius: 10px; padding: 0 10px; background: none; color: #D9DCDA; font-weight: 700; font-size: 14.5px; text-align: left; cursor: pointer; }
+    .dk-nav:hover { background: #1A1C1B; }
+    .dk-nav.on { background: #232524; color: #fff; }
+    .dk-nav .n { margin-left: auto; min-width: 24px; height: 22px; border-radius: 11px; background: var(--sel); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 7px; color: #fff; }
+    .dk-side .dk-foot { margin-top: auto; padding-top: 16px; }
+    .dk-side .dk-foot .dk-nav { color: var(--muted); font-size: 13.5px; }
+    #app > .wrap { max-width: 720px; margin: 0; padding: 28px 36px 120px; }
+    #app > #pane-home, #app > #pane-payments, #app > #pane-orders, #app > #pane-capture { max-width: none; }
+    #app > #pane-door { max-width: 520px; margin: 0 auto; }
+    #app > #queue-bar-wrap { display: none !important; }
+    .savebar { left: 260px; }
+    /* D0 Home */
+    .dk-h1 { font: 800 30px/1.2 Urbanist, system-ui, sans-serif; margin: 0; }
+    .dk-sub { color: var(--muted); font-size: 14.5px; margin: 4px 0 20px; }
+    .dk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dk-stat { padding: 16px 18px; } .dk-stat b { display: block; font-weight: 800; font-size: 30px; } .dk-stat span { font-weight: 600; font-size: 13px; color: var(--muted); }
+    .dk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+    .dk-box { padding: 6px 0; } .dk-box > b { display: block; font-weight: 800; font-size: 16px; padding: 12px 18px; }
+    .dk-box .none { color: var(--muted); font-size: 14px; padding: 4px 18px 14px; margin: 0; }
+    .dk-li { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 18px; border: 0; border-top: 1px solid var(--line); background: none; color: #fff; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; border-radius: 0; }
+    .dk-li .t { flex: 1; min-width: 0; } .dk-li small { display: block; color: var(--muted); font-weight: 500; font-size: 12.5px; margin-top: 2px; }
+    .dk-li .amt { font-weight: 800; min-width: 52px; text-align: right; }
+    .dk-fin { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding: 16px 18px; }
+    .dk-fin b { font-weight: 800; font-size: 16px; } .dk-fin small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+    .dk-fin button { margin-left: auto; width: auto; min-height: 36px; padding: 0 14px; border-radius: 10px; font-size: 13.5px; }
+    /* D3, D4: tables */
+    .dk-bar { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+    .dk-bar .chips { margin-left: auto; padding: 0; overflow: visible; flex-wrap: wrap; }
+    .dk-chip .k { margin-left: 6px; color: var(--muted); } .dk-chip[aria-pressed="true"] .k { color: #D9D2FF; }
+    #pane-payments #tk-find { width: 420px; margin: 0; }
+    .dk-tbl { width: 100%; border-collapse: collapse; }
+    .dk-tbl th { text-align: left; font-weight: 700; font-size: 12px; color: var(--dim); letter-spacing: .5px; text-transform: uppercase; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .dk-tbl td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14px; vertical-align: middle; }
+    .dk-tbl tr:last-child td { border-bottom: 0; }
+    .dk-tbl tbody tr { cursor: pointer; } .dk-tbl tr.on td { background: #20222A; }
+    .dk-tbl .ref { font-weight: 800; letter-spacing: .4px; } .dk-tbl .r { text-align: right; white-space: nowrap; }
+    .dk-tbl .r button { width: auto; min-height: 36px; padding: 0 14px; border-radius: 10px; font-size: 13.5px; margin-left: 6px; }
+    .dk-card { padding: 0; overflow: hidden; }
+    .dk-foot-note { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+    .dk-or { display: grid; grid-template-columns: 1fr 430px; margin: -28px -36px -120px 0; min-height: 100vh; }
+    .dk-or > .l { padding: 28px 26px 120px 0; }
+    .dk-or > .rp { background: #151716; border-left: 1px solid var(--line); padding: 28px; }
+    .dk-or > .rp .cl-card { background: none; border: 0; padding: 0; }
+    .dk-or > .rp .cl-actions { flex-wrap: wrap; }
+    #pane-orders > h1, #pane-orders > .sub { display: none; }
+    .dk-or h1 { margin-top: 0; }
+    /* D2: Finish these beside its editor */
+    body.dk-split #app > #pane-finish { display: block !important; position: fixed; top: 0; bottom: 0; left: 260px; width: 512px; overflow-y: auto; padding: 28px 36px 40px; }
+    body.dk-split #app > #pane-capture { margin-left: 512px; max-width: none; min-height: 100vh; background: #151716; border-left: 1px solid var(--line); padding: 28px 32px 140px; }
+    body.dk-split .savebar { left: 772px; }
+    #finish-list .item.on { background: #20222A; border-color: #5A44C8; }
+    body.dk-split #pane-capture .cap-h, body.dk-split:not([data-dk-miss="photo"]) #pane-capture .doors { display: none !important; }
+    body.dk-split #app > #pane-capture { display: flex; flex-direction: column; }
+    body.dk-split #pane-capture > * { order: 0; } body.dk-split #pane-capture > #run-bar { order: -2; } body.dk-split #pane-capture > .dk-first { order: -1; margin-bottom: 8px; }
+    /* (3) the run bar as a neutral card on desktop: Skip grey, Back to list as text. */
+    .runbar { background: var(--card); border-color: var(--line); color: #fff; }
+    .runbar .count { color: #fff; }
+    #install-hint { display: none !important; }
+    /* D1: Add a place in two columns */
+    .dk-cap { display: flex; gap: 32px; align-items: flex-start; }
+    .dk-cap > .l { width: 460px; flex: none; }
+    .dk-cap > .r { flex: 1; min-width: 0; padding-top: 6px; }
+    .dk-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+    .dk-cap .savebar { position: static; background: none; border: 0; padding: 22px 0 0; display: flex; align-items: center; gap: 12px; }
+    .dk-cap .savebar .primary { width: 220px; flex: none; } .dk-cap .savebar .why { text-align: left; margin: 0; }
+    #pane-capture .doors { max-width: 460px; }
+  }
 </style>
 </head>
 <body>
@@ -485,6 +566,8 @@
 
 <!-- ─────────────────────────── the tool ─────────────────────────── -->
 <div id="app" hidden>
+  <!-- W-288 desktop: the sidebar (renderSide), shown above 900 px only. -->
+  <nav class="dk-side" id="dk-side" aria-label="Panel"></nav>
   <!-- §3/§4 — the front of this tool is for capturing, not for navigating.
        Outside, always one tap: the camera and the upload (in the pane below),
        and the queue badge WHEN there is something in it. Everything else —
@@ -519,10 +602,11 @@
   <!-- W-288 P0: the Panel's home. One grouped list, one row per tool; each row mirrors its menu entry
        (same admin rule, same count), built by renderHome(). "Add a place" opens the capture form. -->
   <div class="wrap" id="pane-home" hidden>
-    <h1>Suna Panel</h1>
-    <p class="sub" id="home-sub"></p>
-    <button class="primary" id="home-add" type="button">Add a place</button>
-    <div id="home-groups"></div>
+    <h1 class="ph-only">Suna Panel</h1>
+    <p class="sub ph-only" id="home-sub"></p>
+    <button class="primary ph-only" id="home-add" type="button">Add a place</button>
+    <div class="ph-only" id="home-groups"></div>
+    <div class="dk-only" id="dk-home"></div>
   </div>
 
   <!-- capture -->
@@ -672,10 +756,7 @@
       <label for="f-building">Building name</label>
       <input id="f-building" type="text" autocomplete="off">
       <label>Suna Tips &amp; Hints</label>
-      <p class="note" style="margin:0 0 8px">
-        Six kinds, and "what to order" is only one of them. "Skip" has never been
-        used once and is the thing a local knows best.
-      </p>
+      <p class="note" style="margin:0 0 8px">One short tip, 3 to 200 characters.</p>
       <div class="chips" id="hint-kinds"></div>
       <!-- Item 5. 131 authored hints already exist; for a given kind they are a
            better prompt than an empty box. -->
@@ -858,8 +939,9 @@
   <div class="wrap" id="pane-orders" hidden>
     <h1>Orders</h1>
     <p class="sub">The buyer gets an email at each step.</p>
-    <div id="or-list"></div>
+    <div class="ph-only" id="or-list"></div>
     <p class="sub" id="or-note" hidden></p>
+    <div class="dk-only" id="dk-or"></div>
   </div>
 
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
@@ -871,15 +953,16 @@
   <div class="wrap" id="pane-payments" hidden>
     <h1>Payments</h1>
     <p class="sub">Match the bank reference, then mark paid.</p>
-    <div class="tk-counts" id="tk-counts"></div>
-    <input id="tk-find" type="search" placeholder="Find a reference or a name" autocomplete="off" spellcheck="false">
+    <div class="tk-counts ph-only" id="tk-counts"></div>
+    <div class="dk-bar" id="dk-pay-bar"><input id="tk-find" type="search" placeholder="Find a reference or a name" autocomplete="off" spellcheck="false"><div class="chips dk-only" id="dk-pay-chips"></div></div>
     <p class="sub" id="tk-note" hidden></p>
-    <h2 class="cl-h">Waiting for payment</h2>
-    <div id="tk-pending"></div>
-    <h2 class="cl-h">Paid</h2>
-    <div id="tk-paid"></div>
-    <h2 class="cl-h">Released and refunded</h2>
-    <div id="tk-closed"></div>
+    <div class="dk-only" id="dk-pay"></div>
+    <h2 class="cl-h ph-only">Waiting for payment</h2>
+    <div class="ph-only" id="tk-pending"></div>
+    <h2 class="cl-h ph-only">Paid</h2>
+    <div class="ph-only" id="tk-paid"></div>
+    <h2 class="cl-h ph-only">Released and refunded</h2>
+    <div class="ph-only" id="tk-closed"></div>
   </div>
 
   <!-- ════ Door (W-228) ══════════════════════════════════════════════════
@@ -5630,6 +5713,7 @@ function renderFinishSlice(list) {
     d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3>'
       + '<p>' + where + (missing.length ? ('needs ' + missing.join(', ')) : 'ready — reopen and save')
       + provenance + '</p>';
+    d.dataset.at = String(at);
     d.onclick = () => startRun(at);
     list.appendChild(d);
   });
@@ -5751,7 +5835,7 @@ function applyRunChrome() {
   pane.classList.toggle('photo-run', photoMode());
   pane.classList.remove('show-all');
   $('run-more').hidden = !photoMode();
-  $('run-more').textContent = 'More — everything else about this place';
+  $('run-more').textContent = 'More: everything else about this place';
   // Read-only, so he can see what he is photographing without editing it by
   // accident with a thumb on a moving train.
   $('f-name').readOnly = photoMode();
@@ -5826,7 +5910,7 @@ $('run-more').onclick = () => {
   const open = pane.classList.toggle('show-all');
   $('run-more').textContent = open
     ? 'Less — back to the photo'
-    : 'More — everything else about this place';
+    : 'More: everything else about this place';
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -9409,6 +9493,241 @@ $('dr-scan').onclick = async () => {
 };
 
 boot();
+/* ════ W-288 DESKTOP (Ops - Design 09:0x; Brian 09:02 "It's part of w288") ═══════════════════════════════
+   Above 900 px: the sidebar on every tool (the phone home list, as navigation), a desktop Home (D0),
+   Payments and Orders as tables (D3, D4), Finish these beside its editor (D2) and Add a place in two
+   columns (D1). Same data, same endpoints, same buttons: the tables reuse the phone's actions
+   (data-tk / data-or), so the pane click handlers do the work. Under 900 px nothing changes. */
+const DK = window.matchMedia('(min-width: 900px)');
+let dkTab = 'home', dkPayTab = 'waiting', dkPaySel = null, dkOrTab = 'todo', dkOrSel = null;
+const dkEl = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+async function renderSide() {
+  const side = $('dk-side'); if (!side || !DK.matches) return;
+  let queued = 0;
+  try { queued = (await idbAll('queue')).length; } catch (e) { /* no store yet */ }
+  side.replaceChildren();
+  side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || ''));
+  const add = dkEl('button', 'primary add', 'Add a place'); add.type = 'button';
+  add.onclick = () => { if (runActive()) leaveRun(); switchTab('capture'); };
+  side.appendChild(add);
+  const nav = (t, name, n) => {
+    const b = dkEl('button', 'dk-nav' + (t === dkTab || (t === 'finish' && dkTab === 'capture' && runActive()) ? ' on' : ''), name);
+    b.type = 'button'; b.dataset.go = t;
+    if (n > 0) b.appendChild(dkEl('span', 'n', String(n)));
+    b.onclick = () => switchTab(t);
+    return b;
+  };
+  side.appendChild(nav('home', 'Home', 0));
+  for (const [title, rows] of HOME_GROUPS) {
+    const shown = rows.filter(([t]) => { const m = $('menu-' + t); return m && !m.hidden; });
+    if (!shown.length) continue;
+    side.appendChild(dkEl('h4', '', title));
+    for (const [t, name] of shown) {
+      const n = t === 'queue' ? queued : HOME_COUNT[t] ? Number($(HOME_COUNT[t]).textContent) || 0 : 0;
+      side.appendChild(nav(t, name.replace('Add from Google Maps link', 'Google Maps link').replace('Welcome to (country)', 'Welcome to'), n));
+    }
+  }
+  // The phone's menu (sign out, the build, the rest) has no burger here: one row at the bottom opens it.
+  const foot = dkEl('div', 'dk-foot'); const more = dkEl('button', 'dk-nav', 'Account and build'); more.type = 'button';
+  more.onclick = () => openMenu(); foot.appendChild(more); side.appendChild(foot);
+}
+
+function dkHold(t, now) {
+  const s = tkState(t, now);
+  if (s === 'claimed') return ['ok', 'Says paid ' + tkAgo(t.claimed_paid_at, now)];
+  if (s === 'pending') return ['warn', Math.max(0, Math.round((Date.parse(t.expires_at) - now) / 60000)) + ' min'];
+  if (s === 'paid') return ['ok', 'Paid' + (t.paid_via ? ', ' + t.paid_via : '')];
+  return ['red', t.status === 'refunded' ? 'Refunded' : t.status === 'cancelled' ? 'Released' : 'Expired'];
+}
+function dkWaiting(now) {
+  return tkRows.filter((t) => ['claimed', 'pending'].includes(tkState(t, now)))
+    .sort((a, b) => (tkState(b, now) === 'claimed') - (tkState(a, now) === 'claimed') || Date.parse(a.claimed_paid_at || a.expires_at || 0) - Date.parse(b.claimed_paid_at || b.expires_at || 0));
+}
+const dkOrOpen = (o) => !['delivered', 'closed', 'refunded'].includes(o.step);
+function dkOrName(o) { return (o.items || []).map((i) => (OR_ITEM[i.key] || i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ') || 'Order'; }
+function dkOrStepTag(o) {
+  const n = orNext(o.step);
+  if (n === 'drafts_sent') return ['warn', 'Send drafts'];
+  if (n === 'delivered') return ['warn', o.ready_by ? 'Ready by ' + orDate(o.ready_by) : 'Mark delivered'];
+  return [o.step === 'refunded' ? 'red' : o.step === 'delivered' || o.step === 'closed' ? 'ok' : 'pur', OR_STEP[o.step] || o.step];
+}
+let dkVerified = null;
+async function renderDkHome() {
+  const box = $('dk-home'); if (!box || !DK.matches) return;
+  const now = Date.now(), hr = new Date().getHours();
+  const waiting = dkWaiting(now), open = orRows.filter(dkOrOpen);
+  const li = (title, sub, tag, amt, go) => {
+    const b = dkEl('button', 'dk-li'); b.type = 'button'; b.onclick = () => switchTab(go);
+    const t = dkEl('span', 't', title); t.appendChild(dkEl('small', '', sub)); b.appendChild(t);
+    if (tag) b.appendChild(dkEl('span', 'cl-tag ' + tag[0], tag[1]));
+    if (amt != null) b.appendChild(dkEl('span', 'amt', amt));
+    return b;
+  };
+  const stat = (n, label) => { const c = dkEl('div', 'card dk-stat'); c.append(dkEl('b', '', n == null ? '…' : String(n)), dkEl('span', '', label)); return c; };
+  const admin = profile && profile.is_admin;
+  box.replaceChildren(dkEl('h1', 'dk-h1', hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'), dkEl('p', 'dk-sub', 'Here’s what’s waiting.'));
+  if (admin) {
+    const stats = dkEl('div', 'dk-stats');
+    // One source with the sidebar and the phone home (Ops - Design 09:3x): HOME_COUNT's elements.
+    const hc = (t) => Number($(HOME_COUNT[t]).textContent) || 0;
+    stats.append(stat(hc('payments'), 'tickets waiting for payment'), stat(hc('orders'), 'orders to deliver'),
+      stat(hc('claims'), 'claims to answer'), stat(dkVerified, 'places checked this week'));
+    box.appendChild(stats);
+    const two = dkEl('div', 'dk-two');
+    const pay = dkEl('div', 'card dk-box'); pay.appendChild(dkEl('b', '', 'Payments waiting'));
+    if (!waiting.length) pay.appendChild(dkEl('p', 'none', 'Nobody is waiting.'));
+    for (const t of waiting.slice(0, 3)) { const h = dkHold(t, now); pay.appendChild(li(t.buyer_name || 'No name', [t.pay_ref, t.event_name].filter(Boolean).join(', '), [h[0], h[0] === 'warn' ? 'Hold ' + h[1] : h[1]], tkRM(t.amount_due), 'payments')); }
+    const ord = dkEl('div', 'card dk-box'); ord.appendChild(dkEl('b', '', 'Orders to deliver'));
+    if (!open.length) ord.appendChild(dkEl('p', 'none', 'Nothing to deliver.'));
+    for (const o of open.slice(0, 3)) ord.appendChild(li(dkOrName(o), o.business || o.email || '', dkOrStepTag(o), null, 'orders'));
+    two.append(pay, ord); box.appendChild(two);
+  }
+  const fin = dkEl('div', 'card dk-fin');
+  const ft = dkEl('div'); ft.append(dkEl('b', '', (finishRows.length ? finishRows.length + (finishServerPaged ? '+' : '') + ' places' : 'Places') + ' to finish near you'), dkEl('small', '', 'Missing a photo, hours or a description'));
+  const fb = dkEl('button', 'ghost', 'Open Finish these'); fb.type = 'button'; fb.onclick = () => switchTab('finish');
+  fin.append(ft, fb); box.appendChild(fin);
+  if (admin && dkVerified == null) {
+    try {
+      const { count } = await db.from('landmarks').select('id', { count: 'exact', head: true }).gte('last_verified_at', new Date(now - 7 * 86400000).toISOString());
+      if (count != null) { dkVerified = count; renderDkHome(); }
+    } catch (e) { /* the card keeps its dots */ }
+  }
+}
+
+function dkPay() {
+  const box = $('dk-pay'); if (!box || !DK.matches) return;
+  const now = Date.now(), find = $('tk-find').value;
+  const st = (t) => tkState(t, now);
+  const groups = { waiting: dkWaiting(now), paid: tkRows.filter((t) => st(t) === 'paid'), closed: tkRows.filter((t) => st(t) === 'closed') };
+  const chips = $('dk-pay-chips'); chips.replaceChildren();
+  for (const [k, label] of [['waiting', 'Waiting'], ['paid', 'Paid'], ['closed', 'Released or refunded']]) {
+    const c = dkEl('button', 'chip dk-chip', label); c.type = 'button'; c.setAttribute('aria-pressed', String(k === dkPayTab));
+    c.appendChild(dkEl('span', 'k', String(groups[k].length)));
+    c.onclick = () => { dkPayTab = k; dkPaySel = null; dkPay(); };
+    chips.appendChild(c);
+  }
+  const rows = groups[dkPayTab].filter((t) => tkMatches(t, find));
+  if (!rows.some((t) => t.pay_ref === dkPaySel)) dkPaySel = rows[0] ? rows[0].pay_ref : null;
+  box.replaceChildren();
+  if (!rows.length) { box.appendChild(dkEl('p', 'sub', find ? 'Nothing here matches that.' : dkPayTab === 'waiting' ? 'Nobody is waiting.' : 'None yet.')); return; }
+  const card = dkEl('div', 'card dk-card'), tbl = dkEl('table', 'dk-tbl');
+  tbl.innerHTML = '<thead><tr><th>Reference</th><th>Name</th><th>Event</th><th>Should pay</th><th>' + (dkPayTab === 'waiting' ? 'Hold' : 'Status') + '</th><th></th></tr></thead>';
+  const body = dkEl('tbody');
+  for (const t of rows) {
+    const s = st(t), on = t.pay_ref === dkPaySel, ref = tkEsc(t.pay_ref || ''), h = dkHold(t, now);
+    const acts = s === 'claimed' || s === 'pending'
+      ? (on ? '<button type="button" class="primary" data-tk="paid" data-ref="' + ref + '">Amount matches, mark paid</button><button type="button" class="ghost" data-tk="release" data-ref="' + ref + '">Release</button>'
+            : '<button type="button" class="ghost" data-tk="paid" data-ref="' + ref + '">Mark paid</button>')
+      : s === 'paid' && on ? '<button type="button" class="ghost" data-tk="refunded" data-ref="' + ref + '">Mark refunded</button>' : '';
+    const receipt = t.proof_path && on ? '<button type="button" class="ghost" data-tk="receipt" data-path="' + tkEsc(t.proof_path) + '">Receipt</button>' : '';
+    const tr = dkEl('tr', on ? 'on' : ''); tr.dataset.ref = t.pay_ref || '';
+    tr.innerHTML = '<td class="ref">' + (ref || 'No reference') + '</td><td>' + tkEsc(t.buyer_name || 'No name') + '</td><td>' + tkEsc([t.event_name, tkSesName(t)].filter(Boolean).join(', ')) + '</td>'
+      + '<td>' + tkEsc(tkRM(t.amount_due)) + '</td><td><span class="cl-tag ' + h[0] + '">' + tkEsc(h[1]) + '</span>' + (t.seat_no ? ' <span class="cl-tag">No. ' + tkEsc(('00' + t.seat_no).slice(-3)) + '</span>' : '') + '</td>'
+      + '<td class="r">' + receipt + acts + '</td>';
+    tr.onclick = (e) => { if (e.target.closest('button')) return; dkPaySel = t.pay_ref; dkPay(); };
+    body.appendChild(tr);
+  }
+  tbl.appendChild(body); card.appendChild(tbl); box.appendChild(card);
+  box.appendChild(dkEl('p', 'dk-foot-note', 'Marking paid sends the ticket by push and email.'));
+}
+
+function dkOrders() {
+  const box = $('dk-or'); if (!box || !DK.matches) return;
+  const groups = { todo: orRows.filter(dkOrOpen), delivered: orRows.filter((o) => ['delivered', 'closed'].includes(o.step)), refunded: orRows.filter((o) => o.step === 'refunded') };
+  const rows = groups[dkOrTab].slice().sort((a, b) => (orDue(b) - orDue(a)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  if (!rows.some((o) => o.session_id === dkOrSel)) dkOrSel = rows[0] ? rows[0].session_id : null;
+  const wrap = dkEl('div', 'dk-or'), l = dkEl('div', 'l'), rp = dkEl('div', 'rp');
+  l.append(dkEl('h1', '', 'Orders'), dkEl('p', 'sub', 'The buyer gets an email at each step.'));
+  const chips = dkEl('div', 'chips'); chips.style.marginBottom = '14px';
+  for (const [k, label] of [['todo', 'To do'], ['delivered', 'Delivered'], ['refunded', 'Refunded']]) {
+    const c = dkEl('button', 'chip dk-chip', label); c.type = 'button'; c.setAttribute('aria-pressed', String(k === dkOrTab));
+    c.appendChild(dkEl('span', 'k', String(groups[k].length)));
+    c.onclick = () => { dkOrTab = k; dkOrSel = null; dkOrders(); };
+    chips.appendChild(c);
+  }
+  l.appendChild(chips);
+  if (!rows.length) l.appendChild(dkEl('p', 'sub', dkOrTab === 'todo' ? 'Nothing to deliver.' : 'None yet.'));
+  else {
+    const card = dkEl('div', 'card dk-card'), tbl = dkEl('table', 'dk-tbl');
+    tbl.innerHTML = '<thead><tr><th>Package</th><th>Buyer</th><th>Paid</th><th>Next step</th><th class="r">Amount</th></tr></thead>';
+    const body = dkEl('tbody');
+    for (const o of rows) {
+      const tag = dkOrStepTag(o), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
+      const tr = dkEl('tr', o.session_id === dkOrSel ? 'on' : '');
+      tr.innerHTML = '<td>' + clEsc(dkOrName(o)) + '</td><td>' + clEsc(o.business || o.email || '') + '</td><td>' + clEsc(orDate(String(o.created_at || '').slice(0, 10))) + '</td>'
+        + '<td><span class="cl-tag ' + tag[0] + '">' + clEsc(tag[1]) + (orDue(o) ? ', due' : '') + '</span></td><td class="r">' + clEsc(cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })) + '</td>';
+      tr.onclick = () => { dkOrSel = o.session_id; dkOrders(); };
+      body.appendChild(tr);
+    }
+    tbl.appendChild(body); card.appendChild(tbl); l.appendChild(card);
+  }
+  const sel = rows.find((o) => o.session_id === dkOrSel);
+  // The selected order is the phone's card, with all its actions (pane-orders' click handler runs them).
+  if (sel) { rp.innerHTML = orCard(sel); const h = rp.querySelector('.cl-top b'); if (h) { h.textContent = dkOrName(sel); h.style.fontSize = '22px'; } }
+  else rp.appendChild(dkEl('p', 'sub', 'Pick an order.'));
+  wrap.append(l, rp); box.replaceChildren(wrap);
+}
+
+/* D1: on desktop the capture form is two columns (photos and location left, details right, the fold
+   open). The nodes are moved, never copied, so every listener stays; under 900 px, or during a Finish
+   run (D2 shows the form as the right-hand panel), they go back exactly where they were. */
+let dkCapState = null;
+function dkCapture(on) {
+  const pane = $('pane-capture');
+  if (on && !dkCapState) {
+    const kids = [...pane.children], nameFg = $('f-name').closest('.fg'), locFg = $('loc-line').closest('.fg'), cityFg = $('city-chip').closest('.fg');
+    const bar = $('savebar'), barHome = [bar.parentNode, bar.nextSibling], det = pane.querySelector('details');
+    dkCapState = { kids, barHome, detOpen: det ? det.open : false };
+    const cols = dkEl('div', 'dk-cap'), l = dkEl('div', 'l'), r = dkEl('div', 'r'), pair = dkEl('div', 'dk-pair');
+    const i = kids.indexOf(nameFg);
+    kids.forEach((k, n) => { if (k === locFg) return; if (k === nameFg) { r.appendChild(pair); pair.appendChild(nameFg); return; } if (k === cityFg) { pair.appendChild(cityFg); return; } (n < i ? l : r).appendChild(k); });
+    l.appendChild(locFg); r.appendChild(bar);
+    if (det) det.open = true;
+    cols.append(l, r); pane.appendChild(cols);
+  } else if (!on && dkCapState) {
+    const cols = pane.querySelector('.dk-cap');
+    for (const k of dkCapState.kids) pane.appendChild(k);
+    const [par, next] = dkCapState.barHome; par.insertBefore($('savebar'), next && next.parentNode === par ? next : null);
+    const det = pane.querySelector('details'); if (det) det.open = dkCapState.detOpen;
+    if (cols) cols.remove();
+    dkCapState = null;
+  }
+}
+
+/** D2: the editor opens on what the Finish filter says is missing (Ops - Design 09:3x): a description
+ *  puts the one-line field first and focused, hours puts the (opened) hours editor first, a photo shows
+ *  the photo doors. Nothing moves in the DOM: only a CSS order. */
+function dkMissing(split) {
+  for (const el of document.querySelectorAll('#pane-capture .dk-first')) el.classList.remove('dk-first');
+  document.body.dataset.dkMiss = split ? finishMissing : '';
+  if (!split) return;
+  if (finishMissing === 'desc') { const fg = $('f-note').closest('.fg'); fg.classList.add('dk-first'); setTimeout(() => $('f-note').focus(), 0); }
+  if (finishMissing === 'hours') { const det = $('hours-grid').closest('details'); if (det) { det.open = true; det.closest('.fg').classList.add('dk-first'); } }
+}
+function dkAfter(which) {
+  dkTab = which;
+  const split = DK.matches && which === 'capture' && runActive();
+  document.body.classList.toggle('dk-split', split);
+  if (split) $('pane-finish').hidden = false;
+  dkMissing(split);
+  for (const it of document.querySelectorAll('#finish-list .item')) it.classList.toggle('on', split && Number(it.dataset.at) === runAt);
+  dkCapture(DK.matches && !split);
+  if (!DK.matches) return;
+  renderSide();
+  if (which === 'home') renderDkHome();
+  if (which === 'payments') dkPay();
+  if (which === 'orders') dkOrders();
+}
+{
+  const sw = switchTab;
+  switchTab = function (which) { sw(which); dkAfter(which); };
+  const rp = renderPayments; renderPayments = function () { rp(); dkPay(); if (dkTab === 'home') renderDkHome(); };
+  const ro = renderOrders; renderOrders = function () { ro(); dkOrders(); if (dkTab === 'home') renderDkHome(); };
+  const rh = renderHome; renderHome = async function () { await rh(); renderSide(); if (dkTab === 'home') renderDkHome(); };
+  DK.addEventListener('change', () => { if (!$('app').hidden) dkAfter(dkTab); });
+}
+
 </script>
 </body>
 </html>
