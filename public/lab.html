@@ -50,7 +50,7 @@
   .col { width: 100%; max-width: var(--col); margin-inline: auto; padding-inline: 16px; }
 
   button { font-family: inherit; font-size: 15px; border: 0; border-radius: 999px; padding: 12px 18px; color: var(--text); background: none; }
-  .primary { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .primary { background: #fff; color: #140F2E; font-weight: 600; }   /* QA 23 Nov: no sand buttons */
   .primary[disabled] { opacity: .45; }
   .ghost { background: rgba(255,255,255,.10); }
   .linkish { background: none; color: var(--sand); padding: 0; text-decoration: underline; font-size: 13px; }
@@ -249,7 +249,7 @@
   .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .kinds button { font-size: 13px; padding: 10px 12px; min-height: 44px;
                   background: rgba(255,255,255,.08); }
-  .kinds button[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .kinds button[aria-pressed="true"] { background: #fff; color: #140F2E; font-weight: 600; }
   .kinds .lbl { font-size: 12px; color: var(--dim); width: 100%; margin-bottom: 2px; }
   /* §2 did-you-go, above everything else on the next visit */
   .askback { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
@@ -293,7 +293,7 @@
                             background: rgba(255,255,255,.08); color: var(--text);
                             border-radius: 999px; text-decoration: none;
                             display: inline-flex; align-items: center; }
-  .prow2 button[aria-pressed="true"] { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .prow2 button[aria-pressed="true"] { background: #fff; color: #140F2E; font-weight: 600; }
   .dish { background: none; color: var(--text); text-align: left; padding: 0; font-size: 14px;
           text-decoration: underline; text-decoration-color: var(--line); }
   .barright { display: flex; gap: 6px; align-items: center; flex: none; }
@@ -351,7 +351,7 @@
   .upl .read { font-size: 12px; color: var(--dim); margin: 0 0 10px; white-space: pre-wrap; }
   .upl .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
   .upl button { min-height: 44px; font-size: 14px; padding: 11px 16px; background: rgba(255,255,255,.08); }
-  .upl button.yes { background: var(--sand); color: var(--ink); font-weight: 600; }
+  .upl button.yes { background: #fff; color: #140F2E; font-weight: 600; }
   .readonly { text-align: center; font-size: 12px; color: var(--sand); padding: 10px 0; }
   .reason { margin-top: 8px; display: flex; gap: 8px; }
   /* A class that sets `display` outranks the UA's `[hidden] { display: none }`,
@@ -773,7 +773,7 @@ installDecisionsUI();
  * BUILD below is a display stamp with nothing to pair with — if a service
  * worker is ever added here, that rule comes back with it.
  */
-const BUILD = 'lab-v80';
+const BUILD = 'lab-v81';
 /// UI-DECISIONS. Quick answers get the new UI; plans keep today's screens.
 /// `?ui=chat` falls back, so a tester can be shown the old one side by side.
 const DECISIONS_UI = new URLSearchParams(location.search).get('ui') !== 'chat';

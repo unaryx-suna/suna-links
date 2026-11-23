@@ -70,7 +70,8 @@
     p.lede { font-size: 15px; line-height: 21px; color: var(--body); margin: 0 0 8px; }
     p.meta { font-size: 13px; color: var(--muted); margin: 0 0 28px; }
     a.cta {
-      background: var(--sand); color: var(--ink-on-sand);
+      /* QA 23 Nov (LIGHT-DARK-ROLE-MAP: sand is never a button colour): the primary on dark is white with ink. */
+      background: #fff; color: #140F2E;
       padding: 15px 34px; border-radius: 26px; text-decoration: none;
       font-weight: 600; font-size: 17px; display: inline-block;
     }
