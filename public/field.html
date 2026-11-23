@@ -551,6 +551,7 @@
   <div id="login-email-step">
     <label for="email">Email</label>
     <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off">
+    <div id="captcha" style="margin-top:12px;min-height:65px"></div>
     <p class="err" id="login-error"></p>
     <button class="primary" id="btn-otp" style="margin-top:14px">Email me a code</button>
     <button class="ghost" id="btn-google" style="width:100%;margin-top:10px">Continue with Google</button>
@@ -1282,7 +1283,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v54';
+const BUILD = 'field-v55';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1386,17 +1387,47 @@ let liveFix = null;            // {lat, lon, accuracy}
    1. Sign in — lifted from admin/index.html
    ════════════════════════════════════════════════════════════════════════ */
 
+/* W-299 (Dex 16:2x): Supabase Auth has captcha on, so the email code needs a Cloudflare Turnstile token
+   (the website's public site key; Auth holds its secret). The widget loads with the sign-in screen,
+   a token is single-use, so it resets after every try. */
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFay9knWDeL40c-a';
+let captchaId = null;
+function captchaReady() {
+  if (captchaId !== null || !window.turnstile || !$('captcha')) return;
+  captchaId = window.turnstile.render('#captcha', { sitekey: TURNSTILE_SITE_KEY, theme: 'dark', size: 'flexible' });
+}
+window.onTurnstileLoad = captchaReady;
+(function loadCaptcha() {
+  if (document.querySelector('script[data-turnstile]')) return;
+  const sc = document.createElement('script');
+  sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+  sc.async = true; sc.defer = true; sc.setAttribute('data-turnstile', '');
+  document.head.appendChild(sc);
+})();
+function captchaToken() {
+  try { return captchaId !== null ? window.turnstile.getResponse(captchaId) || '' : ''; } catch (_) { return ''; }
+}
+function captchaReset() { try { if (captchaId !== null) window.turnstile.reset(captchaId); } catch (_) {} }
+
 $('btn-otp').onclick = async () => {
   const email = $('email').value.trim();
   if (!email) { $('login-error').textContent = 'Enter an email.'; return; }
   $('login-error').textContent = '';
+  const captcha = captchaToken();
+  if (!captcha) { $('login-error').textContent = 'One moment: the human check is still loading. Try again in a few seconds.'; captchaReady(); return; }
   try {
-    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false, captchaToken: captcha } });
+    captchaReset();
     if (error) throw error;
     $('login-email-step').hidden = true;
     $('login-otp-step').hidden = false;
     $('login-email-display').textContent = email;
-  } catch (e) { $('login-error').textContent = e.message || 'Could not send the code.'; }
+  } catch (e) {
+    captchaReset();
+    const m = String((e && e.message) || '');
+    $('login-error').textContent = /captcha/i.test(m) ? "The human check didn't go through. Wait a moment and try again."
+      : /signups not allowed|user not found/i.test(m) ? "That email doesn't have Panel access." : (m || 'Could not send the code.');
+  }
 };
 
 $('btn-verify').onclick = async () => {
@@ -1416,7 +1447,7 @@ $('btn-google').onclick = async () => {
   if (error) $('login-error').textContent = error.message;
 };
 
-$('btn-back').onclick = () => { $('login-otp-step').hidden = true; $('login-email-step').hidden = false; };
+$('btn-back').onclick = () => { $('login-otp-step').hidden = true; $('login-email-step').hidden = false; captchaReset(); };
 /** Sign out lives in the menu now — §4. Named rather than bound to a button
  *  that no longer exists in the bar. */
 async function signOut() { await db.auth.signOut(); location.reload(); }
