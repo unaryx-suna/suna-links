@@ -14,10 +14,10 @@ const NOW = Date.parse('2026-12-05T12:00:00Z');
 const at = '2026-12-05T11:42:00Z', hhmm = L.tkTime(at);
 const paid = { id: 't1', buyer_name: 'Mira Lee', event_name: 'Suna Founders Night', status: 'paid', seat_no: 7, checked_in: true, already_used: false, checked_in_at: at };
 const unused = { ...paid, checked_in: false, checked_in_at: null };
-const WHO = 'Mira Lee · Suna Founders Night · No. 007';
+const WHO = 'Mira Lee, Suna Founders Night, No. 007';
 
-t('paid, first scan: green Valid with the name', () => {
-  assert.deepEqual(L.tkDoorResult(paid, null, NOW), ['ok', 'Valid', 'Mira Lee', `Suna Founders Night · No. 007 · in at ${hhmm}`]);
+t('paid, first scan: green Checked in with the name (W-288)', () => {
+  assert.deepEqual(L.tkDoorResult(paid, null, NOW), ['ok', 'Checked in', 'Mira Lee', `Suna Founders Night, No. 007, in at ${hhmm}`]);
 });
 t('refunded: red Not valid, "Refunded"', () => {
   assert.deepEqual(L.tkDoorResult({ ...unused, status: 'refunded' }, null, NOW), ['no', 'Not valid', 'Refunded', WHO]);
@@ -42,8 +42,8 @@ t('pending, they tapped "I\'ve paid": "Not paid yet", pointing at Payments', () 
   assert.deepEqual(v.slice(0, 3), ['no', 'Not valid', 'Not paid yet']);
   assert.match(v[3], /check Payments/);
 });
-t('already checked in: red Not valid, "Already used at 19:42"-style time', () => {
-  assert.deepEqual(L.tkDoorResult({ ...paid, already_used: true }, null, NOW), ['no', 'Not valid', `Already used at ${hhmm}`, WHO]);
+t('already checked in: red "Already used", the name, "First scanned at 19:42" (W-288)', () => {
+  assert.deepEqual(L.tkDoorResult({ ...paid, already_used: true }, null, NOW), ['no', 'Already used', 'Mira Lee', `First scanned at ${hhmm}`]);
 });
 t('unknown code (P0002): red Not valid, "Unknown code"', () => {
   assert.deepEqual(L.tkDoorResult({ error: 'not_found' }, null, NOW).slice(0, 3), ['no', 'Not valid', 'Unknown code']);

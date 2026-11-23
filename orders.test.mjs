@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
-const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP };')();
+const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 const O = { session_id: 'cs_test_abc123def456', country: 'MY', currency: 'myr', items: [{ key: 'cny_kit', qty: 1 }, { key: 'sponsored_post', qty: 2 }], step: 'details_in',
@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v50';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v50'/);
+  assert.match(html, /const BUILD = 'field-v52';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v52'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/oneoff-order', \{[\s\S]{0,200}Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
@@ -31,13 +31,20 @@ t('due: ready-by today or past and not finished', () => {
 });
 t('the card: escaped business, items with counts, paid amount + country + guarantee, ready-by, rounds, email, the note; Refund until refunded', () => {
   const h = L.orCard(O, '2027-02-07');
-  assert.match(h, /<b>Kopi &lt;Ping&gt;<\/b><span class="or-step due">Details in · due<\/span>/);
-  assert.match(h, /Items<\/span><span>cny_kit, sponsored_post × 2</);
-  assert.match(h, /Paid<\/span><span>RM353 · MY · guarantee</);
-  assert.match(h, /Ready by<\/span><span>2027-02-07</); assert.match(h, /Rounds<\/span><span>1 used</);
+  assert.match(h, /<b>Kopi &lt;Ping&gt;<\/b><span class="or-step due">Details in, due<\/span>/);
+  assert.match(h, /Items<\/span><span>Chinese New Year content kit, Sponsored post × 2</);
+  assert.match(h, /Paid<\/span><span>RM353, MY, guarantee</);
+  assert.match(h, /Ready by<\/span><span>7 Feb 2027</); assert.match(h, /Rounds<\/span><span>1 used</);
   assert.match(h, />Call first<\/textarea>/);
   assert.deepEqual([...h.matchAll(/data-or="(\w+)"/g)].map((m) => m[1]), ['drafts_sent', 'delivered', 'set_ready_by', 'refund']);
   assert.doesNotMatch(L.orCard({ ...O, step: 'refunded' }, '2027-02-07'), /data-or="refund"/);
+});
+t('Ops 23 Nov: the next step is the one white button (Send drafts, then Mark delivered); dates as "23 Nov"', () => {
+  const cls = (step) => [...L.orCard({ ...O, step }, '2027-02-07').matchAll(/class="(\w+)" data-or="(\w+)"/g)].filter((m) => m[1] === 'primary').map((m) => m[2]);
+  assert.deepEqual(cls('paid'), ['drafts_sent']); assert.deepEqual(cls('details_in'), ['drafts_sent']);
+  assert.deepEqual(cls('drafts_sent'), ['delivered']); assert.deepEqual(cls('approved'), ['delivered']);
+  assert.deepEqual(cls('delivered'), []); assert.deepEqual(cls('refunded'), []);
+  assert.equal(L.orDate('2026-11-23', 2026), '23 Nov'); assert.equal(L.orDate('2027-02-07', 2026), '7 Feb 2027'); assert.equal(L.orDate('', 2026), '');
 });
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

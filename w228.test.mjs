@@ -41,7 +41,7 @@ t('the server: only I-604\'s admin RPCs with this session (each checks is_admin)
   assert.match(html, /tkRpc\(TK_API\.list, \{ p_event_id: null \}\)/);
   assert.match(html, /tkRpc\(TK_API\.checkIn, \{ p_ticket: code \}\)/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
-  assert.equal(build, 'field-v50');
+  assert.equal(build, 'field-v52');
   assert.ok(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8').includes(`const CACHE_VERSION = '${build}';`));
 });
 
@@ -66,20 +66,20 @@ t('states and counts: holding, says paid, paid, checked in; a hold that ran out 
 t('a Payments card: reference, amount, member (escaped), event; Mark paid and Release while waiting; Mark refunded once paid; a receipt button only when there is one', () => {
   const said = L.tkCard({ ...T, claimed_paid_at: '2026-12-01T03:50:00Z', proof_path: 'u1/r.jpg' }, NOW);
   assert.match(said, /<b>SUNA-7F3K<\/b><b>RM20<\/b>/);
-  assert.match(said, /Mira &lt;Lee&gt; · mira@example\.com/);
+  assert.match(said, /Mira &lt;Lee&gt;, mira@example\.com/);
   assert.match(said, /Suna Founders Night/);
   assert.match(said, /Says paid 10 min ago/);
-  assert.match(said, /data-tk="paid" data-ref="SUNA-7F3K">Mark paid</);
+  assert.match(said, /data-tk="paid" data-ref="SUNA-7F3K">Amount matches, mark paid</);
   assert.match(said, /data-tk="release" data-ref="SUNA-7F3K">Release</);
   assert.match(said, /data-tk="receipt" data-path="u1\/r\.jpg">Receipt</);
   const hold = L.tkCard(T, NOW);
-  assert.match(hold, /Hold until \d\d:\d\d/);
+  assert.match(hold, /Hold until \d{1,2}:\d\d [AP]M/);
   assert.doesNotMatch(hold, /data-tk="receipt"/);
   const paid = L.tkCard({ ...T, status: 'paid', paid_via: 'duitnow', amount_due: 22.5, seat_no: 7, checked_in_at: '2026-12-05T11:42:00Z' }, NOW);
   assert.match(paid, /No\. 007/);
-  assert.match(paid, /Paid · duitnow/);
+  assert.match(paid, /Paid, duitnow/);
   assert.match(paid, /RM22\.50/);
-  assert.match(paid, /In at \d\d:\d\d/);
+  assert.match(paid, /In at \d{1,2}:\d\d [AP]M/);
   assert.match(paid, /data-tk="refunded"/);
   assert.doesNotMatch(paid, /data-tk="paid"|data-tk="release"/);
   const closed = L.tkCard({ ...T, status: 'refunded' }, NOW);
@@ -91,12 +91,12 @@ t('a Payments card: reference, amount, member (escaped), event; Mark paid and Re
   assert.equal(L.tkMatches(T, 'MIRA@EX'), true);
 });
 
-t('the Door: first scan shows the name and Paid; a second says "Already checked in at"; unpaid and unknown are refused in words; release and refund need a second tap', () => {
+t('the Door: first scan shows the name and Paid; a second says "Already used" and when it was first scanned (W-288); unpaid and unknown are refused in words; release and refund need a second tap', () => {
   const at = '2026-12-05T11:42:00Z', hhmm = L.tkTime(at);
   const R = { buyer_name: 'Mira Lee', event_name: 'Suna Founders Night', status: 'paid', seat_no: 7, checked_in: true, already_used: false, checked_in_at: at };
   // W-235 replaced these answers; w235.test.mjs checks each status.
-  assert.deepEqual(L.tkDoorResult(R), ['ok', 'Valid', 'Mira Lee', `Suna Founders Night · No. 007 · in at ${hhmm}`]);
-  assert.deepEqual(L.tkDoorResult({ ...R, already_used: true }), ['no', 'Not valid', `Already used at ${hhmm}`, 'Mira Lee · Suna Founders Night · No. 007']);
+  assert.deepEqual(L.tkDoorResult(R), ['ok', 'Checked in', 'Mira Lee', `Suna Founders Night, No. 007, in at ${hhmm}`]);
+  assert.deepEqual(L.tkDoorResult({ ...R, already_used: true }), ['no', 'Already used', 'Mira Lee', `First scanned at ${hhmm}`]);
   assert.deepEqual(L.tkDoorResult({ ...R, status: 'pending', checked_in: false, checked_in_at: null }).slice(0, 3), ['no', 'Not valid', 'Not paid yet']);
   assert.deepEqual(L.tkDoorResult({ ...R, status: 'refunded', checked_in: false, checked_in_at: null }).slice(0, 3), ['no', 'Not valid', 'Refunded']);
   assert.deepEqual(L.tkDoorResult({ error: 'not_found' }).slice(0, 3), ['no', 'Not valid', 'Unknown code']);

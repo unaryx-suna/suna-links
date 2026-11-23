@@ -27,8 +27,8 @@ t('missing: hours, cover, description under 40 characters, tips', () => {
 });
 t('the line: saves, verified date, hours source, what\'s missing; never a rating', () => {
   assert.equal(L.rvLine({ saves: 1, itinStops: 2, last_verified_at: '2026-11-03T02:00:00Z', hours_source: 'admin', hours_source_ref: 'https://x.my', operating_hours: {}, cover_image_url: 'x', description: 'x'.repeat(50), tips: 1 }),
-    '1 save · 2 in plans · verified 3 Nov · hours admin · nothing missing');
-  assert.equal(L.rvLine({}), '0 saves · verified never · hours — · needs hours, cover, description, tips');
+    '1 save, 2 in plans, verified 3 Nov, hours admin, nothing missing');
+  assert.equal(L.rvLine({}), '0 saves, verified never, hours —, needs hours, cover, description, tips');
   assert.doesNotMatch(logic, /\brating|review_count|\bstars\b/i);
 });
 t('hours source: a link or "contacted: <channel> <date>", 3 to 300 characters', () => {

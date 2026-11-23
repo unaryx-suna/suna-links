@@ -163,10 +163,10 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders'\]\) \{/); // W-202 added Claims after it
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v50');
+  assert.equal(build, 'field-v52');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
-  assert.match(html, /<h1>Add from Google Maps link<\/h1>/);
+  assert.match(html, /<h1 class=\"am-h\">Add from Google Maps link <span/);
   assert.match(html, /id="menu-addplace" hidden>Add from Google Maps link</);
   assert(!/>Add from Maps link/.test(html));
 });
@@ -217,7 +217,7 @@ await t('W-88 a look-alike stops the item with the server\'s match and offers Ad
 });
 await t('W-88 other answers: the server\'s words; only a lapsed session parks the queue', () => {
   assert.equal(manualOutcome(409, { refused: 'the admin ledger hid or rejected this place' }).final, true);
-  assert.equal(manualOutcome(400, { error: 'a category' }).error, 'admin-add-place · 400 · a category');
+  assert.equal(manualOutcome(400, { error: 'a category' }).error, 'admin-add-place, 400, a category');
   assert.equal(manualOutcome(400, { error: 'a category' }).final, true);
   assert.equal(manualOutcome(403, { error: 'admins only' }).final, true);
   assert.match(manualOutcome(401, { error: 'sign in' }).error, /\b401\b/, 'looksLikeAuthFailure reads 401');
@@ -271,7 +271,7 @@ await t('W-91 over 100 km: blocked as before; non-admins keep the 100 km rule', 
 await t('W-91 BUILD and the worker move together', () => {
   const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
   assert.equal(html.match(/const BUILD = '([^']+)'/)[1], sw.match(/const CACHE_VERSION = '([^']+)'/)[1]);
-  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v50');
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v52');
 });
 
 // ── W-96: the update tap, and what the name box may suggest ──

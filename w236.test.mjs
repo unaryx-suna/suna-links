@@ -19,7 +19,7 @@ const S1 = ['s1', '1:00 PM', '2026-12-05T05:00:00Z'], S3 = ['s3', 'Cross-stitch'
 t('session times are Malaysia time: 05:00Z is 1:00 PM; the label shows only when it adds something', () => {
   assert.equal(nb(L.tkSesTime('2026-12-05T05:00:00Z')), '1:00 PM');
   assert.equal(nb(L.tkSesName(row('a', S1))), '1:00 PM');
-  assert.equal(nb(L.tkSesName(row('a', S3))), '2:40 PM · Cross-stitch');
+  assert.equal(nb(L.tkSesName(row('a', S3))), '2:40 PM, Cross-stitch');
   assert.equal(L.tkSesName(row('a', null)), '');
 });
 t('tickets group by session, earliest first; no session first and alone when there are no sessions', () => {
@@ -28,22 +28,22 @@ t('tickets group by session, earliest first; no session first and alone when the
   assert.deepEqual(L.tkBySession([row('a', null), row('b', null)]).map((x) => x.key), ['']);
 });
 t('Payments card names the session; a sessionless ticket has no Session row', () => {
-  assert.match(nb(L.tkCard(row('a', S3), NOW)), /<span class="k">Session<\/span><span>2:40 PM · Cross-stitch<\/span>/);
+  assert.match(nb(L.tkCard(row('a', S3), NOW)), /<span class="k">Session<\/span><span>2:40 PM, Cross-stitch<\/span>/);
   assert.doesNotMatch(L.tkCard(row('a', null), NOW), /Session/);
 });
 t('the Door counts one line per session (paid, checked in); an event without sessions keeps the two totals only', () => {
   const rows = [row('a', S3, { checked_in_at: '2026-12-05T06:41:00Z' }), row('b', S1), row('c', S3), row('d', S3, { status: 'refunded' })];
   const h = nb(L.tkDoorCountsHTML(rows, NOW));
   assert.match(h, /<span><b>3<\/b>paid<\/span><span><b>1<\/b>checked in<\/span>/);
-  assert.match(h, /<p><b>1:00 PM<\/b><span>1 paid · 0 in<\/span><\/p><p><b>2:40 PM · Cross-stitch<\/b><span>2 paid · 1 in<\/span><\/p>/);
+  assert.match(h, /<p><b>1:00 PM<\/b><span>1 paid, 0 in<\/span><\/p><p><b>2:40 PM, Cross-stitch<\/b><span>2 paid, 1 in<\/span><\/p>/);
   assert.doesNotMatch(L.tkDoorCountsHTML([row('a', null)], NOW), /tk-ses-counts/);
 });
 t('the Door\'s answer names the session (from its list), green and red alike', () => {
   const ans = { status: 'paid', checked_in: true, already_used: false, buyer_name: 'Mira', event_name: 'Founders Night', checked_in_at: '2026-12-05T06:41:00Z' };
   const v = L.tkDoorResult(ans, row('a', S3), NOW);
-  assert.equal(v[0], 'ok'); assert.match(nb(v[3]), /^Founders Night · 2:40 PM session · in at /);
-  assert.equal(nb(L.tkDoorResult({ ...ans, already_used: true }, row('a', S3), NOW)[3]), 'Mira · Founders Night · 2:40 PM session');
-  assert.equal(L.tkDoorResult({ ...ans, already_used: true }, null, NOW)[3], 'Mira · Founders Night');
+  assert.equal(v[0], 'ok'); assert.match(nb(v[3]), /^Founders Night, 2:40 PM session, in at /);
+  assert.match(nb(L.tkDoorResult({ ...ans, already_used: true }, row('a', S3), NOW)[3]), /^First scanned at .+, 2:40 PM session$/);   // W-288
+  assert.match(L.tkDoorResult({ ...ans, already_used: true }, null, NOW)[3], /^First scanned at [^,]+$/);
 });
 t('wiring: Payments groups the paid list; the Door paints the per-session counts', () => {
   assert.match(html, /const paidGroups = tkBySession\(by\(\['paid'\]\)\);/);

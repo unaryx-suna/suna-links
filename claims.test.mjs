@@ -36,9 +36,9 @@ t('a card: event, date and city, claimant (escaped), the full email with Reply, 
   const card = L.clCard(C, NOW);
   assert.match(card, /<strong>Free Coworking Thursday<\/strong>/);
   assert.match(card, /2 h ago/);
-  assert.match(card, /Thu 3 Dec · Kuala Lumpur/);
-  assert.match(card, /Rachel &lt;Tan&gt; · Organiser/);
-  assert.match(card, /rachel@emspaced\.com \(confirmed\) · <a href="mailto:rachel@emspaced\.com\?subject=Your%20claim%20for%20Free%20Coworking%20Thursday%20on%20Suna">Reply<\/a>/);
+  assert.match(card, /Thu 3 Dec, Kuala Lumpur/);
+  assert.match(card, /Rachel &lt;Tan&gt;, Organiser/);
+  assert.match(card, /rachel@emspaced\.com \(confirmed\), <a href="mailto:rachel@emspaced\.com\?subject=Your%20claim%20for%20Free%20Coworking%20Thursday%20on%20Suna">Reply<\/a>/);
   assert.match(card, /<a href="https:\/\/www\.emspaced\.com\/" target="_blank" rel="noopener noreferrer">emspaced\.com<\/a>/);
   assert.match(card, /“We run it”/);
   assert.match(card, /Email matches organiser’s site/);

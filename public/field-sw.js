@@ -27,7 +27,7 @@
 // already registered v1 keeps the old cache — and the old origin-wide scope —
 // until something else evicts it, so the fix would not reach the one phone it
 // was written for.
-const CACHE_VERSION = 'field-v50';
+const CACHE_VERSION = 'field-v52';
 
 /**
  * The Supabase bundle is cross-origin, so its response is opaque and cannot be
@@ -38,6 +38,8 @@ const SHELL = [
   '/field.html',
   '/field-manifest.json',
   '/field-icon.svg',
+  '/fonts/urbanist-medium.woff2',
+  '/fonts/urbanist-bold.woff2',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
 ];
 
