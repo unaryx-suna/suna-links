@@ -216,7 +216,7 @@ export default async function handler(req, res) {
         if (isBySuna(it)) parts.push('by Suna');
         else if (it.partner_name) parts.push(`by ${it.partner_name}`);
         else if (it.creator_username) parts.push(`by @${it.creator_username}`);
-        title = parts.join(' — ') || title;
+        title = parts.join(', ') || title;   // W-309 W3b FIX 4: 'A quieter day in Ipoh, by Suna' (no dash)
 
         // The creator's own opening line is the best description available;
         // fall back to something true rather than something promotional.
@@ -231,6 +231,8 @@ export default async function handler(req, res) {
         // place photo: the same picture the page opens on.
         const cover = coverFor(data, await imageResolves(data.cover));
         image = cover;
+        // W-309 W3b BETTER 4: the desktop QR points at this plan's canonical address (its /i/ segment).
+        data.slug = String(canonicalItineraryURL(origin, slug, rawName)).split('/i/')[1] || '';
         body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
         signed = data.signedMoments;
       }

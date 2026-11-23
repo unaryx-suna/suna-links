@@ -49,7 +49,7 @@ await t('the canonical spelling renders (200), with canonical and og:url the sam
   const og = (r.body.match(/<meta property="og:url" content="([^"]*)">/) || [])[1];
   assert.equal(canon, `https://app.unaryx.com${CANON}`);
   assert.equal(og, canon);
-  assert.match(r.body, /<title>Chiang mai — by @suna_qa<\/title>/);
+  assert.match(r.body, /<title>Chiang mai, by @suna_qa<\/title>/);
   assert.doesNotMatch(r.body, /name="robots"/);
 });
 
@@ -105,7 +105,7 @@ if (process.env.LIVE) {
     assert.equal(r.to, `${CANON}?via=suna_qa`);
     const page = await head(r.to);
     assert.equal(page.code, 200);
-    assert.match(page.body, /<title>Chiang mai — by @suna_qa<\/title>/);
+    assert.match(page.body, /<title>Chiang mai, by @suna_qa<\/title>/);
     assert.doesNotMatch(page.body, /name="robots"/);
     assert.ok(page.body.includes(`<meta property="og:url" content="${B}${CANON}">`) && page.body.includes(`<link rel="canonical" href="${B}${CANON}">`));
   });

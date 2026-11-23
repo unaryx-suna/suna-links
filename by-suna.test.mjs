@@ -61,9 +61,9 @@ await t('suna: the owner\'s username and avatar appear NOWHERE (body, title, og:
   assert(!suna.includes('ownerzz'), 'any part of it leaked');
 });
 await t('suna: <title> and og:title say "by Suna"', async () => {
-  assert.equal(tag(head(suna), /<title>([^<]*)<\/title>/), 'KL in a day — by Suna');
-  assert.equal(tag(head(suna), /<meta property="og:title" content="([^"]*)"/), 'KL in a day — by Suna');
-  assert.equal(tag(head(suna), /<meta name="twitter:title" content="([^"]*)"/) ?? 'KL in a day — by Suna', 'KL in a day — by Suna');
+  assert.equal(tag(head(suna), /<title>([^<]*)<\/title>/), 'KL in a day, by Suna');
+  assert.equal(tag(head(suna), /<meta property="og:title" content="([^"]*)"/), 'KL in a day, by Suna');
+  assert.equal(tag(head(suna), /<meta name="twitter:title" content="([^"]*)"/) ?? 'KL in a day, by Suna', 'KL in a day, by Suna');
 });
 await t('suna: no JSON-LD on /i/ to leak through', async () => { assert(!/application\/ld\+json/.test(suna)); });
 await t('suna: ?via= still renders the same page (via is client-side)', async () => {
@@ -78,12 +78,12 @@ await t('worq: unchanged — "By WORQ" + Partner tag, no Follow, no pick pill', 
   assert(!/class="follow"/.test(worq)); assert(!/class="pick"/.test(worq)); assert(!about(worq).includes('suna-mark.svg'));
 });
 await t('worq: <title>/og:title say "by WORQ", never the owner (W-31 add-on)', async () => {
-  assert.equal(tag(head(worq), /<title>([^<]*)<\/title>/), 'KL in a day — by WORQ');
-  assert.equal(tag(head(worq), /<meta property="og:title" content="([^"]*)"/), 'KL in a day — by WORQ');
+  assert.equal(tag(head(worq), /<title>([^<]*)<\/title>/), 'KL in a day, by WORQ');
+  assert.equal(tag(head(worq), /<meta property="og:title" content="([^"]*)"/), 'KL in a day, by WORQ');
   assert(!head(worq).includes(OWNER), 'owner in the head');
 });
 await t('creator: <title> still "by @username"', async () => {
-  assert.equal(tag(head(creator), /<title>([^<]*)<\/title>/), `KL in a day — by @${OWNER}`);
+  assert.equal(tag(head(creator), /<title>([^<]*)<\/title>/), `KL in a day, by @${OWNER}`);
 });
 
 await t('creator: unchanged — @username, avatar, Follow', async () => {
