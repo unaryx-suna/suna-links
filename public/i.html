@@ -70,7 +70,8 @@
     p.lede { font-size: 15px; line-height: 21px; color: var(--body); margin: 0 0 8px; }
     p.meta { font-size: 13px; color: var(--muted); margin: 0 0 28px; }
     a.cta {
-      background: var(--sand); color: var(--ink-on-sand);
+      /* QA 23 Nov (LIGHT-DARK-ROLE-MAP: sand is never a button colour): the primary on dark is white with ink. */
+      background: #fff; color: #140F2E;
       padding: 15px 34px; border-radius: 26px; text-decoration: none;
       font-weight: 600; font-size: 17px; display: inline-block;
     }
@@ -222,7 +223,7 @@
     <p class="lede" id="intro">A route someone actually walked, with their own photos and notes for each stop.</p>
     <p class="meta" id="meta"></p>
 
-    <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8">Get Suna — Free</a>
+    <a class="cta" id="cta" href="https://apps.apple.com/app/id6759053765?pt=128539200&amp;ct=web-i&amp;mt=8">Get Suna, free</a>
 
     <div class="rule"></div>
     <p class="foot">Open in Suna on iPhone or Android to follow the route, with each stop's notes as you arrive.</p>
