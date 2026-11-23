@@ -41,7 +41,7 @@ t('the server: only I-604\'s admin RPCs with this session (each checks is_admin)
   assert.match(html, /tkRpc\(TK_API\.list, \{ p_event_id: null \}\)/);
   assert.match(html, /tkRpc\(TK_API\.checkIn, \{ p_ticket: code \}\)/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
-  assert.equal(build, 'field-v56');
+  assert.equal(build, 'field-v57');
   assert.ok(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8').includes(`const CACHE_VERSION = '${build}';`));
 });
 
