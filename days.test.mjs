@@ -62,7 +62,7 @@ await t('W-197 teaser: day chips with counts, ONE locked card ("+10 more stops i
   assert.match(html, /<p class="ls">2 more on day 1, then days 2 to 4\. Copy the plan/);
   assert.equal((html.match(/<div class="lock">/g) || []).length, 1);
   for (let n = 4; n <= 13; n++) assert(!html.includes(`Stop ${n}<`), `Stop ${n} leaked`);
-  assert.match(html, /<div class="stop-pic px-tile"><img src="\/icons\/px\/pintemples\.png"/);
+  assert.match(html, /<div class="stop-pic (?:px-tile"><img src="\/icons\/px\/pintemples\.png"|map"><img class="stop-img" src="\/api\/map\?)/);   // W-309 BETTER 5: a map when it has a pin
 });
 
 await t('before the migration (400 on `day`): asked again without it, the page still renders', async () => {

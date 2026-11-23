@@ -365,8 +365,13 @@ function stopBlock(s, n, image, credit) {
   const dir = !state && hasPin(s.latitude, s.longitude)
     ? `<a class="dir" href="${escapeHtml(googleMapsURL(s.latitude, s.longitude))}" target="_blank" rel="noopener">Directions ›</a>` : '';
   // A stop with no image gets a pixel tile, never a grey box (W-197).
+  // W-309 W3b BETTER 5 (Ops - Design 24 Nov 00:28): a stop with no photo but a pin shows a small map of where it
+  // is (api/map.js, Apple's snapshot); the pixel tile only when there's no pin or the map doesn't load.
+  const PX = '<img src="/icons/px/pintemples.png" width="52" height="52" alt="">';
   const pic = image ? stopImage(image, name, credit)
-    : '<div class="stop-pic px-tile"><img src="/icons/px/pintemples.png" width="52" height="52" alt=""></div>';
+    : hasPin(s.latitude, s.longitude)
+      ? `<div class="stop-pic map"><img class="stop-img" src="/api/map?lat=${Number(s.latitude).toFixed(5)}&amp;lng=${Number(s.longitude).toFixed(5)}&amp;w=200&amp;h=240" alt="Map of ${escapeHtml(name)}" width="96" height="112" loading="lazy" decoding="async" onerror="this.parentNode.className='stop-pic px-tile';this.outerHTML='${PX.replace(/"/g, '&quot;')}'"></div>`
+      : `<div class="stop-pic px-tile">${PX}</div>`;
   return `<li class="stop${state ? ' stop-over' : ''}">
       <span class="num" aria-hidden="true">${n}</span>
       <article class="card sc">
@@ -447,6 +452,7 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc{display:flex;border-radius:18px;background:#181b19;border-color:#2a2f2c}
 .sc .stop-pic{width:96px;height:auto;min-height:112px;flex:none}
 .sc .stop-pic::before,.sc .stop-pic::after{display:none}
+.sc .stop-pic.map img{width:100%;height:100%;object-fit:cover;display:block}
 .sc .stop-pic.px-tile{display:flex;align-items:center;justify-content:center;background:#202421}
 .px-tile img{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E;background:#FFF9D5;padding:6px}
 .sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}

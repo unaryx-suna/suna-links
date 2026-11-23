@@ -39,5 +39,9 @@ t('BETTER 3 + 4: "Open in your browser" (hidden until an in-app browser) and the
   const shell = readFileSync(new URL('./public/i.html', import.meta.url), 'utf8');
   assert.match(shell, /Instagram\|FBAN\|FBAV/); assert.match(shell, /x-safari-https:/); assert.match(shell, /package=com\.android\.chrome/);
 });
+t('BETTER 5: a stop with no photo but a pin shows its map (api/map), falling back to the pixel tile', () => {
+  assert.match(html, /<div class="stop-pic map"><img class="stop-img" src="\/api\/map\?lat=4\.60000&amp;lng=101\.10000&amp;w=200&amp;h=240" alt="Map of Stop 1"/);
+  assert.match(html, /onerror="this\.parentNode\.className='stop-pic px-tile';/);
+});
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);
