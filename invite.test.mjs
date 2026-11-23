@@ -51,6 +51,9 @@ t('Android → Google Play with the invite ct as its referrer campaign (W-241), 
   assert.equal(call('/u/aina?ct=ask-invite', UA.android).h.Location, PLAY + encodeURIComponent('utm_source=suna&utm_campaign=ask-invite&suna_target=%2Fu%2Faina'));
   assert.equal(call('/u/aina', UA.mac).h.Location, 'https://unaryx.com/get?ct=invite-link');
   assert.equal(call('/u/aina', undefined).h.Location, 'https://unaryx.com/get?ct=invite-link');
+  // QA W3: a creator's link keeps its own ct on a computer too.
+  assert.equal(call('/u/Elina.lotus?via=creator&ct=creator-elina-lotus', UA.mac).h.Location, 'https://unaryx.com/get?ct=creator-elina-lotus');
+  assert.equal(call('/u/aina?ct=<bad>', UA.mac).h.Location, 'https://unaryx.com/get?ct=invite-link');
 });
 
 t('bad usernames get the same redirects; never cached, noindex, no page body', () => {

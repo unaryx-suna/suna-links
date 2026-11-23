@@ -61,7 +61,8 @@ export function ctFrom(rawURL) {
 export function targetFor(device, ct, target = '') {
   if (device === 'ios') return STORE(CT.test(ct) ? ct : 'invite-link');
   if (device === 'android') return playURL(CT.test(ct) ? ct : 'invite-link', target);
-  return 'https://unaryx.com/get?ct=invite-link';
+  // QA W3: a computer keeps the link's own ct too (a creator's /u/ link was counted as invite-link on desktop).
+  return `https://unaryx.com/get?ct=${encodeURIComponent(CT.test(ct) ? ct : 'invite-link')}`;
 }
 
 export default function handler(req, res) {
