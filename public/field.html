@@ -1283,7 +1283,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v55';
+const BUILD = 'field-v56';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1413,17 +1413,21 @@ $('btn-otp').onclick = async () => {
   const email = $('email').value.trim();
   if (!email) { $('login-error').textContent = 'Enter an email.'; return; }
   $('login-error').textContent = '';
+  if ($('btn-otp').disabled) return;   // a double tap would send the same single-use token twice
   const captcha = captchaToken();
   if (!captcha) { $('login-error').textContent = 'One moment: the human check is still loading. Try again in a few seconds.'; captchaReady(); return; }
+  $('btn-otp').disabled = true;
   try {
     const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false, captchaToken: captcha } });
     captchaReset();
     if (error) throw error;
+    $('btn-otp').disabled = false;
     $('login-email-step').hidden = true;
     $('login-otp-step').hidden = false;
     $('login-email-display').textContent = email;
   } catch (e) {
     captchaReset();
+    $('btn-otp').disabled = false;
     const m = String((e && e.message) || '');
     $('login-error').textContent = /captcha/i.test(m) ? "The human check didn't go through. Wait a moment and try again."
       : /signups not allowed|user not found/i.test(m) ? "That email doesn't have Panel access." : (m || 'Could not send the code.');
