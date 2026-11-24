@@ -17,11 +17,12 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v59';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v59'/);
+  assert.match(html, /const BUILD = 'field-v60';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v60'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
-  assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/oneoff-order', \{[\s\S]{0,200}Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
+  // W-308 Role A: through the Panel's own origin (oneoff-order's CORS answers unaryx.com only); the token goes as before.
+  assert.match(html, /fetch\('\/api\/panel-order', \{[\s\S]{0,200}Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
   assert.match(html, /const n = Number\(out\.due_today\) \|\| 0;/);
   for (const a of ['list', 'drafts_sent', 'delivered', 'set_ready_by', 'refund', 'note']) assert.ok(html.includes(`'${a}'`) || html.includes(`action: '${a}'`), a);
 });
@@ -79,5 +80,18 @@ t('W-308 DEX-142 G: Inbox: kind chips, red edge for what needs us (unread), purp
   assert.match(html, /<div class="wrap" id="pane-inbox" hidden>/); assert.match(html, /orCall\(\{ action: 'inbox_read', id: it\.id \}\)/);
   assert.match(html, /const rows = ibRows\.filter\(\(x\) => \(showTest \|\| !x\.test\)/);
 });
+const { createRequire } = await import('node:module');
+const PO = createRequire(import.meta.url)('./api/panel-order.js');
+const call = async (req) => { const out = {}; await PO({ headers: {}, ...req }, { setHeader() {}, status(c) { out.c = c; return this; }, end(b) { out.b = b; } }); return out; };
+{
+  const seen = []; globalThis.fetch = async (u, o) => { seen.push({ u, o }); return { status: 200, text: async () => '{"items":[]}' }; };
+  const a = await call({ method: 'GET' }); assert.equal(a.c, 405);
+  const b = await call({ method: 'POST', body: { action: 'details' }, headers: { authorization: 'Bearer ' + 'x'.repeat(40) } }); assert.equal(b.c, 400, 'buyer actions never come this way');
+  const c = await call({ method: 'POST', body: { action: 'inbox_list' }, headers: {} }); assert.equal(c.c, 401);
+  const d = await call({ method: 'POST', body: { action: 'inbox_list' }, headers: { authorization: 'Bearer ' + 'x'.repeat(40), apikey: 'k' } });
+  assert.equal(d.c, 200); assert.equal(seen.length, 1); assert.equal(seen[0].u, 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order');
+  assert.equal(seen[0].o.headers.Authorization, 'Bearer ' + 'x'.repeat(40)); assert.equal(JSON.parse(seen[0].o.body).action, 'inbox_list');
+  console.log('  ok   panel-order forwarder checks');
+}
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

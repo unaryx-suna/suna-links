@@ -1336,7 +1336,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v59';
+const BUILD = 'field-v60';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8842,7 +8842,8 @@ function ibWaiting(it) { return !it.read_at && !!(IB_KIND[it.kind] || [])[2]; }
 let orRows = [];
 async function orCall(body) {
   const token = await amToken();
-  const res = await fetch(SUPABASE_URL + '/functions/v1/oneoff-order', {
+  // W-308 Role A: oneoff-order's CORS answers unaryx.com only, so the Panel goes through its own origin (api/panel-order).
+  const res = await fetch('/api/panel-order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (token || SUPABASE_ANON_KEY) },
     body: JSON.stringify(body),
