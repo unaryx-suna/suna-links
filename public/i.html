@@ -314,6 +314,16 @@
         for (var j = 0; j < followers.length; j++) handOff(followers[j]);
       }
 
+      // W-309 W3b BETTER 3: in Instagram / Facebook / TikTok's own browser, offer the real browser,
+      // where the app link works (iOS Safari's x-safari-https scheme; Android Chrome by intent).
+      var inapp = document.getElementById('inapp');
+      if (inapp && /Instagram|FBAN|FBAV|FB_IAB|BytedanceWebview|musical_ly/i.test(navigator.userAgent)) {
+        var here = window.location.href;
+        inapp.href = isIOS ? here.replace(/^https:/, 'x-safari-https:')
+          : 'intent://' + here.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+        inapp.hidden = false;
+      }
+
       // Share, on the cover. The Web Share sheet where there is one, else the
       // link goes on the clipboard and the page says so. The shared address is
       // the canonical one, so a share never forks attribution with a stale via.

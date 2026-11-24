@@ -72,8 +72,10 @@ for (const kind of ['suna', 'sunatravels']) {
     assert(!/place-stock/.test(h), 'a place-stock URL is on the page');
     assert(!/class="stop-pic stock"/.test(h));
     const [a, b, c] = stopsOf(h);
-    assert.equal(picOf(a), null, 'stock-only stop: no picture');
-    assert.equal(picOf(b), null, 'a stock place_image_url is not a real photo');
+    // W-309 W3b BETTER 5: no photo of their own and a pin = a map of where they are (never a stock image).
+    const mapOrNone = (x) => picOf(x) === null || /^\/api\/map\?lat=/.test(picOf(x));
+    assert.ok(mapOrNone(a), 'stock-only stop: no photo (a map at most)');
+    assert.ok(mapOrNone(b), 'a stock place_image_url is not a real photo (a map at most)');
     assert.equal((c.match(/data-full="([^"]+)"/) || [])[1], REAL, 'real photo before the moment');
     // A stop with only a moment shows the moment.
     const onlyMoment = [{ ...STOPS[0], moment_path: MOMENT, moment_bucket: 'community-post-photos' }];

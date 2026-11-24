@@ -365,8 +365,13 @@ function stopBlock(s, n, image, credit) {
   const dir = !state && hasPin(s.latitude, s.longitude)
     ? `<a class="dir" href="${escapeHtml(googleMapsURL(s.latitude, s.longitude))}" target="_blank" rel="noopener">Directions ›</a>` : '';
   // A stop with no image gets a pixel tile, never a grey box (W-197).
+  // W-309 W3b BETTER 5 (Ops - Design 24 Nov 00:28): a stop with no photo but a pin shows a small map of where it
+  // is (api/map.js, Apple's snapshot); the pixel tile only when there's no pin or the map doesn't load.
+  const PX = '<img src="/icons/px/pintemples.png" width="52" height="52" alt="">';
   const pic = image ? stopImage(image, name, credit)
-    : '<div class="stop-pic px-tile"><img src="/icons/px/pintemples.png" width="52" height="52" alt=""></div>';
+    : hasPin(s.latitude, s.longitude)
+      ? `<div class="stop-pic map"><img class="stop-img" src="/api/map?lat=${Number(s.latitude).toFixed(5)}&amp;lng=${Number(s.longitude).toFixed(5)}&amp;w=200&amp;h=240" alt="Map of ${escapeHtml(name)}" width="96" height="112" loading="lazy" decoding="async" onerror="this.parentNode.className='stop-pic px-tile';this.outerHTML='${PX.replace(/"/g, '&quot;')}'"></div>`
+      : `<div class="stop-pic px-tile">${PX}</div>`;
   return `<li class="stop${state ? ' stop-over' : ''}">
       <span class="num" aria-hidden="true">${n}</span>
       <article class="card sc">
@@ -383,7 +388,13 @@ function stopBlock(s, n, image, credit) {
 
 /** The copy button: the page's script points it at the app (or the App Store). */
 const COPY_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>';
-const copyButton = () => `<a class="cta copy" id="cta" href="${STORE_WEB_I}">${COPY_ICON} Copy this plan to Suna</a>`;
+// W-309 W3b FIX 10 (Ops - Design 24 Nov 00:28, Figma B1): ONE sticky "Copy this plan to Suna" at the foot of the
+// screen (id="cta", the page script's), with "Free on iPhone and Android" under it. The locked card's button is its
+// twin through the script's data-open-suna hook (same app hand-off, same count).
+const copyButton = (twin = false) => `<a class="cta copy" ${twin ? 'data-open-suna' : 'id="cta"'} href="${STORE_WEB_I}">${COPY_ICON} Copy this plan to Suna</a>`;
+// W-309 W3b BETTER 3: inside Instagram's or Facebook's browser the app link can't open Suna, so a plain
+// "Open in your browser" shows there (the page script reveals it and points it at Safari or Chrome).
+const stickyCopy = () => `<div class="stick">${copyButton()}<p>Free on iPhone and Android</p><a class="inapp" id="inapp" href="#" hidden>Open in your browser</a></div>`;
 const PADLOCK = '<svg class="lk" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><rect width="12" height="12" fill="#FFF9D5"/><path fill="#2B1E0E" d="M4 2h4v1H4zM3 3h1v2H3zM8 3h1v2H8zM2 5h8v6H2z"/><path fill="#F6CB94" d="M3 6h6v4H3z"/><path fill="#2B1E0E" d="M5 7h2v2H5z"/></svg>';
 
 /**
@@ -412,8 +423,7 @@ function lockedBlock(count, dayCounts, shownDays) {
           ${PADLOCK}
           <p class="lt">+${count} more stop${count === 1 ? '' : 's'} in the app</p>
           <p class="ls">${escapeHtml(where)}Copy the plan and Suna takes you through it, stop by stop.</p>
-          ${copyButton()}
-          <p class="ls small">Free on iPhone and Android</p>
+          ${copyButton(true)}
         </div>
       </div>
     </li>`;
@@ -435,13 +445,14 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .daychips span{border:1px solid #2a2f2c;background:#181b19;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:600}
 .route-head{display:none}
 .route{padding:0 16px 0 50px}
-.route::before{left:28px;top:14px;bottom:30px;width:0;border-left:2px dashed #3a403c;background:none}
+.route::before{left:28px;top:14px;bottom:30px;width:0;border-left:2px dashed rgba(255,255,255,.3);background:none}
 .stop{margin-bottom:14px}
 .stop::before{display:none}
-.num{position:absolute;left:-34px;top:0;width:26px;height:26px;border-radius:13px;background:#f6cb94;color:#1d1408;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:1}
+.num{position:absolute;left:-34px;top:0;width:26px;height:26px;border-radius:13px;background:#fff;color:#140F2E;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:1}
 .sc{display:flex;border-radius:18px;background:#181b19;border-color:#2a2f2c}
 .sc .stop-pic{width:96px;height:auto;min-height:112px;flex:none}
 .sc .stop-pic::before,.sc .stop-pic::after{display:none}
+.sc .stop-pic.map img{width:100%;height:100%;object-fit:cover;display:block}
 .sc .stop-pic.px-tile{display:flex;align-items:center;justify-content:center;background:#202421}
 .px-tile img{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E;background:#FFF9D5;padding:6px}
 .sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}
@@ -463,7 +474,31 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .ls{font-size:14px;color:#a3a8a4;margin:6px 0 0;line-height:1.4}
 .ls.small{font-size:12.5px;margin-top:8px}
 a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;min-height:52px;border-radius:26px;background:#fff;color:#140F2E;font-weight:700;font-size:16px;padding:0 20px}
-.after{padding:4px 16px 0}
+/* W-309 W3b FIX 1: the cover and Suna's mark hold their place while the photo loads, then the photo fades in. */
+.cover{background:rgba(255,255,255,.08)}
+.cover-img{opacity:0;transition:opacity .35s ease}
+.cover-img.in{opacity:1}
+.by-mark{background:rgba(255,255,255,.12)!important}
+@media (prefers-reduced-motion:reduce){.cover-img{transition:none}}
+/* FIX 3: "Suna's pick" is a white 20% chip (no orange surfaces; #FF8C18 is for event labels only). */
+.pick:not(.creator){background:rgba(255,255,255,.2);color:#fff}
+/* FIX 10: the sticky copy bar. */
+body.pv-body{padding-bottom:132px}
+.stick{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(15,17,16,0),#0f1110 28%);text-align:center}
+.stick a.cta.copy{max-width:528px;margin:0 auto}
+.stick p{margin:8px 0 0;font-size:12.5px;color:rgba(255,255,255,.65)}
+.stick .inapp{display:inline-block;margin:8px 0 0;font-size:14px;font-weight:700;color:#B3A6FF;text-decoration:underline;text-underline-offset:3px}
+.stick .inapp[hidden]{display:none}
+/* W-309 W3b BETTER 4 (Figma S3c): on a computer, Copy does nothing useful; the QR to this plan instead. */
+.qrtile{display:none}
+@media (min-width:900px) and (hover:hover){
+  .stick{display:none}
+  body.pv-body{padding-bottom:40px}
+  .qrtile{display:flex;align-items:center;gap:16px;position:fixed;right:24px;bottom:24px;z-index:20;margin:0;padding:14px 18px 14px 14px;border:1px solid #2a2f2c;border-radius:20px;background:#181b19;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .qrtile img{width:112px;height:112px;border-radius:14px;background:#fff9d5}
+  .qrtile b{display:block;font-size:16px;margin:0 0 4px}
+  .qrtile span{font-size:14px;color:rgba(255,255,255,.7)}
+}
 .bar{display:none}
 </style>`;
 
@@ -476,13 +511,13 @@ a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:
 function coverImg(cover, variants) {
   const alt = '';
   if (!variants || !variants[640]) {
-    return `<img class="cover-img" src="${escapeHtml(cover)}" alt="${alt}" decoding="async" fetchpriority="high">`;
+    return `<img class="cover-img" src="${escapeHtml(cover)}" alt="${alt}" decoding="async" fetchpriority="high" onload="this.classList.add('in')">`;
   }
   const set = [`${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
   return `<img class="cover-img" src="${escapeHtml(variants[640])}" srcset="${escapeHtml(set)}"`
     + ` sizes="(min-width: 700px) 640px, 100vw" data-full="${escapeHtml(cover)}"`
     + ` onerror="if(this.src!==this.dataset.full){this.srcset='';this.src=this.dataset.full}"`
-    + ` alt="${alt}" decoding="async" fetchpriority="high">`;
+    + ` alt="${alt}" decoding="async" fetchpriority="high" onload="this.classList.add('in')">`;
 }
 
 /** Which sized copies of the cover exist, checked once per render. */
@@ -546,7 +581,7 @@ export function previewBody(data, cover, variants, mascot) {
   }).join('\n    ') + lockedBlock(lockedCount, dayCounts, shown.map(stopDay).filter((d) => d !== null));
   const kicker = ['Plan', it.resolved_city_name].filter(Boolean).join(', ');
 
-  return `${W197_CSS}<main class="pv">
+  return `${W197_CSS}<noscript><style>.cover-img{opacity:1}</style></noscript><main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">
     ${cover ? coverImg(cover, variants) : `<div class="cover-mascot">${mascot || ''}</div>`}
     <div class="fade-top"></div>
@@ -568,7 +603,8 @@ export function previewBody(data, cover, variants, mascot) {
   <ol class="route">
     ${items}
   </ol>` : ''}
-  ${lockedCount ? '' : `<div class="after">${copyButton()}</div>`}
 </main>
+${stickyCopy()}
+${data.slug && /^[A-Za-z0-9-]{1,160}$/.test(data.slug) ? `<figure class="qrtile"><img src="https://unaryx.com/api/qr?i=${escapeHtml(data.slug)}" width="112" height="112" alt="QR code for this plan" loading="lazy"><figcaption><b>Copy it on your phone</b><span>Point your phone camera here.</span></figcaption></figure>` : ''}
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>`;
 }
