@@ -1344,7 +1344,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v64';
+const BUILD = 'field-v65';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8752,6 +8752,8 @@ const OR_SYM = { myr: 'RM', sgd: 'S$', aud: 'A$' };
 // The names the buyer saw at checkout (unaryx-site api/_lib/partner-plans.js EXTRAS).
 const OR_ITEM = { content_kit: 'Event content kit', qr_kit: 'Printed QR kit', sponsored_post: 'Sponsored post', sponsored_reel: 'Sponsored reel + story', cny_kit: 'Chinese New Year content kit' };
 const OR_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** W-311 (7): who the order is for: the organiser's name (server I-761 adds it to list), not Stripe's business box. */
+function orWho(o) { return (o && (o.organiser_name || (o.organiser && o.organiser.name) || o.business)) || ''; }
 /** '2026-11-23' -> '23 Nov' (the year only when it isn't this year). */
 function orDate(d, year = new Date().getFullYear()) {
   const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -8776,7 +8778,7 @@ function orCard(o, today) {
     const row = (k, v) => v ? '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>' : '';
     // W-307 (12): a Stripe TEST order says so (shown, never filtered out: Brian's test order must be findable).
     const test = o.livemode === false || /^cs_test_/.test(String(o.session_id || ''));
-    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + (test ? '<span class="or-test">TEST</span>' : '') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
+    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(orWho(o) || o.email || 'Order') + (test ? '<span class="or-test">TEST</span>' : '') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
       + row('Items', items)
       + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ', ' + clEsc(o.country) : '') + (o.guarantee ? ', guarantee' : ''))
       + row('Ready by', clEsc(orDate(o.ready_by))) + row('Event', clEsc(orDate(o.event_date)))
@@ -8810,7 +8812,7 @@ function orListCard(o) {
   const items = (o.items || []).map((i) => OR_ITEM[i.key] || i.key).join(', ');
   const line = late && nt && nt.due ? nt.label.replace(/\s*\(.*\)$/, '') + ' due ' + orDate(nt.due) : o.ready_by ? 'Ready ' + orDate(o.ready_by) : '';
   return '<button type="button" class="or2' + (late ? ' late' : '') + '" data-or-open="' + clEsc(o.session_id) + '"><span class="chip ' + k + '">' + w + '</span>' + (test ? '<span class="or-test">TEST</span>' : '')
-    + '<b>' + clEsc(items || 'Order') + '</b><small>' + clEsc(o.business || o.email || '') + '</small>' + (line ? '<span class="rb">' + clEsc(line) + '</span>' : '') + '</button>';
+    + '<b>' + clEsc(items || 'Order') + '</b><small>' + clEsc(orWho(o) || o.email || '') + '</small>' + (line ? '<span class="rb">' + clEsc(line) + '</span>' : '') + '</button>';
 }
 const OR_TL = [['paid', 'Paid'], ['details_in', 'Details in'], ['drafts_sent', 'Drafts sent'], ['approved', 'Approved'], ['delivered', 'Delivered']];
 const OR_ORDER = ['paid', 'details_in', 'drafts_sent', 'changes', 'approved', 'delivered', 'closed'];
@@ -8828,7 +8830,7 @@ function orDetail(o) {
     return '<button type="button" class="od-ck' + (done ? ' done' : '') + '"' + (done || !act ? ' disabled' : ' data-or="' + act + '" data-id="' + id + '"') + '><i>' + (done ? '✓' : '') + '</i><span>' + label + '</span>' + note + '</button>'; }).join('');
   const ours = ck.filter((c) => !c.step).map((c) => '<button type="button" class="od-ck' + (c.done ? ' done' : '') + '"' + (c.done ? ' disabled' : ' data-or-check="' + clEsc(c.item + ':' + c.task) + '" data-id="' + id + '"') + '><i>' + (c.done ? '✓' : '') + '</i><span>' + clEsc(c.label) + '</span><em class="' + (c.overdue ? 'late' : '') + '">' + clEsc(c.due ? orDate(c.due) : '') + '</em></button>').join('');
   return '<button type="button" class="od-back" data-or-close>‹ Orders</button>'
-    + '<div class="od-org"><span class="ey">ORGANISER</span><h2>' + clEsc(o.business || 'Order') + '</h2>' + ln('EMAIL', o.email) + ln('PHONE', o.phone) + ln('POST TO', o.post_to || o.address) + '</div>'
+    + '<div class="od-org"><span class="ey">ORGANISER</span><h2>' + clEsc(orWho(o) || 'Order') + '</h2>' + ln('EMAIL', o.email) + ln('PHONE', o.phone) + ln('POST TO', o.post_to || o.address) + '</div>'
     + '<div class="od-ord"><div><small>ORDER</small><b>' + clEsc(items) + '</b></div><b>' + (o.ready_by ? 'Ready ' + clEsc(orDate(o.ready_by)) : '') + '</b></div>'
     + '<p class="od-h">STEPS</p>' + steps + (ours ? '<p class="od-h">WE PROVIDE</p>' + ours : '')
     + '<div id="or-form-' + id + '"></div>'
@@ -9801,7 +9803,7 @@ async function renderDkHome() {
     for (const t of waiting.slice(0, 3)) { const h = dkHold(t, now); pay.appendChild(li(t.buyer_name || 'No name', [t.pay_ref, t.event_name].filter(Boolean).join(', '), [h[0], h[0] === 'warn' ? 'Hold ' + h[1] : h[1]], tkRM(t.amount_due), 'payments')); }
     const ord = dkEl('div', 'card dk-box'); ord.appendChild(dkEl('b', '', 'Orders to deliver'));
     if (!open.length) ord.appendChild(dkEl('p', 'none', 'Nothing to deliver.'));
-    for (const o of open.slice(0, 3)) ord.appendChild(li(dkOrName(o), o.business || o.email || '', dkOrStepTag(o), null, 'orders'));
+    for (const o of open.slice(0, 3)) ord.appendChild(li(dkOrName(o), orWho(o) || o.email || '', dkOrStepTag(o), null, 'orders'));
     two.append(pay, ord); box.appendChild(two);
   }
   const fin = dkEl('div', 'card dk-fin');
@@ -9876,7 +9878,7 @@ function dkOrders() {
     for (const o of rows) {
       const tag = dkOrStepTag(o), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
       const tr = dkEl('tr', o.session_id === dkOrSel ? 'on' : '');
-      tr.innerHTML = '<td>' + clEsc(dkOrName(o)) + '</td><td>' + clEsc(o.business || o.email || '') + '</td><td>' + clEsc(orDate(String(o.created_at || '').slice(0, 10))) + '</td>'
+      tr.innerHTML = '<td>' + clEsc(dkOrName(o)) + '</td><td>' + clEsc(orWho(o) || o.email || '') + '</td><td>' + clEsc(orDate(String(o.created_at || '').slice(0, 10))) + '</td>'
         + '<td><span class="cl-tag ' + tag[0] + '">' + clEsc(tag[1]) + (orDue(o) ? ', due' : '') + '</span></td><td class="r">' + clEsc(cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })) + '</td>';
       tr.onclick = () => { dkOrSel = o.session_id; dkOrders(); };
       body.appendChild(tr);

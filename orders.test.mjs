@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
-const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext, orSort, orListCard, orDetail, ibRow, ibWaiting, ibAgo, orAskSheet };')();
+const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext, orSort, orListCard, orDetail, ibRow, ibWaiting, ibAgo, orAskSheet, orWho };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 const O = { session_id: 'cs_test_abc123def456', country: 'MY', currency: 'myr', items: [{ key: 'cny_kit', qty: 1 }, { key: 'sponsored_post', qty: 2 }], step: 'details_in',
@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v64';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v64'/);
+  assert.match(html, /const BUILD = 'field-v65';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v65'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   // W-308 Role A: through the Panel's own origin (oneoff-order's CORS answers unaryx.com only); the token goes as before.
@@ -94,6 +94,11 @@ t('W-308 DEX-142 I2/I3: Ask for details again: Logo and Event details ticked, De
 t('an open ask re-opens Details in at a later step: unticked, "Asked again HH:MM"', () => {
   const d = L.orDetail({ ...O, step: 'details_in', checklist: [], needs_you: { missing: ['Your logo'], asked_at: '2026-11-24T10:00:31Z' } });
   assert.match(d, /class="od-ck" disabled><i><\/i><span>Details in<\/span><em>Asked again 18:00<\/em>/);
+});
+t('W-311 (7): the organiser name (organiser_name from the server) before Stripe\'s business box', () => {
+  assert.equal(L.orWho({ business: 'unaryx', organiser_name: 'QA Lantern Walk' }), 'QA Lantern Walk');
+  assert.equal(L.orWho({ business: 'unaryx' }), 'unaryx');
+  assert.match(L.orDetail({ ...O, organiser_name: 'Kopi Ping', checklist: [] }), /<span class="ey">ORGANISER<\/span><h2>Kopi Ping<\/h2>/);
 });
 const { createRequire } = await import('node:module');
 const PO = createRequire(import.meta.url)('./api/panel-order.js');
