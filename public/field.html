@@ -1344,7 +1344,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v62';
+const BUILD = 'field-v63';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8821,7 +8821,8 @@ function orDetail(o) {
   const items = (o.items || []).map((i) => OR_ITEM[i.key] || i.key).join(', ');
   const ck = o.checklist || [], firstOpen = OR_TL.find(([k]) => !orStepDone(o, k));
   const dueOf = (k) => { const c = ck.find((x) => x.step === k); return c && c.due ? orDate(c.due) : k === 'delivered' && o.ready_by ? orDate(o.ready_by) : ''; };
-  const steps = OR_TL.map(([k, label]) => { const done = orStepDone(o, k), act = k === 'drafts_sent' ? 'drafts_sent' : k === 'delivered' ? 'delivered' : '';
+  // An open ask (needs_you) re-opens Details in until the buyer's next step, so it shows "Asked again HH:MM".
+  const steps = OR_TL.map(([k, label]) => { const done = orStepDone(o, k) && !(k === 'details_in' && o.needs_you), act = k === 'drafts_sent' ? 'drafts_sent' : k === 'delivered' ? 'delivered' : '';
     const asked = k === 'details_in' && o.needs_you && o.needs_you.asked_at ? 'Asked again ' + new Date(o.needs_you.asked_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kuala_Lumpur' }) : '';
     const note = done ? '' : asked ? '<em>' + clEsc(asked) + '</em>' : firstOpen && firstOpen[0] === k && k === 'details_in' ? '<em class="need">Needed</em>' : '<em>' + clEsc(dueOf(k)) + '</em>';
     return '<button type="button" class="od-ck' + (done ? ' done' : '') + '"' + (done || !act ? ' disabled' : ' data-or="' + act + '" data-id="' + id + '"') + '><i>' + (done ? '✓' : '') + '</i><span>' + label + '</span>' + note + '</button>'; }).join('');

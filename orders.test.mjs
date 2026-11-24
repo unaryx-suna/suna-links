@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v62';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v62'/);
+  assert.match(html, /const BUILD = 'field-v63';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v63'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   // W-308 Role A: through the Panel's own origin (oneoff-order's CORS answers unaryx.com only); the token goes as before.
@@ -90,6 +90,10 @@ t('W-308 DEX-142 I2/I3: Ask for details again: Logo and Event details ticked, De
   assert.match(sh, /<div class="od-to"><span>aiman@kopiping\.example<\/span><small>Email<\/small><\/div>/);
   assert.match(html, /orCall\(\{ action: 'ask_details', session_id: id, missing \}\)/);
   assert.doesNotMatch(L.orDetail({ ...o, step: 'delivered' }), /data-or-ask=/);
+});
+t('an open ask re-opens Details in at a later step: unticked, "Asked again HH:MM"', () => {
+  const d = L.orDetail({ ...O, step: 'details_in', checklist: [], needs_you: { missing: ['Your logo'], asked_at: '2026-11-24T10:00:31Z' } });
+  assert.match(d, /class="od-ck" disabled><i><\/i><span>Details in<\/span><em>Asked again 18:00<\/em>/);
 });
 const { createRequire } = await import('node:module');
 const PO = createRequire(import.meta.url)('./api/panel-order.js');
