@@ -17,7 +17,7 @@ t('the sidebar: brand, white Add a place, Home, the four groups from HOME_GROUPS
 });
 t('Payments and Orders tables reuse the phone actions (data-tk / data-or), so the existing click handlers run them', () => {
   assert.match(h, /function dkPay\(\)[\s\S]*data-tk="paid"[\s\S]*Amount matches, mark paid<\/button><button type="button" class="ghost" data-tk="release"[\s\S]*class="ghost" data-tk="paid" data-ref="' \+ ref \+ '">Mark paid<\/button>/);
-  assert.match(h, /function dkOrders\(\)[\s\S]*rp\.innerHTML = orCard\(sel\)/);
+  assert.match(h, /function dkOrders\(\)[\s\S]*rp\.innerHTML = orDetail\(sel\)/);
   assert.match(h, /<th>Package<\/th><th>Buyer<\/th><th>Paid<\/th><th>Next step<\/th><th class="r">Amount<\/th>/);
   assert.match(h, /<th>Reference<\/th><th>Name<\/th><th>Event<\/th><th>Should pay<\/th>/);
 });

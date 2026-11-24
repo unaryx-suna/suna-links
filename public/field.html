@@ -1344,7 +1344,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v63';
+const BUILD = 'field-v64';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8945,15 +8945,17 @@ $('pane-orders').addEventListener('click', (e) => {
   if (b.dataset.orOpen) { orOpen = b.dataset.orOpen; renderOrders(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute('data-or-close')) { orOpen = null; renderOrders(); return; }
   if (b.dataset.copy) { try { navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (_) {} return; }
-  if (b.dataset.orAsk) { const o = orRows.find((x) => x.session_id === b.dataset.orAsk); if (o) $('or-ask-' + b.dataset.orAsk).innerHTML = orAskSheet(o); return; }
-  if (b.dataset.orAskCancel) { const id = b.dataset.orAskCancel; $('or-ask-' + id).innerHTML = '<button type="button" class="primary od-ask" data-or-ask="' + clEsc(id) + '">Ask for details again</button>'; return; }
-  if (b.dataset.orAskGo) { const id = b.dataset.orAskGo, slot = $('or-ask-' + id), o = orRows.find((x) => x.session_id === id);
+  if (b.dataset.orAsk) { const o = orRows.find((x) => x.session_id === b.dataset.orAsk); if (o) b.closest('[id^="or-ask-"]').innerHTML = orAskSheet(o); return; }
+  if (b.dataset.orAskCancel) { const id = b.dataset.orAskCancel; b.closest('[id^="or-ask-"]').innerHTML = '<button type="button" class="primary od-ask" data-or-ask="' + clEsc(id) + '">Ask for details again</button>'; return; }
+  if (b.dataset.orAskGo) { const id = b.dataset.orAskGo, slot = b.closest('[id^="or-ask-"]'), o = orRows.find((x) => x.session_id === id);
     const missing = [...slot.querySelectorAll('input:checked')].map((x) => x.value);
     if (!missing.length) { orLine('Pick at least one thing.'); return; }
     b.disabled = true; b.textContent = 'Sending…';
     orCall({ action: 'ask_details', session_id: id, missing }).then((r) => {
       slot.innerHTML = '<div class="od-sent"><i>✓</i>' + (r.emailed === false ? 'Logged. No email on this order' : 'Sent to ' + clEsc((o && o.email) || 'their email')) + '</div>';
-      return loadOrders(false).then(() => { orOpen = id; renderOrders(); const s2 = $('or-ask-' + id); if (s2) s2.innerHTML = slot.innerHTML; });
+      // W-308: the desktop pane and the phone list are both in the page; keep to the one on screen.
+      const desk = typeof DK !== 'undefined' && DK.matches;
+      return loadOrders(false).then(() => { if (!desk) orOpen = id; renderOrders(); const s2 = document.querySelector((desk ? '#dk-or' : '#or-list') + ' [id="or-ask-' + id + '"]'); if (s2) s2.innerHTML = slot.innerHTML; });
     }).catch((err) => { b.disabled = false; b.textContent = 'Send'; orLine(err.message); }); return; }
   if (b.dataset.orCheck) { const [item, task] = b.dataset.orCheck.split(':'); b.disabled = true;
     orCall({ action: 'check', session_id: b.dataset.id, item, task }).then(() => loadOrders(true)).then(() => orLine('Ticked: the organiser is told.')).catch((err) => { b.disabled = false; orLine(err.message); }); return; }
@@ -9854,7 +9856,7 @@ function dkPay() {
 function dkOrders() {
   const box = $('dk-or'); if (!box || !DK.matches) return;
   const groups = { todo: orRows.filter(dkOrOpen), delivered: orRows.filter((o) => ['delivered', 'closed'].includes(o.step)), refunded: orRows.filter((o) => o.step === 'refunded') };
-  const rows = groups[dkOrTab].slice().sort((a, b) => (orDue(b) - orDue(a)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  const rows = orSort(groups[dkOrTab]);   // W-308 H: late first, then by ready-by
   if (!rows.some((o) => o.session_id === dkOrSel)) dkOrSel = rows[0] ? rows[0].session_id : null;
   const wrap = dkEl('div', 'dk-or'), l = dkEl('div', 'l'), rp = dkEl('div', 'rp');
   l.append(dkEl('h1', '', 'Orders'), dkEl('p', 'sub', 'The buyer gets an email at each step.'));
@@ -9883,7 +9885,8 @@ function dkOrders() {
   }
   const sel = rows.find((o) => o.session_id === dkOrSel);
   // The selected order is the phone's card, with all its actions (pane-orders' click handler runs them).
-  if (sel) { rp.innerHTML = orCard(sel); const h = rp.querySelector('.cl-top b'); if (h) { h.textContent = dkOrName(sel); h.style.fontSize = '22px'; } }
+  // W-308 DEX-142 I: the same one-order view as the phone (organiser card, Steps, We provide, Ask for details again).
+  if (sel) { rp.innerHTML = orDetail(sel); const bk = rp.querySelector('[data-or-close]'); if (bk) bk.remove(); }
   else rp.appendChild(dkEl('p', 'sub', 'Pick an order.'));
   wrap.append(l, rp); box.replaceChildren(wrap);
 }
