@@ -163,7 +163,13 @@
   .ib-k.p { background: #5A44C8; color: #fff; } .ib-k.t { background: rgba(255,255,255,.14); color: rgba(255,255,255,.75); }
   .ib-row b { display: block; font-size: 15px; } .ib-row small { display: block; color: rgba(255,255,255,.6); font-size: 13px; margin-top: 2px; }
   .ib-row.test { opacity: .6; }
-  .ib-test { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.10); font-weight: 700; }
+  .ib-test { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.10); font-weight: 700; cursor: pointer; }
+  /* Ops - Design 15:3x (d): a switch: white 30% off, white with an ink knob on. */
+  .ib-test input { appearance: none; -webkit-appearance: none; position: relative; width: 46px; height: 28px; margin: 0; border-radius: 999px; background: rgba(255,255,255,.3); cursor: pointer; transition: background .15s; }
+  .ib-test input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .ib-test input:checked { background: #fff; } .ib-test input:checked::after { background: #140F2E; transform: translateX(18px); }
+  .ib-test input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .ib-test input, .ib-test input::after { transition: none; } }
   .or2 { display: block; width: 100%; text-align: left; margin: 0 0 10px; padding: 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,.10); background: #1A1D1B; color: #fff; font: inherit; }
   .or2.late { border-color: #FF7A6B; } .or2 b { display: block; font-size: 16px; } .or2 small { display: block; color: rgba(255,255,255,.6); font-size: 13px; }
   .or2 .rb { display: block; margin-top: 8px; font-weight: 700; font-size: 14px; } .or2.late .rb { color: #FF7A6B; }
@@ -990,7 +996,7 @@
     <div class="ib-chips" id="ib-chips"><button type="button" data-ib="all" aria-pressed="true">All</button><button type="button" data-ib="wait" aria-pressed="false">Waiting on us<em id="ib-wait"></em></button></div>
     <div id="ib-list"></div>
     <p class="sub" id="ib-note" hidden></p>
-    <label class="ib-test"><span>Show test payments</span><input type="checkbox" id="ib-test"></label>
+    <label class="ib-test"><span>Show test payments</span><input type="checkbox" role="switch" id="ib-test"></label>
   </div>
 
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
@@ -1330,7 +1336,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v58';
+const BUILD = 'field-v59';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
