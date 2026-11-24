@@ -188,6 +188,14 @@
   .od-ck.done i { background: #fff; border-color: #fff; color: #140F2E; }
   .od-ck span { flex: 1; } .od-ck em { font-style: normal; font-size: 12px; color: rgba(255,255,255,.6); } .od-ck em.need { color: #FF7A6B; font-weight: 700; } .od-ck em.late { color: #FF7A6B; }
   .od-ck[disabled] { cursor: default; }
+  .od-ask { width: 100%; margin-top: 16px; }
+  .od-sheet { margin-top: 16px; padding: 14px; border-radius: 18px; background: #1A1D1B; border: 1px solid rgba(255,255,255,.10); }
+  .od-pick { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; margin: 0 0 8px; border-radius: 14px; background: rgba(255,255,255,.05); font-weight: 700; }
+  .od-pick input { width: 20px; height: 20px; accent-color: #fff; }
+  .od-to { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 12px; border-radius: 14px; background: rgba(255,255,255,.05); font-weight: 700; }
+  .od-to small { color: rgba(255,255,255,.55); font-weight: 600; }
+  .od-sent { display: flex; align-items: center; gap: 10px; min-height: 52px; margin-top: 16px; padding: 0 14px; border-radius: 999px; background: #fff; color: #140F2E; font-weight: 700; }
+  .od-sent i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #91f499; color: #140F2E; font-style: normal; font-size: 13px; }
   .od-back { border: 0; background: none; color: rgba(255,255,255,.75); padding: 0; margin: 0 0 10px; font: 600 14px/1 inherit; }
   /* W-202: Claims */
   .cl-card { margin-bottom: 12px; }
@@ -1336,7 +1344,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v61';
+const BUILD = 'field-v62';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8814,7 +8822,8 @@ function orDetail(o) {
   const ck = o.checklist || [], firstOpen = OR_TL.find(([k]) => !orStepDone(o, k));
   const dueOf = (k) => { const c = ck.find((x) => x.step === k); return c && c.due ? orDate(c.due) : k === 'delivered' && o.ready_by ? orDate(o.ready_by) : ''; };
   const steps = OR_TL.map(([k, label]) => { const done = orStepDone(o, k), act = k === 'drafts_sent' ? 'drafts_sent' : k === 'delivered' ? 'delivered' : '';
-    const note = done ? '' : firstOpen && firstOpen[0] === k && k === 'details_in' ? '<em class="need">Needed</em>' : '<em>' + clEsc(dueOf(k)) + '</em>';
+    const asked = k === 'details_in' && o.needs_you && o.needs_you.asked_at ? 'Asked again ' + new Date(o.needs_you.asked_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kuala_Lumpur' }) : '';
+    const note = done ? '' : asked ? '<em>' + clEsc(asked) + '</em>' : firstOpen && firstOpen[0] === k && k === 'details_in' ? '<em class="need">Needed</em>' : '<em>' + clEsc(dueOf(k)) + '</em>';
     return '<button type="button" class="od-ck' + (done ? ' done' : '') + '"' + (done || !act ? ' disabled' : ' data-or="' + act + '" data-id="' + id + '"') + '><i>' + (done ? '✓' : '') + '</i><span>' + label + '</span>' + note + '</button>'; }).join('');
   const ours = ck.filter((c) => !c.step).map((c) => '<button type="button" class="od-ck' + (c.done ? ' done' : '') + '"' + (c.done ? ' disabled' : ' data-or-check="' + clEsc(c.item + ':' + c.task) + '" data-id="' + id + '"') + '><i>' + (c.done ? '✓' : '') + '</i><span>' + clEsc(c.label) + '</span><em class="' + (c.overdue ? 'late' : '') + '">' + clEsc(c.due ? orDate(c.due) : '') + '</em></button>').join('');
   return '<button type="button" class="od-back" data-or-close>‹ Orders</button>'
@@ -8822,10 +8831,21 @@ function orDetail(o) {
     + '<div class="od-ord"><div><small>ORDER</small><b>' + clEsc(items) + '</b></div><b>' + (o.ready_by ? 'Ready ' + clEsc(orDate(o.ready_by)) : '') + '</b></div>'
     + '<p class="od-h">STEPS</p>' + steps + (ours ? '<p class="od-h">WE PROVIDE</p>' + ours : '')
     + '<div id="or-form-' + id + '"></div>'
+    // W-308 DEX-142 I2/I3 (server I-759 (4) ask_details): pick what's missing, send to their email, logged on the order.
+    + (['delivered', 'closed', 'refunded'].includes(o.step) ? '' : '<div id="or-ask-' + id + '"><button type="button" class="primary od-ask" data-or-ask="' + id + '">Ask for details again</button></div>')
     + '<div class="cl-row" style="margin-top:14px"><span class="k">Paid</span><span>' + cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.guarantee ? ', guarantee' : '') + '</span></div>'
     + '<div class="cl-actions"><button type="button" class="ghost" data-or="set_ready_by" data-id="' + id + '">New ready-by date</button>' + (o.step !== 'refunded' ? '<button type="button" class="danger" data-or="refund" data-id="' + id + '">Refund</button>' : '') + '</div>'
     + '<div class="cl-form"><label>Note (never shown to the buyer)</label><textarea class="or-note" id="or-n-' + id + '" maxlength="2000">' + clEsc(o.staff_note || '') + '</textarea>'
     + '<div class="cl-actions"><button type="button" class="ghost" data-or-go="note" data-id="' + id + '">Save note</button></div></div>';
+}
+/** DEX-142 I2: what's missing (Logo and Event details ticked first) and where it goes. */
+const OR_ASK = ['Your logo', 'Event details', 'Delivery address'];
+function orAskSheet(o) {
+  const id = clEsc(o.session_id);
+  return '<div class="od-sheet"><p class="od-h" style="margin-top:4px">WHAT\'S MISSING?</p>'
+    + OR_ASK.map((m, k) => '<label class="od-pick"><input type="checkbox" value="' + clEsc(m) + '"' + (k < 2 ? ' checked' : '') + '><span>' + clEsc(m.replace(/^Your /, '').replace(/^./, (c) => c.toUpperCase())) + '</span></label>').join('')
+    + '<p class="od-h">SEND TO</p><div class="od-to"><span>' + clEsc(o.email || '') + '</span><small>Email</small></div>'
+    + '<div class="cl-actions"><button type="button" class="primary" data-or-ask-go="' + id + '">Send</button><button type="button" class="ghost" data-or-ask-cancel="' + id + '">Cancel</button></div></div>';
 }
 // W-308 DEX-142 G: the Inbox. Kinds from oneoff-order's admin_alert (I-758 (b)).
 const IB_KIND = { event_listed: ['NEW LISTING', '', 1], extra_bought: ['EXTRA PAID', '', 1], payment_received: ['PAID', 'p', 0], partner_joined: ['NEW PARTNER', 'p', 0],
@@ -8924,6 +8944,16 @@ $('pane-orders').addEventListener('click', (e) => {
   if (b.dataset.orOpen) { orOpen = b.dataset.orOpen; renderOrders(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute('data-or-close')) { orOpen = null; renderOrders(); return; }
   if (b.dataset.copy) { try { navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (_) {} return; }
+  if (b.dataset.orAsk) { const o = orRows.find((x) => x.session_id === b.dataset.orAsk); if (o) $('or-ask-' + b.dataset.orAsk).innerHTML = orAskSheet(o); return; }
+  if (b.dataset.orAskCancel) { const id = b.dataset.orAskCancel; $('or-ask-' + id).innerHTML = '<button type="button" class="primary od-ask" data-or-ask="' + clEsc(id) + '">Ask for details again</button>'; return; }
+  if (b.dataset.orAskGo) { const id = b.dataset.orAskGo, slot = $('or-ask-' + id), o = orRows.find((x) => x.session_id === id);
+    const missing = [...slot.querySelectorAll('input:checked')].map((x) => x.value);
+    if (!missing.length) { orLine('Pick at least one thing.'); return; }
+    b.disabled = true; b.textContent = 'Sending…';
+    orCall({ action: 'ask_details', session_id: id, missing }).then((r) => {
+      slot.innerHTML = '<div class="od-sent"><i>✓</i>' + (r.emailed === false ? 'Logged. No email on this order' : 'Sent to ' + clEsc((o && o.email) || 'their email')) + '</div>';
+      return loadOrders(false).then(() => { orOpen = id; renderOrders(); const s2 = $('or-ask-' + id); if (s2) s2.innerHTML = slot.innerHTML; });
+    }).catch((err) => { b.disabled = false; b.textContent = 'Send'; orLine(err.message); }); return; }
   if (b.dataset.orCheck) { const [item, task] = b.dataset.orCheck.split(':'); b.disabled = true;
     orCall({ action: 'check', session_id: b.dataset.id, item, task }).then(() => loadOrders(true)).then(() => orLine('Ticked: the organiser is told.')).catch((err) => { b.disabled = false; orLine(err.message); }); return; }
   if (b.dataset.or) orForm(b.dataset.id, b.dataset.or);
