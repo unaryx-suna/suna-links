@@ -8,7 +8,7 @@
  * actions don't come this way. No logging of bodies or tokens.
  */
 const FN = 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order';
-const ADMIN = new Set(['inbox_list', 'inbox_read', 'list', 'check', 'note', 'drafts_sent', 'delivered', 'set_ready_by', 'refund', 'welcome_list', 'welcome_posted']);
+const ADMIN = new Set(['inbox_list', 'inbox_read', 'list', 'check', 'ask_details', 'note', 'drafts_sent', 'delivered', 'set_ready_by', 'refund', 'welcome_list', 'welcome_posted']);
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');

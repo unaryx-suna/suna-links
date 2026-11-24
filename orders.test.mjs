@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
-const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext, orSort, orListCard, orDetail, ibRow, ibWaiting, ibAgo };')();
+const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext, orSort, orListCard, orDetail, ibRow, ibWaiting, ibAgo, orAskSheet };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 const O = { session_id: 'cs_test_abc123def456', country: 'MY', currency: 'myr', items: [{ key: 'cny_kit', qty: 1 }, { key: 'sponsored_post', qty: 2 }], step: 'details_in',
@@ -79,6 +79,17 @@ t('W-308 DEX-142 G: Inbox: kind chips, red edge for what needs us (unread), purp
   assert.equal(L.ibWaiting({ kind: 'extra_bought', read_at: null }), true); assert.equal(L.ibWaiting({ kind: 'partner_joined', read_at: null }), false);
   assert.match(html, /<div class="wrap" id="pane-inbox" hidden>/); assert.match(html, /orCall\(\{ action: 'inbox_read', id: it\.id \}\)/);
   assert.match(html, /const rows = ibRows\.filter\(\(x\) => \(showTest \|\| !x\.test\)/);
+});
+t('W-308 DEX-142 I2/I3: Ask for details again: Logo and Event details ticked, Delivery address not; Send to their email; Details in reads "Asked again HH:MM"; ask_details through the forwarder', () => {
+  const o = { ...O, step: 'paid', checklist: [], needs_you: { missing: ['Your logo'], asked_at: '2026-11-24T04:30:00Z' } };
+  const d = L.orDetail(o);
+  assert.match(d, /<span>Details in<\/span><em>Asked again 12:30<\/em>/);
+  assert.match(d, /data-or-ask="cs_test_abc123def456">Ask for details again<\/button>/);
+  const sh = L.orAskSheet(o);
+  assert.match(sh, /value="Your logo" checked><span>Logo<\/span>[\s\S]*value="Event details" checked>[\s\S]*value="Delivery address"><span>Delivery address<\/span>/);
+  assert.match(sh, /<div class="od-to"><span>aiman@kopiping\.example<\/span><small>Email<\/small><\/div>/);
+  assert.match(html, /orCall\(\{ action: 'ask_details', session_id: id, missing \}\)/);
+  assert.doesNotMatch(L.orDetail({ ...o, step: 'delivered' }), /data-or-ask=/);
 });
 const { createRequire } = await import('node:module');
 const PO = createRequire(import.meta.url)('./api/panel-order.js');
