@@ -147,6 +147,7 @@
   /* W-284: Orders (one-off packages, I-740) */
   .or-step { font-size: 12px; border-radius: 999px; padding: 3px 9px; background: rgba(140,123,234,.22); color: #cfc6ff; }
   .or-step.due { background: rgba(255,107,107,.18); color: var(--danger); }
+  .or-test { font-size: 11px; font-weight: 800; letter-spacing: .06em; border-radius: 6px; padding: 2px 7px; margin-left: 6px; background: rgba(255,255,255,.14); color: var(--muted, #b9b4c9); vertical-align: middle; }
   .or-note { width: 100%; min-height: 60px; }
   /* W-202: Claims */
   .cl-card { margin-bottom: 12px; }
@@ -1283,7 +1284,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v56';
+const BUILD = 'field-v57';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8708,7 +8709,9 @@ function orCard(o, today) {
     const items = (o.items || []).map((i) => clEsc(OR_ITEM[i.key] || i.key) + (i.qty > 1 ? ' × ' + i.qty : '')).join(', ');
     const next = orNext(o.step), cls = (a) => (a === next ? 'primary' : 'ghost');
     const row = (k, v) => v ? '<div class="cl-row"><span class="k">' + k + '</span><span>' + v + '</span></div>' : '';
-    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
+    // W-307 (12): a Stripe TEST order says so (shown, never filtered out: Brian's test order must be findable).
+    const test = o.livemode === false || /^cs_test_/.test(String(o.session_id || ''));
+    return '<div class="card cl-card"><div class="cl-top"><b>' + clEsc(o.business || o.email || 'Order') + (test ? '<span class="or-test">TEST</span>' : '') + '</b><span class="or-step' + (orDue(o, today) ? ' due' : '') + '">' + clEsc(OR_STEP[o.step] || o.step) + (orDue(o, today) ? ', due' : '') + '</span></div>'
       + row('Items', items)
       + row('Paid', cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.country ? ', ' + clEsc(o.country) : '') + (o.guarantee ? ', guarantee' : ''))
       + row('Ready by', clEsc(orDate(o.ready_by))) + row('Event', clEsc(orDate(o.event_date)))
