@@ -149,6 +149,40 @@
   .or-step.due { background: rgba(255,107,107,.18); color: var(--danger); }
   .or-test { font-size: 11px; font-weight: 800; letter-spacing: .06em; border-radius: 6px; padding: 2px 7px; margin-left: 6px; background: rgba(255,255,255,.14); color: var(--muted, #b9b4c9); vertical-align: middle; }
   .or-note { width: 100%; min-height: 60px; }
+  /* W-308 DEX-142 G/H/I (Brian 12:28): Inbox, Orders by ready-by, one order with its ticks */
+  .ib-chips { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .ib-chips button { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: #fff; border-radius: 999px; padding: 8px 14px; font: 700 13px/1 inherit; }
+  .ib-chips button[aria-pressed="true"] { background: #fff; color: #140F2E; border-color: #fff; }
+  .ib-chips em { font-style: normal; color: #FF7A6B; margin-left: 4px; }
+  .ib-row { position: relative; display: block; width: 100%; text-align: left; margin: 0 0 10px; padding: 14px 14px 14px 34px; border-radius: 18px; border: 1px solid rgba(255,255,255,.10); background: #1A1D1B; color: #fff; font: inherit; }
+  .ib-row.act { border-color: #FF7A6B; }
+  .ib-row .dot { position: absolute; left: 14px; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: #FF7A6B; transform: translateY(-50%); }
+  .ib-row .dot.p { background: #8C7BEA; } .ib-row.read .dot { background: rgba(255,255,255,.25); }
+  .ib-row .ago { position: absolute; right: 14px; top: 14px; color: rgba(255,255,255,.55); font-size: 12px; }
+  .ib-k { display: inline-block; margin: 0 6px 6px 0; padding: 4px 8px; border-radius: 999px; background: #fff; color: #140F2E; font: 800 10px/1 inherit; letter-spacing: .06em; }
+  .ib-k.p { background: #5A44C8; color: #fff; } .ib-k.t { background: rgba(255,255,255,.14); color: rgba(255,255,255,.75); }
+  .ib-row b { display: block; font-size: 15px; } .ib-row small { display: block; color: rgba(255,255,255,.6); font-size: 13px; margin-top: 2px; }
+  .ib-row.test { opacity: .6; }
+  .ib-test { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.10); font-weight: 700; }
+  .or2 { display: block; width: 100%; text-align: left; margin: 0 0 10px; padding: 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,.10); background: #1A1D1B; color: #fff; font: inherit; }
+  .or2.late { border-color: #FF7A6B; } .or2 b { display: block; font-size: 16px; } .or2 small { display: block; color: rgba(255,255,255,.6); font-size: 13px; }
+  .or2 .rb { display: block; margin-top: 8px; font-weight: 700; font-size: 14px; } .or2.late .rb { color: #FF7A6B; }
+  .or2 .chip { display: inline-block; margin-bottom: 8px; padding: 4px 8px; border-radius: 999px; background: #fff; color: #140F2E; font: 800 10px/1 inherit; letter-spacing: .06em; }
+  .or2 .chip.late { background: #FF7A6B; color: #140F2E; } .or2 .chip.p { background: #5A44C8; color: #fff; }
+  .od-org { margin: 0 0 12px; padding: 16px; border-radius: 22px; background: linear-gradient(160deg, #5A44C8 0%, #3A288C 100%); color: #fff; }
+  .od-org .ey { display: block; font: 800 11px/1 inherit; letter-spacing: .1em; opacity: .8; } .od-org h2 { margin: 6px 0 10px; font-size: 20px; }
+  .od-org .ln { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.14); font-size: 14px; }
+  .od-org .ln .k { width: 64px; font: 800 10px/1 inherit; letter-spacing: .08em; opacity: .75; } .od-org .ln span { flex: 1; word-break: break-word; }
+  .od-org .cp { border: 0; background: none; color: #fff; padding: 4px; font-size: 13px; text-decoration: underline; }
+  .od-ord { display: flex; justify-content: space-between; align-items: center; margin: 0 0 14px; padding: 14px; border-radius: 18px; background: #1A1D1B; border: 1px solid rgba(255,255,255,.10); }
+  .od-ord small { display: block; font: 800 10px/1 inherit; letter-spacing: .08em; color: rgba(255,255,255,.55); } .od-ord b { font-size: 17px; }
+  .od-h { margin: 16px 0 6px; color: rgba(255,255,255,.55); font: 800 11px/1 inherit; letter-spacing: .1em; }
+  .od-ck { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0; border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid rgba(255,255,255,.10); background: none; color: #fff; font: 700 15px/1.2 inherit; text-align: left; }
+  .od-ck i { flex: none; width: 24px; height: 24px; border-radius: 7px; border: 2px solid rgba(255,255,255,.35); display: grid; place-items: center; font-style: normal; font-size: 14px; }
+  .od-ck.done i { background: #fff; border-color: #fff; color: #140F2E; }
+  .od-ck span { flex: 1; } .od-ck em { font-style: normal; font-size: 12px; color: rgba(255,255,255,.6); } .od-ck em.need { color: #FF7A6B; font-weight: 700; } .od-ck em.late { color: #FF7A6B; }
+  .od-ck[disabled] { cursor: default; }
+  .od-back { border: 0; background: none; color: rgba(255,255,255,.75); padding: 0; margin: 0 0 10px; font: 600 14px/1 inherit; }
   /* W-202: Claims */
   .cl-card { margin-bottom: 12px; }
   .cl-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -948,6 +982,17 @@
     <div class="dk-only" id="dk-or"></div>
   </div>
 
+  <!-- ════ Inbox (W-308 DEX-142 G, Brian 12:28; server I-758 (b) oneoff-order inbox_list / inbox_read) ═══
+       Everything admin hears about, newest first: real only, test behind the switch. Opening a row marks it
+       read. Admin only. -->
+  <div class="wrap" id="pane-inbox" hidden>
+    <h1>Inbox</h1>
+    <div class="ib-chips" id="ib-chips"><button type="button" data-ib="all" aria-pressed="true">All</button><button type="button" data-ib="wait" aria-pressed="false">Waiting on us<em id="ib-wait"></em></button></div>
+    <div id="ib-list"></div>
+    <p class="sub" id="ib-note" hidden></p>
+    <label class="ib-test"><span>Show test payments</span><input type="checkbox" id="ib-test"></label>
+  </div>
+
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
        Tickets to events Suna hosts, paid by DuitNow or bank transfer with a
        reference. Brian checks his bank, finds the reference here and marks
@@ -1197,6 +1242,7 @@
     <button class="opt" id="menu-addplace" hidden>Add from Google Maps link<small>A tipped place, straight from Google Maps</small></button>
     <button class="opt" id="menu-review" hidden>Review places<small>Keep every place's details current, the most used first</small></button>
     <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
+    <button class="opt" id="menu-inbox" hidden>Inbox <span class="badge zero" id="inbox-count">0</span><small>Everything that happened, newest first</small></button>
     <button class="opt" id="menu-orders" hidden>Orders <span class="badge zero" id="orders-count">0</span><small>One-off packages: due today first</small></button>
     <button class="opt" id="menu-payments" hidden>Payments <span class="badge zero" id="payments-count">0</span><small>Tickets waiting to be marked paid</small></button>
     <button class="opt" id="menu-door" hidden>Door<small>Scan tickets in at a Suna event</small></button>
@@ -1284,7 +1330,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v57';
+const BUILD = 'field-v58';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5428,6 +5474,7 @@ function openMenu() {
   $('menu-review').hidden = !(profile && profile.is_admin);
   $('menu-payments').hidden = !(profile && profile.is_admin);
   $('menu-orders').hidden = !(profile && profile.is_admin);
+  $('menu-inbox').hidden = !(profile && profile.is_admin);
   $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
@@ -5453,12 +5500,13 @@ $('menu-claims').onclick = () => { closeMenu(); switchTab('claims'); };
 $('menu-review').onclick = () => { closeMenu(); switchTab('review'); };
 $('menu-payments').onclick = () => { closeMenu(); switchTab('payments'); };
 $('menu-orders').onclick = () => { closeMenu(); switchTab('orders'); };
+$('menu-inbox').onclick = () => { closeMenu(); switchTab('inbox'); };
 $('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders']) {
+  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
@@ -5480,6 +5528,7 @@ function switchTab(which) {
   if (which === 'review') openReview();
   if (which === 'payments') loadTickets('payments');
   if (which === 'orders') loadOrders(true);
+  if (which === 'inbox') loadInbox(true);
   if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
@@ -5493,10 +5542,10 @@ const HOME_GROUPS = [
               ['addplace', 'Add from Google Maps link', 'A tipped place, straight from Google Maps'], ['queue', 'Upload queue', 'Places still uploading from this phone']]],
   ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'],
                              ['creators', 'Creators', 'The purple Creator tag']]],
-  ['Money and tickets', [['orders', 'Orders', 'Packages to deliver'], ['payments', 'Payments', 'Tickets waiting for payment'], ['door', 'Door', 'Scan tickets at the event']]],
+  ['Money and tickets', [['inbox', 'Inbox', 'Everything that happened, newest first'], ['orders', 'Orders', 'Packages to deliver, late first'], ['payments', 'Payments', 'Tickets waiting for payment'], ['door', 'Door', 'Scan tickets at the event']]],
   ['Country screens', [['country', 'Welcome to (country)', 'Hero photo, foods to try, essential apps']]],
 ];
-const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count' };
+const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count' };
 /** W-288: the feature row is a toggle (the purple switch shows aria-pressed), no star glyph. */
 function featuredHTML() {
   return '<span>Feature on its Welcome to screen<small>Fills the Top Places block. Added after the place uploads.</small></span><i class="tog" aria-hidden="true"></i>';
@@ -8534,11 +8583,13 @@ async function loadProfile() {
   $('menu-review').hidden = !profile.is_admin;
   $('menu-payments').hidden = !profile.is_admin;
   $('menu-orders').hidden = !profile.is_admin;
+  $('menu-inbox').hidden = !profile.is_admin;
   $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
   if (profile.is_admin) loadTickets(null).catch(() => {});
   if (profile.is_admin) loadOrders(false).catch(() => {});   // W-284: the due-today badge
+  if (profile.is_admin) loadInbox(false).catch(() => {});    // W-308 G: the unread badge
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -8727,6 +8778,60 @@ function orCard(o, today) {
       + '<div class="cl-form"><label>Note (never shown to the buyer)</label><textarea class="or-note" id="or-n-' + id + '" maxlength="2000">' + clEsc(o.staff_note || '') + '</textarea>'
       + '<div class="cl-actions"><button type="button" class="ghost" data-or-go="note" data-id="' + id + '">Save note</button></div></div></div>';
 }
+// W-308 DEX-142 H/I (Brian 12:28): the list by ready-by, late first; a chip for where it is; one order's steps and
+// what we provide, each ticked to move it (a timeline step opens its own form; a task is a 'check').
+const OR_CHIP = { paid: ['NEEDS DETAILS', ''], details_in: ['DETAILS IN', ''], changes: ['CHANGES ASKED', ''], drafts_sent: ['DRAFTS SENT', 'p'], approved: ['APPROVED', 'p'],
+  new_date_offered: ['NEW DATE OFFERED', ''], delivered: ['DELIVERED', 'p'], closed: ['CLOSED', ''], refunded: ['REFUNDED', ''] };
+/** The first not-done task with a date (what's due next), or null. */
+function orNextTask(o) { return (o.checklist || []).find((c) => !c.done) || null; }
+function orLate(o) { return (o.checklist || []).some((c) => c.overdue) || orDue(o); }
+/** Late first, then by ready-by (soonest), then the newest; finished ones last. */
+function orSort(rows) {
+  const fin = (o) => ['delivered', 'closed', 'refunded'].includes(o.step) ? 1 : 0;
+  return rows.slice().sort((a, b) => fin(a) - fin(b) || (orLate(b) - orLate(a)) || String(a.ready_by || '9999').localeCompare(String(b.ready_by || '9999')) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+function orListCard(o) {
+  const late = orLate(o), nt = orNextTask(o), test = o.livemode === false || /^cs_test_/.test(String(o.session_id || ''));
+  const [w, k] = late ? ['LATE', 'late'] : (OR_CHIP[o.step] || [String(o.step || '').toUpperCase(), '']);
+  const items = (o.items || []).map((i) => OR_ITEM[i.key] || i.key).join(', ');
+  const line = late && nt && nt.due ? nt.label.replace(/\s*\(.*\)$/, '') + ' due ' + orDate(nt.due) : o.ready_by ? 'Ready ' + orDate(o.ready_by) : '';
+  return '<button type="button" class="or2' + (late ? ' late' : '') + '" data-or-open="' + clEsc(o.session_id) + '"><span class="chip ' + k + '">' + w + '</span>' + (test ? '<span class="or-test">TEST</span>' : '')
+    + '<b>' + clEsc(items || 'Order') + '</b><small>' + clEsc(o.business || o.email || '') + '</small>' + (line ? '<span class="rb">' + clEsc(line) + '</span>' : '') + '</button>';
+}
+const OR_TL = [['paid', 'Paid'], ['details_in', 'Details in'], ['drafts_sent', 'Drafts sent'], ['approved', 'Approved'], ['delivered', 'Delivered']];
+const OR_ORDER = ['paid', 'details_in', 'drafts_sent', 'changes', 'approved', 'delivered', 'closed'];
+function orStepDone(o, k) { const i = OR_ORDER.indexOf(o.step), j = OR_ORDER.indexOf(k); return i >= 0 && j >= 0 && (k === 'drafts_sent' ? i >= 2 : i >= j); }
+function orDetail(o) {
+  const id = clEsc(o.session_id), cur = OR_SYM[String(o.currency).toLowerCase()] || '';
+  const ln = (k, v) => v ? '<div class="ln"><span class="k">' + k + '</span><span>' + clEsc(v) + '</span><button type="button" class="cp" data-copy="' + clEsc(v) + '">Copy</button></div>' : '';
+  const items = (o.items || []).map((i) => OR_ITEM[i.key] || i.key).join(', ');
+  const ck = o.checklist || [], firstOpen = OR_TL.find(([k]) => !orStepDone(o, k));
+  const dueOf = (k) => { const c = ck.find((x) => x.step === k); return c && c.due ? orDate(c.due) : k === 'delivered' && o.ready_by ? orDate(o.ready_by) : ''; };
+  const steps = OR_TL.map(([k, label]) => { const done = orStepDone(o, k), act = k === 'drafts_sent' ? 'drafts_sent' : k === 'delivered' ? 'delivered' : '';
+    const note = done ? '' : firstOpen && firstOpen[0] === k && k === 'details_in' ? '<em class="need">Needed</em>' : '<em>' + clEsc(dueOf(k)) + '</em>';
+    return '<button type="button" class="od-ck' + (done ? ' done' : '') + '"' + (done || !act ? ' disabled' : ' data-or="' + act + '" data-id="' + id + '"') + '><i>' + (done ? '✓' : '') + '</i><span>' + label + '</span>' + note + '</button>'; }).join('');
+  const ours = ck.filter((c) => !c.step).map((c) => '<button type="button" class="od-ck' + (c.done ? ' done' : '') + '"' + (c.done ? ' disabled' : ' data-or-check="' + clEsc(c.item + ':' + c.task) + '" data-id="' + id + '"') + '><i>' + (c.done ? '✓' : '') + '</i><span>' + clEsc(c.label) + '</span><em class="' + (c.overdue ? 'late' : '') + '">' + clEsc(c.due ? orDate(c.due) : '') + '</em></button>').join('');
+  return '<button type="button" class="od-back" data-or-close>‹ Orders</button>'
+    + '<div class="od-org"><span class="ey">ORGANISER</span><h2>' + clEsc(o.business || 'Order') + '</h2>' + ln('EMAIL', o.email) + ln('PHONE', o.phone) + ln('POST TO', o.post_to || o.address) + '</div>'
+    + '<div class="od-ord"><div><small>ORDER</small><b>' + clEsc(items) + '</b></div><b>' + (o.ready_by ? 'Ready ' + clEsc(orDate(o.ready_by)) : '') + '</b></div>'
+    + '<p class="od-h">STEPS</p>' + steps + (ours ? '<p class="od-h">WE PROVIDE</p>' + ours : '')
+    + '<div id="or-form-' + id + '"></div>'
+    + '<div class="cl-row" style="margin-top:14px"><span class="k">Paid</span><span>' + cur + (Number(o.amount_total || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (o.guarantee ? ', guarantee' : '') + '</span></div>'
+    + '<div class="cl-actions"><button type="button" class="ghost" data-or="set_ready_by" data-id="' + id + '">New ready-by date</button>' + (o.step !== 'refunded' ? '<button type="button" class="danger" data-or="refund" data-id="' + id + '">Refund</button>' : '') + '</div>'
+    + '<div class="cl-form"><label>Note (never shown to the buyer)</label><textarea class="or-note" id="or-n-' + id + '" maxlength="2000">' + clEsc(o.staff_note || '') + '</textarea>'
+    + '<div class="cl-actions"><button type="button" class="ghost" data-or-go="note" data-id="' + id + '">Save note</button></div></div>';
+}
+// W-308 DEX-142 G: the Inbox. Kinds from oneoff-order's admin_alert (I-758 (b)).
+const IB_KIND = { event_listed: ['NEW LISTING', '', 1], extra_bought: ['EXTRA PAID', '', 1], payment_received: ['PAID', 'p', 0], partner_joined: ['NEW PARTNER', 'p', 0],
+  organiser_setup: ['NEW ORGANISER', 'p', 0], payment_failed: ['PAYMENT FAILED', '', 1], subscription_cancelled: ['CANCELLED', '', 1], order_waiting: ['WAITING ON US', '', 1] };
+function ibAgo(iso, now = Date.now()) { const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60000)); return m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
+function ibSub(it) { const d = it.detail || {}; return it.kind === 'event_listed' ? (d.venue_pinned === false ? 'No pin' : 'Check it') : [d.plan, d.items, d.amount, d.city].filter((x) => typeof x === 'string' || typeof x === 'number').join(', '); }
+function ibRow(it, now) {
+  const [w, k, act] = IB_KIND[it.kind] || [String(it.kind || '').replace(/_/g, ' ').toUpperCase(), '', 0];
+  return '<button type="button" class="ib-row' + (act && !it.read_at ? ' act' : '') + (it.read_at ? ' read' : '') + (it.test ? ' test' : '') + '" data-ib-id="' + clEsc(it.id) + '"><span class="dot' + (k === 'p' ? ' p' : '') + '"></span><span class="ago">' + ibAgo(it.created_at, now) + '</span>'
+    + (it.test ? '<span class="ib-k t">TEST</span>' : '') + '<span class="ib-k ' + k + '">' + w + '</span><b>' + clEsc(it.title || '') + '</b><small>' + clEsc(ibSub(it)) + '</small></button>';
+}
+function ibWaiting(it) { return !it.read_at && !!(IB_KIND[it.kind] || [])[2]; }
 /* ORDERS-LOGIC-END */
 let orRows = [];
 async function orCall(body) {
@@ -8750,14 +8855,41 @@ async function loadOrders(render) {
   $('orders-count').classList.toggle('zero', n === 0);
   if (render) renderOrders();
 }
+let orOpen = null;
 function renderOrders() {
   $('or-note').onclick = null; $('or-note').style.cursor = '';
   $('or-note').hidden = orRows.length > 0;
   $('or-note').textContent = 'No orders yet. A paid /deals or join-flow order shows here.';
-  // Due first (ready-by today or past, not finished), then the newest.
-  const rows = orRows.slice().sort((a, b) => (orDue(b) - orDue(a)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
-  $('or-list').innerHTML = rows.map((o) => orCard(o)).join('');
+  const o = orOpen && orRows.find((x) => x.session_id === orOpen);
+  // W-308 H/I: by ready-by, late first; one order opens its steps and what we provide.
+  $('or-list').innerHTML = o ? orDetail(o) : orSort(orRows).map((x) => orListCard(x)).join('');
 }
+let ibRows = [], ibFilter = 'all';
+async function loadInbox(render) {
+  let out;
+  try { out = await orCall({ action: 'inbox_list' }); }
+  catch (e) { if (render) { $('ib-list').innerHTML = ''; $('ib-note').hidden = false; listFail($('ib-note'), 'the inbox', () => loadInbox(true)); } return; }
+  ibRows = out.items || [];
+  const n = ibRows.filter((x) => !x.read_at && !x.test).length;
+  $('inbox-count').textContent = String(n); $('inbox-count').classList.toggle('zero', n === 0);
+  if (render) renderInbox();
+}
+function renderInbox() {
+  const showTest = $('ib-test').checked, now = Date.now();
+  const rows = ibRows.filter((x) => (showTest || !x.test) && (ibFilter === 'all' || ibWaiting(x)));
+  const w = ibRows.filter((x) => !x.test && ibWaiting(x)).length;
+  $('ib-wait').textContent = w ? ' ' + w : '';
+  $('ib-note').hidden = rows.length > 0; $('ib-note').textContent = ibFilter === 'all' ? 'Nothing yet. Listings, payments and new partners show here.' : 'Nothing waiting on us.';
+  $('ib-list').innerHTML = rows.map((x) => ibRow(x, now)).join('');
+}
+$('pane-inbox').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-ib]'); if (c) { ibFilter = c.dataset.ib; $('ib-chips').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === c))); renderInbox(); return; }
+  const r = e.target.closest('[data-ib-id]'); if (!r) return;
+  const it = ibRows.find((x) => x.id === r.dataset.ibId); if (!it || it.read_at) return;
+  it.read_at = new Date().toISOString(); renderInbox(); orCall({ action: 'inbox_read', id: it.id }).catch(() => {});
+  const n = ibRows.filter((x) => !x.read_at && !x.test).length; $('inbox-count').textContent = String(n); $('inbox-count').classList.toggle('zero', n === 0);
+});
+$('ib-test').addEventListener('change', renderInbox);
 function orForm(id, action) {
   const slot = $('or-form-' + id);
   const o = orRows.find((x) => x.session_id === id); if (!o || !slot) return;
@@ -8782,6 +8914,11 @@ async function orGo(id, action) {
 function orLine(text) { $('or-note').hidden = false; $('or-note').textContent = text; $('or-note').scrollIntoView({ block: 'nearest' }); }
 $('pane-orders').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.orOpen) { orOpen = b.dataset.orOpen; renderOrders(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute('data-or-close')) { orOpen = null; renderOrders(); return; }
+  if (b.dataset.copy) { try { navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (_) {} return; }
+  if (b.dataset.orCheck) { const [item, task] = b.dataset.orCheck.split(':'); b.disabled = true;
+    orCall({ action: 'check', session_id: b.dataset.id, item, task }).then(() => { orLine('Ticked: the organiser is told.'); return loadOrders(true); }).catch((err) => { b.disabled = false; orLine(err.message); }); return; }
   if (b.dataset.or) orForm(b.dataset.id, b.dataset.or);
   else if (b.dataset.orGo) orGo(b.dataset.id, b.dataset.orGo);
   else if (b.dataset.orCancel) { const s = $('or-form-' + b.dataset.orCancel); if (s) s.innerHTML = ''; }

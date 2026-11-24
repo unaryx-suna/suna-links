@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
-const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext };')();
+const L = new Function(cut('/* CLAIMS-LOGIC-START */', '/* CLAIMS-LOGIC-END */') + cut('/* ORDERS-LOGIC-START */', '/* ORDERS-LOGIC-END */') + '\nreturn { orDue, orCard, OR_STEP, orDate, orNext, orSort, orListCard, orDetail, ibRow, ibWaiting, ibAgo };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 const O = { session_id: 'cs_test_abc123def456', country: 'MY', currency: 'myr', items: [{ key: 'cny_kit', qty: 1 }, { key: 'sponsored_post', qty: 2 }], step: 'details_in',
@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v57';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v57'/);
+  assert.match(html, /const BUILD = 'field-v58';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v58'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/oneoff-order', \{[\s\S]{0,200}Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
@@ -50,6 +50,34 @@ t('W-307 (12): a Stripe test order carries a TEST tag (livemode false or a cs_te
   assert.match(L.orCard({ ...O, livemode: false }, '2027-02-07'), /<span class="or-test">TEST<\/span>/);
   assert.match(L.orCard({ ...O, session_id: 'cs_test_abc' }, '2027-02-07'), /or-test/);
   assert.doesNotMatch(L.orCard({ ...O, session_id: 'cs_live_abc', livemode: true }, '2027-02-07'), /or-test/);
+});
+t('W-308 DEX-142 H: late first, then by ready-by; a LATE chip and the overdue task\'s date; finished last', () => {
+  const late = { ...O, session_id: 'cs_a', ready_by: '2027-02-20', checklist: [{ item: 'cny_kit', task: 'drafts', label: 'Send design drafts', due: '2027-02-01', done: false, overdue: true, step: 'drafts_sent' }] };
+  const soon = { ...O, session_id: 'cs_b', ready_by: '2027-02-10', checklist: [] }, done = { ...O, session_id: 'cs_c', step: 'delivered', ready_by: '2027-01-01', checklist: [] };
+  assert.deepEqual(L.orSort([done, soon, late]).map((o) => o.session_id), ['cs_a', 'cs_b', 'cs_c']);
+  assert.match(L.orListCard(late), /class="or2 late"[\s\S]*<span class="chip late">LATE<\/span>[\s\S]*<span class="rb">Send design drafts due 1 Feb 2027<\/span>/);
+  assert.match(L.orListCard({ ...soon, step: 'paid' }), /<span class="chip ">NEEDS DETAILS<\/span>[\s\S]*<span class="rb">Ready 10 Feb 2027<\/span>/);
+});
+t('W-308 DEX-142 I: one order: organiser details to copy, Steps (Details in Needed at paid), timeline steps open their form, our tasks tick with check', () => {
+  const o = { ...O, step: 'paid', phone: '+60 12 345 6789', checklist: [{ item: 'cny_kit', task: 'brief', label: 'Confirm the brief', due: '2027-01-20', done: false, overdue: false },
+    { item: 'cny_kit', task: 'drafts', label: 'Send design drafts', due: '2027-01-26', done: false, overdue: false, step: 'drafts_sent' }] };
+  const h = L.orDetail(o);
+  assert.match(h, /<span class="ey">ORGANISER<\/span><h2>Kopi &lt;Ping&gt;<\/h2>[\s\S]*data-copy="aiman@kopiping.example"[\s\S]*data-copy="\+60 12 345 6789"/);
+  assert.match(h, /class="od-ck done" disabled><i>✓<\/i><span>Paid<\/span>/);
+  assert.match(h, /<span>Details in<\/span><em class="need">Needed<\/em>/);
+  assert.match(h, /data-or="drafts_sent" data-id="cs_test_abc123def456"><i><\/i><span>Drafts sent<\/span><em>26 Jan 2027<\/em>/);
+  assert.match(h, /<p class="od-h">WE PROVIDE<\/p><button type="button" class="od-ck" data-or-check="cny_kit:brief"/);
+  assert.match(html, /orCall\(\{ action: 'check', session_id: b\.dataset\.id, item, task \}\)/);
+});
+t('W-308 DEX-142 G: Inbox: kind chips, red edge for what needs us (unread), purple for news, TEST tagged and hidden behind the switch, tap marks read', () => {
+  const now = Date.parse('2026-11-24T05:00:00Z');
+  const a = L.ibRow({ id: 'x', kind: 'event_listed', title: 'QA <Night>', test: false, detail: { venue_pinned: false }, created_at: '2026-11-24T04:51:00Z', read_at: null }, now);
+  assert.match(a, /class="ib-row act"[\s\S]*<span class="ago">9m<\/span><span class="ib-k ">NEW LISTING<\/span><b>QA &lt;Night&gt;<\/b><small>No pin<\/small>/);
+  const p = L.ibRow({ id: 'y', kind: 'payment_received', title: 'qa', test: true, detail: {}, created_at: '2026-11-24T04:00:00Z', read_at: null }, now);
+  assert.match(p, /class="ib-row test"[\s\S]*<span class="ib-k t">TEST<\/span><span class="ib-k p">PAID<\/span>/);
+  assert.equal(L.ibWaiting({ kind: 'extra_bought', read_at: null }), true); assert.equal(L.ibWaiting({ kind: 'partner_joined', read_at: null }), false);
+  assert.match(html, /<div class="wrap" id="pane-inbox" hidden>/); assert.match(html, /orCall\(\{ action: 'inbox_read', id: it\.id \}\)/);
+  assert.match(html, /const rows = ibRows\.filter\(\(x\) => \(showTest \|\| !x\.test\)/);
 });
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

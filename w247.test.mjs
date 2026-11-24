@@ -59,8 +59,8 @@ await t('Panel: the box is admin-only, on a saved place, and calls only assign_s
   assert.match(html, /const show = !!\(profile && profile\.is_admin && cap && cap\.editing && cap\.onServer && cap\.id\);/);
   assert.match(html, /db\.rpc\('assign_sticker_checkpoint', \{\s*p_code: code, p_landmark_id: cap\.id, p_label:/);
   assert.equal((html.match(/renderSticker\(\);/g) || []).length, 3, 'on open (twice) and on reset');
-  assert.match(html, /const BUILD = 'field-v57';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v57'/);
+  assert.match(html, /const BUILD = 'field-v58';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v58'/);
 });
 await t('Panel: sticker codes as typed', () => {
   assert.equal(L.stickerCode(' k7m-2pq '), 'K7M2PQ');
