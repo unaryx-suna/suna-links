@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v61';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v61'/);
+  assert.match(html, /const BUILD = 'field-v62';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v62'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   // W-308 Role A: through the Panel's own origin (oneoff-order's CORS answers unaryx.com only); the token goes as before.
