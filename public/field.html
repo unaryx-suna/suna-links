@@ -1336,7 +1336,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v60';
+const BUILD = 'field-v61';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8915,8 +8915,8 @@ async function orGo(id, action) {
   if (action === 'set_ready_by') { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return orLine('Pick the date.'); body.date = v; }
   if (action === 'note') body.text = $('or-n-' + id).value;
   try { await orCall(body); } catch (e) { orLine(e.message); return; }
+  await loadOrders(true);   // W-308 Role A: reload first, then say what happened (the reload hid the line)
   orLine({ drafts_sent: 'Drafts sent: the buyer is emailed the link.', delivered: 'Marked delivered.', set_ready_by: 'New date set: the buyer is told.', refund: 'Refunded through Stripe.', note: 'Note saved.' }[action]);
-  await loadOrders(true);
 }
 function orLine(text) { $('or-note').hidden = false; $('or-note').textContent = text; $('or-note').scrollIntoView({ block: 'nearest' }); }
 $('pane-orders').addEventListener('click', (e) => {
@@ -8925,7 +8925,7 @@ $('pane-orders').addEventListener('click', (e) => {
   if (b.hasAttribute('data-or-close')) { orOpen = null; renderOrders(); return; }
   if (b.dataset.copy) { try { navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (_) {} return; }
   if (b.dataset.orCheck) { const [item, task] = b.dataset.orCheck.split(':'); b.disabled = true;
-    orCall({ action: 'check', session_id: b.dataset.id, item, task }).then(() => { orLine('Ticked: the organiser is told.'); return loadOrders(true); }).catch((err) => { b.disabled = false; orLine(err.message); }); return; }
+    orCall({ action: 'check', session_id: b.dataset.id, item, task }).then(() => loadOrders(true)).then(() => orLine('Ticked: the organiser is told.')).catch((err) => { b.disabled = false; orLine(err.message); }); return; }
   if (b.dataset.or) orForm(b.dataset.id, b.dataset.or);
   else if (b.dataset.orGo) orGo(b.dataset.id, b.dataset.orGo);
   else if (b.dataset.orCancel) { const s = $('or-form-' + b.dataset.orCancel); if (s) s.innerHTML = ''; }
