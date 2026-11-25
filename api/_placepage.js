@@ -135,6 +135,14 @@ export function sized(url, w = 640) {
   const i = clean.lastIndexOf('/');
   return `${clean.slice(0, i)}/_w/${w}${clean.slice(i)}`;
 }
+// W-314 OD-web-Q9-1: the hero from the resized copies (320/640/1280, image-variants-sweep) with width and height,
+// so a phone fetches ~40 KB, not the original; the original if a copy is missing; any other host as it is.
+export function heroImg(url, alt = '') {
+  if (!url) return '';
+  const stored = /\/storage\/v1\/object\/public\//.test(url);
+  const set = stored ? ` srcset="${[320, 640, 1280].map((w) => `${esc(sized(url, w))} ${w}w`).join(', ')}" sizes="(min-width: 560px) 560px, 100vw"` : '';
+  return `<img class="hi" src="${esc(stored ? sized(url, 640) : url)}"${set} width="640" height="440" data-full="${esc(url)}" onerror="this.onerror=null;this.removeAttribute('srcset');this.src=this.dataset.full" alt="${esc(alt)}" fetchpriority="high" decoding="async">`;
+}
 const img = (url, cls, alt = '', w = 640) => url
   ? `<img class="${cls}" src="${esc(sized(url, w))}" data-full="${esc(url)}" onerror="this.onerror=null;this.src=this.dataset.full" alt="${esc(alt)}" loading="lazy" decoding="async">`
   : '';
@@ -298,7 +306,7 @@ export function placeBody(d) {
   ].filter(Boolean).join('');
   return `${topBar(d.store)}
 <main>
-<div class="hero">${d.cover ? `<img class="hi" src="${esc(d.cover)}" alt="${esc(p.name)}" fetchpriority="high">` : ''}<div class="in">
+<div class="hero">${heroImg(d.cover, p.name)}<div class="in">
 ${kicker ? `<p class="kick">${esc(kicker)}</p>` : ''}<h1>${esc(p.name)}</h1>
 ${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>
 <div class="pad">
