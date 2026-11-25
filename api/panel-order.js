@@ -7,7 +7,7 @@
  * came, and oneoff-order checks is_admin itself. Only the Panel's admin actions pass; the order link's buyer
  * actions don't come this way. No logging of bodies or tokens.
  */
-const FN = 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order';
+const FN = 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order?forceFunctionRegion=ap-southeast-2';
 const ADMIN = new Set(['inbox_list', 'inbox_read', 'list', 'check', 'ask_details', 'note', 'drafts_sent', 'delivered', 'set_ready_by', 'refund', 'welcome_list', 'welcome_posted']);
 
 module.exports = async function handler(req, res) {

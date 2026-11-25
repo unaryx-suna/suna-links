@@ -45,7 +45,7 @@ const USED = { error: "today's 20 adds are used", claim: { ok: false, reason: 'd
 await t('the request: POST to admin-add-place with the session token and the publishable key, nothing else', async () => {
   const seen = [];
   const res = await amCall(fakeFetch(200, DRY, seen), BASE, KEY, 'jwt-abc', amBody(' https://maps.app.goo.gl/x ', {}, true));
-  assert.equal(seen[0].url, BASE + '/functions/v1/admin-add-place');
+  assert.equal(seen[0].url, BASE + '/functions/v1/admin-add-place?forceFunctionRegion=ap-southeast-2');
   assert.equal(seen[0].init.method, 'POST');
   assert.equal(seen[0].init.headers.Authorization, 'Bearer jwt-abc');
   assert.equal(seen[0].init.headers.apikey, KEY);
@@ -163,7 +163,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox'\]\) \{/); // W-202 added Claims after it
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
-  assert.equal(build, 'field-v65');
+  assert.equal(build, 'field-v66');
 });
 await t('the copy says Google Maps, never bare "Maps" (Brian, 15 Oct: "Maps" reads as Apple Maps)', () => {
   assert.match(html, /<h1 class=\"am-h\">Add from Google Maps link <span/);
@@ -271,7 +271,7 @@ await t('W-91 over 100 km: blocked as before; non-admins keep the 100 km rule', 
 await t('W-91 BUILD and the worker move together', () => {
   const sw = readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8');
   assert.equal(html.match(/const BUILD = '([^']+)'/)[1], sw.match(/const CACHE_VERSION = '([^']+)'/)[1]);
-  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v65');
+  assert.equal(html.match(/const BUILD = '([^']+)'/)[1], 'field-v66');
 });
 
 // ── W-96: the update tap, and what the name box may suggest ──
