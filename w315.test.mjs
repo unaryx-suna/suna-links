@@ -45,11 +45,15 @@ t('(3) the sidebar for an admin: Waiting on you, then Reports (Places, Events, O
   assert.match(html, /const SIDE_GROUPS = \[\n  \['Reports', \[\['review', 'Places'\], \['events', 'Events'\], \['orgs', 'Organisers and partners'\], \['orders', 'Money and tickets'\], \['feedback', 'Feedback'\]\]\],\n  \['Tools', \[\['capture', 'Add a place'\], \['addplace', 'Google Maps link'\], \['queue', 'Upload queue'\], \['door', 'Door'\]\]\],/);
   assert.match(html, /if \(DK\.matches && which === 'home' && profile && profile\.is_admin\) \{ switchTab\('wait'\); return; \}/);
 });
-t('(3) Organisers and partners: four tiles, All / Listed / Partner / Founding with counts, a search, the table; a row opens their page', () => {
+t('(3) Organisers and partners: four tiles, All / Listed / Partner / Founding with counts, a search, the table; a row opens the organiser beside it', () => {
   assert.match(html, /<div class="wrap" id="pane-orgs" hidden>/);
   assert.match(html, /\[\[ogRows\.length, 'Organisers'\], \[partners\.length, 'Partners'\], \[live, 'Events live'\], \[renewing, 'Renewing this month'\]\]/);
   assert.match(html, /<th>Organiser<\/th><th class="dk">City<\/th><th>Plan<\/th><th>Live<\/th><th class="dk">Renews<\/th><th class="dk">Joined<\/th>/);
-  assert.match(html, /<tr data-href="https:\/\/unaryx\.com\/events\/by\/' \+ escapeHtml\(o\.slug\)/);
+  assert.match(html, /<tr data-og-id="' \+ escapeHtml\(o\.id\)/);
+  // 4-partners-organisers.png: the organiser opens beside the table; what needs the server says so, and its buttons are off.
+  assert.match(html, /'<h4 class="og-sec">Plan and billing<\/h4>[\s\S]*'<h4 class="og-sec">Events<\/h4>[\s\S]*'<h4 class="og-sec">Team links<\/h4>[\s\S]*'<h4 class="og-sec">Welcome pack<\/h4>/);
+  assert.match(html, /<button type="button" class="wt-btn" disabled title="Needs the server read">Resend their link<\/button><button type="button" class="wt-btn og-cancel" disabled title="Needs the server read">Cancel plan<\/button>/);
+  assert.match(html, /const OG_EV = \{ approved: 'Live', pending: 'In review', rejected: 'Not listed', cancelled: 'Cancelled' \};/);
 });
 t('(3) Feedback: To sort / All, newest first', () => {
   assert.match(html, /<div class="wrap" id="pane-feedback" hidden>/);

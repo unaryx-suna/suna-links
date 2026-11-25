@@ -578,7 +578,15 @@
   .rp-table table { width: 100%; border-collapse: collapse; font-size: 15px; }
   .rp-table th { text-align: left; padding: 12px 14px; font: 800 11.5px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
   .rp-table td { padding: 12px 14px; border-top: 1px solid var(--line); }
-  .rp-table tr[data-href] { cursor: pointer; } .rp-table tr[data-href]:hover td { background: rgba(255,255,255,.04); }
+  .rp-table tr[data-href], .rp-table tr[data-og-id] { cursor: pointer; } .rp-table tr[data-og-id]:hover td, .rp-table tr.on td { background: rgba(255,255,255,.04); } .rp-table tr.on td:first-child { box-shadow: inset 3px 0 0 #B3A6FF; }
+  .og-h { margin: 0; font: 800 26px/1.15 Urbanist, system-ui, sans-serif; }
+  .og-sec { margin: 18px 0 8px; font: 800 12px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+  .wt-plan dd.dim { color: var(--muted); }
+  .og-ev { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); } .og-ev:first-child { border-top: 0; }
+  .og-ev b { display: block; } .og-ev small { color: var(--muted); }
+  .og-st { flex: none; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; } .og-st.live { background: rgba(90,200,120,.16); color: #7ee2a0; } .og-st.rev { background: rgba(246,203,148,.16); color: #f6cb94; }
+  .og-cancel { color: #FF7A6B; border-color: rgba(255,122,107,.4); }
+  @media (max-width: 899px) { #og-cols.open .wt-list, #pane-orgs:has(#og-cols.open) .rp-tiles, #pane-orgs:has(#og-cols.open) .rp-bar { display: none; } }
   .rp-pill { display: inline-block; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
   .rp-pill.p { background: rgba(179,166,255,.18); color: #B3A6FF; }
   @media (max-width: 899px) { .rp-table th.dk, .rp-table td.dk { display: none; } }
@@ -1105,7 +1113,7 @@
     <p class="wt-sub">To look things up. Anything that needs you is in Waiting on you.</p>
     <div class="rp-tiles" id="og-tiles"></div>
     <div class="rp-bar"><div class="rp-chips" id="og-chips"></div><input type="search" id="og-q" placeholder="Search organisers" aria-label="Search organisers"></div>
-    <div class="rp-table" id="og-table"></div>
+    <div class="wt-cols" id="og-cols"><div class="wt-list"><div class="rp-table" id="og-table"></div></div><div class="wt-detail" id="og-detail" hidden></div></div>
     <p class="sub" id="og-note" hidden></p>
   </div>
   <div class="wrap" id="pane-feedback" hidden>
@@ -9295,13 +9303,45 @@ function renderOrgs() {
   const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
   const planPill = (o) => o.is_listed === false ? '<span class="rp-pill">Not listed</span>' : '<span class="rp-pill' + (ogPlan(o) !== 'listed' ? ' p' : '') + '">' + escapeHtml(ogPlan(o).replace(/^./, (c) => c.toUpperCase())) + '</span>';
   $('og-table').innerHTML = rows.length ? '<table><thead><tr><th>Organiser</th><th class="dk">City</th><th>Plan</th><th>Live</th><th class="dk">Renews</th><th class="dk">Joined</th></tr></thead><tbody>'
-    + rows.map((o) => '<tr data-href="https://unaryx.com/events/by/' + escapeHtml(o.slug) + '"><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || 0)
+    + rows.map((o) => '<tr data-og-id="' + escapeHtml(o.id) + '"' + (ogSel === o.id ? ' class="on"' : '') + '><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || 0)
       + '</td><td class="dk">' + (o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</td><td class="dk">' + escapeHtml(day(o.created_at)) + '</td></tr>').join('') + '</tbody></table>'
     : '<p class="sub" style="padding:16px;margin:0">No organisers match.</p>';
 }
 $('og-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-og]'); if (b) { ogFilter = b.dataset.og; renderOrgs(); } });
 $('og-q').addEventListener('input', () => renderOrgs());
-$('og-table').addEventListener('click', (e) => { const r = e.target.closest('tr[data-href]'); if (r) window.open(r.dataset.href, '_blank', 'noopener'); });
+$('og-table').addEventListener('click', (e) => { const r = e.target.closest('tr[data-og-id]'); if (r) { ogSel = r.dataset.ogId; renderOrgs(); ogDetail(); if (!DK.matches) window.scrollTo(0, 0); } });
+/* W-315 (4-partners-organisers.png): one organiser beside the table (phone: full screen). What the Panel can read
+   now: plan, renewal, their events with status, the public page. Billing (setup fee, Open in Stripe), team links,
+   the welcome pack, Resend their link and Cancel plan need the server read (organiser_* / partner_* tables are
+   service-role only): shown, marked, disabled. */
+let ogSel = null;
+const OG_EV = { approved: 'Live', pending: 'In review', rejected: 'Not listed', cancelled: 'Cancelled' };
+async function ogDetail() {
+  const box = $('og-detail'), o = ogRows.find((x) => x.id === ogSel);
+  $('og-cols').classList.toggle('open', Boolean(o) && !DK.matches);
+  if (!o) { box.hidden = true; return; }
+  const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const row = (k, v, dim) => '<div><dt>' + k + '</dt><dd' + (dim ? ' class="dim"' : '') + '>' + v + '</dd></div>';
+  const server = 'Needs the server read';
+  box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-og-back>‹ Partners and organisers</button></div>'
+    + '<h2 class="og-h">' + escapeHtml(o.name) + '</h2><p class="sub" style="margin:0 0 14px">' + escapeHtml([ogPlan(o).replace(/^./, (c) => c.toUpperCase()), o.city].filter(Boolean).join(', ')) + '</p>'
+    + '<h4 class="og-sec">Plan and billing</h4><dl class="wt-plan">' + row('Plan', escapeHtml(o.is_listed === false ? 'Not listed' : ogPlan(o).replace(/^./, (c) => c.toUpperCase())))
+    + row('Renews', o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + row('Setup fee', server, true) + row('Stripe', server, true) + '</dl>'
+    + '<h4 class="og-sec">Events</h4><div class="wt-plan" id="og-events"><p style="padding:12px 14px;margin:0" class="sub">Loading…</p></div>'
+    + '<h4 class="og-sec">Team links</h4><dl class="wt-plan">' + row('Links', server, true) + '</dl>'
+    + '<h4 class="og-sec">Welcome pack</h4><dl class="wt-plan">' + row('Post to', server, true) + '</dl>'
+    + '<div class="wt-foot"><a class="wt-btn" href="https://unaryx.com/events/by/' + escapeHtml(o.slug) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Public page ↗</a>'
+    + '<button type="button" class="wt-btn" disabled title="Needs the server read">Resend their link</button><button type="button" class="wt-btn og-cancel" disabled title="Needs the server read">Cancel plan</button></div>';
+  box.hidden = false;
+  const { data, error } = await db.from('world_events').select('id,name,start_time,end_time,status').eq('organiser_id', o.id).order('start_time', { ascending: false }).limit(50);
+  const ev = $('og-events'); if (!ev || ogSel !== o.id) return;
+  if (error) { ev.innerHTML = '<p style="padding:12px 14px;margin:0" class="sub">Couldn\'t load their events.</p>'; return; }
+  const now = Date.now();
+  ev.innerHTML = (data || []).length ? data.map((e) => { const st = Date.parse(e.end_time) < now && e.status === 'approved' ? 'Ended' : (OG_EV[e.status] || e.status);
+    return '<div class="og-ev"><span><b>' + escapeHtml(e.name) + '</b><small>' + escapeHtml(day(e.start_time)) + '</small></span><span class="og-st ' + (st === 'Live' ? 'live' : st === 'In review' ? 'rev' : '') + '">' + escapeHtml(st) + '</span></div>'; }).join('')
+    : '<p style="padding:12px 14px;margin:0" class="sub">No events yet.</p>';
+}
+$('og-detail').addEventListener('click', (e) => { if (e.target.closest('[data-og-back]')) { ogSel = null; renderOrgs(); ogDetail(); } });
 
 let fbkRows = [], fbkFilter = 'open';
 async function loadFeedback() {
