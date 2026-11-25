@@ -552,6 +552,25 @@
   .wt-toast button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #140F2E; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
   @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } }
   @media (min-width: 900px) { .wt-nofm .wt-back { display: none; } }
+  /* W-315 (3): report views (tiles + a table). */
+  .rp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+  @media (min-width: 900px) { .rp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .rp-tile { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.03); }
+  .rp-tile b { display: block; font: 800 28px/1.1 Urbanist, system-ui, sans-serif; } .rp-tile span { color: var(--muted); font-size: 14px; }
+  .rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .rp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
+  .rp-chips button { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: none; color: #fff; font: 600 14px/1 inherit; cursor: pointer; }
+  .rp-chips button[aria-pressed="true"] { background: #5A44C8; border-color: #5A44C8; }
+  .rp-chips button em { font-style: normal; color: var(--muted); margin-left: 4px; } .rp-chips button[aria-pressed="true"] em { color: #fff; }
+  .rp-bar input[type=search] { min-height: 44px; flex: 0 1 260px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; }
+  .rp-table { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .rp-table table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .rp-table th { text-align: left; padding: 12px 14px; font: 800 11.5px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+  .rp-table td { padding: 12px 14px; border-top: 1px solid var(--line); }
+  .rp-table tr[data-href] { cursor: pointer; } .rp-table tr[data-href]:hover td { background: rgba(255,255,255,.04); }
+  .rp-pill { display: inline-block; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
+  .rp-pill.p { background: rgba(179,166,255,.18); color: #B3A6FF; }
+  @media (max-width: 899px) { .rp-table th.dk, .rp-table td.dk { display: none; } }
   /* ════ W-288 DESKTOP (Ops - Design 09:0x, claude/design/panel-v2/desktop/): above 900 px a 260 px sidebar on every
      tool, a desktop Home, tables for Payments and Orders, Finish these beside its editor, Add a place in two
      columns. Under 900 px nothing here applies: the phone Panel is unchanged. */
@@ -1068,6 +1087,23 @@
     </div>
   </div>
 
+  <!-- ════ W-315 (3): report views, to look things up (anything that needs Brian is in Waiting on you) ════ -->
+  <div class="wrap" id="pane-orgs" hidden>
+    <h1>Organisers and partners</h1>
+    <p class="wt-sub">To look things up. Anything that needs you is in Waiting on you.</p>
+    <div class="rp-tiles" id="og-tiles"></div>
+    <div class="rp-bar"><div class="rp-chips" id="og-chips"></div><input type="search" id="og-q" placeholder="Search organisers" aria-label="Search organisers"></div>
+    <div class="rp-table" id="og-table"></div>
+    <p class="sub" id="og-note" hidden></p>
+  </div>
+  <div class="wrap" id="pane-feedback" hidden>
+    <h1>Feedback</h1>
+    <p class="wt-sub">What people sent from the app, newest first.</p>
+    <div class="rp-bar"><div class="rp-chips" id="fbk-chips"></div></div>
+    <div class="rp-table" id="fbk-table"></div>
+    <p class="sub" id="fbk-note" hidden></p>
+  </div>
+
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
        Tickets to events Suna hosts, paid by DuitNow or bank transfer with a
        reference. Brian checks his bank, finds the reference here and marks
@@ -1318,6 +1354,8 @@
     <button class="opt" id="menu-review" hidden>Review places<small>Keep every place's details current, the most used first</small></button>
     <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
     <button class="opt" id="menu-wait" hidden>Waiting on you <span class="badge zero" id="wait-count">0</span><small>Only what needs your call</small></button>
+    <button class="opt" id="menu-orgs" hidden>Organisers and partners<small>Every organiser, their plan and live events</small></button>
+    <button class="opt" id="menu-feedback" hidden>Feedback<small>What people sent from the app</small></button>
     <button class="opt" id="menu-inbox" hidden>Inbox <span class="badge zero" id="inbox-count">0</span><small>Everything that happened, newest first</small></button>
     <button class="opt" id="menu-orders" hidden>Orders <span class="badge zero" id="orders-count">0</span><small>One-off packages: due today first</small></button>
     <button class="opt" id="menu-payments" hidden>Payments <span class="badge zero" id="payments-count">0</span><small>Tickets waiting to be marked paid</small></button>
@@ -5552,6 +5590,8 @@ function openMenu() {
   $('menu-orders').hidden = !(profile && profile.is_admin);
   $('menu-inbox').hidden = !(profile && profile.is_admin);
   $('menu-wait').hidden = !(profile && profile.is_admin);
+  $('menu-orgs').hidden = !(profile && profile.is_admin);
+  $('menu-feedback').hidden = !(profile && profile.is_admin);
   $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
@@ -5579,12 +5619,14 @@ $('menu-payments').onclick = () => { closeMenu(); switchTab('payments'); };
 $('menu-orders').onclick = () => { closeMenu(); switchTab('orders'); };
 $('menu-inbox').onclick = () => { closeMenu(); switchTab('inbox'); };
 $('menu-wait').onclick = () => { closeMenu(); switchTab('wait'); };
+$('menu-orgs').onclick = () => { closeMenu(); switchTab('orgs'); };
+$('menu-feedback').onclick = () => { closeMenu(); switchTab('feedback'); };
 $('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait']) {
+  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
@@ -5608,6 +5650,8 @@ function switchTab(which) {
   if (which === 'orders') loadOrders(true);
   if (which === 'inbox') loadInbox(true);
   if (which === 'wait') loadWait(true); else wtFlush();
+  if (which === 'orgs') loadOrgs();
+  if (which === 'feedback') loadFeedback();
   if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
@@ -5620,10 +5664,14 @@ const HOME_GROUPS = [
   ['Waiting on you', [['wait', 'Waiting on you', 'Only what needs your call']]],   // W-315: first
   ['Places', [['finish', 'Finish these', 'Missing a photo, hours or a description'], ['review', 'Review places', 'Keep details current, the most used first'],
               ['addplace', 'Add from Google Maps link', 'A tipped place, straight from Google Maps'], ['queue', 'Upload queue', 'Places still uploading from this phone']]],
-  ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'],
+  ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'], ['orgs', 'Organisers and partners', 'Every organiser, their plan and live events'], ['feedback', 'Feedback', 'What people sent from the app'],
                              ['creators', 'Creators', 'The purple Creator tag']]],
   ['Money and tickets', [['inbox', 'Inbox', 'Everything that happened, newest first'], ['orders', 'Orders', 'Packages to deliver, late first'], ['payments', 'Payments', 'Tickets waiting for payment'], ['door', 'Door', 'Scan tickets at the event']]],
   ['Country screens', [['country', 'Welcome to (country)', 'Hero photo, foods to try, essential apps']]],
+];
+const SIDE_GROUPS = [
+  ['Reports', [['review', 'Places'], ['events', 'Events'], ['orgs', 'Organisers and partners'], ['orders', 'Money and tickets'], ['feedback', 'Feedback']]],
+  ['Tools', [['capture', 'Add a place'], ['addplace', 'Google Maps link'], ['queue', 'Upload queue'], ['door', 'Door']]],
 ];
 const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count', wait: 'wait-count' };
 /** W-288: the feature row is a toggle (the purple switch shows aria-pressed), no star glyph. */
@@ -8665,6 +8713,8 @@ async function loadProfile() {
   $('menu-orders').hidden = !profile.is_admin;
   $('menu-inbox').hidden = !profile.is_admin;
   $('menu-wait').hidden = !profile.is_admin;
+  $('menu-orgs').hidden = !profile.is_admin;
+  $('menu-feedback').hidden = !profile.is_admin;
   $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
@@ -9119,6 +9169,64 @@ $('pane-wait').addEventListener('click', (ev) => {
   const row = ev.target.closest('.wt-row[data-wt]'); if (row) { wtSel = row.dataset.wt; wtDetail(); if (!DK.matches) window.scrollTo(0, 0); }
 });
 $('pane-wait').addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.wt-row[data-wt]')) { ev.preventDefault(); ev.target.click(); } });
+/* ── W-315 (3): report views. Organisers and partners (tiles + table; a row opens their page) and Feedback. ── */
+let ogRows = [], ogLive = new Map(), ogFilter = 'all';
+const ogPlan = (o) => (o.plan === 'partner' && o.plan_until && Date.parse(o.plan_until) <= Date.parse('2027-01-31T23:59:59+08:00') ? 'founding' : o.plan || 'listed');
+async function loadOrgs() {
+  const note = $('og-note');
+  try {
+    const [o, ev] = await Promise.all([
+      db.from('organisers').select('id,slug,name,city,plan,plan_until,is_listed,created_at').order('created_at', { ascending: false }).limit(500),
+      db.from('world_events').select('organiser_id').eq('status', 'approved').gte('end_time', new Date().toISOString()).not('organiser_id', 'is', null).limit(2000),
+    ]);
+    if (o.error) throw new Error(o.error.message); if (ev.error) throw new Error(ev.error.message);
+    ogRows = o.data || []; ogLive = new Map();
+    for (const r of ev.data || []) ogLive.set(r.organiser_id, (ogLive.get(r.organiser_id) || 0) + 1);
+    note.hidden = true; renderOrgs();
+  } catch (err) { note.hidden = false; listFail(note, 'organisers', () => loadOrgs()); }
+}
+function renderOrgs() {
+  const now = Date.now(), monthEnd = new Date(); monthEnd.setMonth(monthEnd.getMonth() + 1, 1); monthEnd.setHours(0, 0, 0, 0);
+  const partners = ogRows.filter((o) => o.plan === 'partner');
+  const live = [...ogLive.values()].reduce((a, b) => a + b, 0);
+  const renewing = partners.filter((o) => o.plan_until && Date.parse(o.plan_until) >= now && Date.parse(o.plan_until) < monthEnd.getTime()).length;
+  $('og-tiles').innerHTML = [[ogRows.length, 'Organisers'], [partners.length, 'Partners'], [live, 'Events live'], [renewing, 'Renewing this month']]
+    .map(([n, l]) => '<div class="rp-tile"><b>' + n + '</b><span>' + l + '</span></div>').join('');
+  const counts = { all: ogRows.length, listed: ogRows.filter((o) => ogPlan(o) === 'listed').length, partner: ogRows.filter((o) => ogPlan(o) === 'partner').length, founding: ogRows.filter((o) => ogPlan(o) === 'founding').length };
+  $('og-chips').innerHTML = [['all', 'All'], ['listed', 'Listed'], ['partner', 'Partner'], ['founding', 'Founding']]
+    .map(([k, l]) => '<button type="button" data-og="' + k + '" aria-pressed="' + (ogFilter === k) + '">' + l + '<em>' + counts[k] + '</em></button>').join('');
+  const q = $('og-q').value.trim().toLowerCase();
+  const rows = ogRows.filter((o) => (ogFilter === 'all' || ogPlan(o) === ogFilter) && (!q || String(o.name).toLowerCase().includes(q)));
+  const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const planPill = (o) => o.is_listed === false ? '<span class="rp-pill">Not listed</span>' : '<span class="rp-pill' + (ogPlan(o) !== 'listed' ? ' p' : '') + '">' + escapeHtml(ogPlan(o).replace(/^./, (c) => c.toUpperCase())) + '</span>';
+  $('og-table').innerHTML = rows.length ? '<table><thead><tr><th>Organiser</th><th class="dk">City</th><th>Plan</th><th>Live</th><th class="dk">Renews</th><th class="dk">Joined</th></tr></thead><tbody>'
+    + rows.map((o) => '<tr data-href="https://unaryx.com/events/by/' + escapeHtml(o.slug) + '"><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || 0)
+      + '</td><td class="dk">' + (o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</td><td class="dk">' + escapeHtml(day(o.created_at)) + '</td></tr>').join('') + '</tbody></table>'
+    : '<p class="sub" style="padding:16px;margin:0">No organisers match.</p>';
+}
+$('og-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-og]'); if (b) { ogFilter = b.dataset.og; renderOrgs(); } });
+$('og-q').addEventListener('input', () => renderOrgs());
+$('og-table').addEventListener('click', (e) => { const r = e.target.closest('tr[data-href]'); if (r) window.open(r.dataset.href, '_blank', 'noopener'); });
+
+let fbkRows = [], fbkFilter = 'open';
+async function loadFeedback() {
+  const note = $('fbk-note');
+  try {
+    const { data, error } = await db.from('feedback').select('id,created_at,kind,body,status,handled_at,app_version').order('created_at', { ascending: false }).limit(300);
+    if (error) throw new Error(error.message);
+    fbkRows = data || []; note.hidden = true; renderFeedback();
+  } catch (err) { note.hidden = false; listFail(note, 'feedback', () => loadFeedback()); }
+}
+function renderFeedback() {
+  const open = fbkRows.filter((f) => !f.handled_at);
+  $('fbk-chips').innerHTML = [['open', 'To sort', open.length], ['all', 'All', fbkRows.length]]
+    .map(([k, l, n]) => '<button type="button" data-fbk="' + k + '" aria-pressed="' + (fbkFilter === k) + '">' + l + '<em>' + n + '</em></button>').join('');
+  const rows = fbkFilter === 'open' ? open : fbkRows;
+  $('fbk-table').innerHTML = rows.length ? '<table><thead><tr><th>Sent</th><th>Kind</th><th>What they said</th><th class="dk">Version</th></tr></thead><tbody>'
+    + rows.map((f) => '<tr><td>' + escapeHtml(new Date(f.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + '</td><td>' + escapeHtml(f.kind || '') + '</td><td>' + escapeHtml(f.body || '') + '</td><td class="dk">' + escapeHtml(f.app_version || '') + '</td></tr>').join('') + '</tbody></table>'
+    : '<p class="sub" style="padding:16px;margin:0">' + (fbkFilter === 'open' ? 'Nothing to sort.' : 'No feedback yet.') + '</p>';
+}
+$('fbk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-fbk]'); if (b) { fbkFilter = b.dataset.fbk; renderFeedback(); } });
 let orRows = [];
 async function orCall(body) {
   const token = await amToken();
@@ -9991,7 +10099,7 @@ async function renderSide() {
   side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || ''));
   const add = dkEl('button', 'primary add', 'Add a place'); add.type = 'button';
   add.onclick = () => { if (runActive()) leaveRun(); switchTab('capture'); };
-  side.appendChild(add);
+  if (!(profile && profile.is_admin)) side.appendChild(add);   // W-315: an admin has Add a place under Tools
   const nav = (t, name, n) => {
     const b = dkEl('button', 'dk-nav' + (t === dkTab || (t === 'finish' && dkTab === 'capture' && runActive()) ? ' on' : ''), name);
     b.type = 'button'; b.dataset.go = t;
@@ -9999,9 +10107,12 @@ async function renderSide() {
     b.onclick = () => switchTab(t);
     return b;
   };
-  side.appendChild(nav('home', 'Home', 0));
-  for (const [title, rows] of HOME_GROUPS) {
-    const shown = rows.filter(([t]) => { const m = $('menu-' + t); return m && !m.hidden; });
+  // W-315 (3) (panel-gaps 6-one-queue.png): an admin's sidebar is Waiting on you, then REPORTS and TOOLS.
+  const groups = profile && profile.is_admin ? SIDE_GROUPS : HOME_GROUPS;
+  if (profile && profile.is_admin) side.appendChild(nav('wait', 'Waiting on you', Number($('wait-count').textContent) || 0));
+  else side.appendChild(nav('home', 'Home', 0));
+  for (const [title, rows] of groups) {
+    const shown = rows.filter(([t]) => { if (t === 'capture') return true; const m = $('menu-' + t); return m && !m.hidden; });
     if (!shown.length) continue;
     side.appendChild(dkEl('h4', '', title));
     for (const [t, name] of shown) {
@@ -10191,6 +10302,7 @@ function dkMissing(split) {
   if (finishMissing === 'hours') { const det = $('hours-grid').closest('details'); if (det) { det.open = true; det.closest('.fg').classList.add('dk-first'); } }
 }
 function dkAfter(which) {
+  if (DK.matches && which === 'home' && profile && profile.is_admin) { switchTab('wait'); return; }   // W-315: Home is Waiting on you
   dkTab = which;
   const split = DK.matches && which === 'capture' && runActive();
   document.body.classList.toggle('dk-split', split);

@@ -41,5 +41,19 @@ t('markup: an admin-only menu row with the Needs you count, the pane, the first 
   assert.match(html, /update\(\{ status: 'rejected', review_note: p\.why \}\)/);
   assert.doesNotMatch(cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */'), /panel-ai['"]?\s*[,)]|functions\.invoke|\/functions\/v1\//, 'nothing calls a model yet');
 });
+t('(3) the sidebar for an admin: Waiting on you, then Reports (Places, Events, Organisers and partners, Money and tickets, Feedback) and Tools; Home is Waiting on you on a computer', () => {
+  assert.match(html, /const SIDE_GROUPS = \[\n  \['Reports', \[\['review', 'Places'\], \['events', 'Events'\], \['orgs', 'Organisers and partners'\], \['orders', 'Money and tickets'\], \['feedback', 'Feedback'\]\]\],\n  \['Tools', \[\['capture', 'Add a place'\], \['addplace', 'Google Maps link'\], \['queue', 'Upload queue'\], \['door', 'Door'\]\]\],/);
+  assert.match(html, /if \(DK\.matches && which === 'home' && profile && profile\.is_admin\) \{ switchTab\('wait'\); return; \}/);
+});
+t('(3) Organisers and partners: four tiles, All / Listed / Partner / Founding with counts, a search, the table; a row opens their page', () => {
+  assert.match(html, /<div class="wrap" id="pane-orgs" hidden>/);
+  assert.match(html, /\[\[ogRows\.length, 'Organisers'\], \[partners\.length, 'Partners'\], \[live, 'Events live'\], \[renewing, 'Renewing this month'\]\]/);
+  assert.match(html, /<th>Organiser<\/th><th class="dk">City<\/th><th>Plan<\/th><th>Live<\/th><th class="dk">Renews<\/th><th class="dk">Joined<\/th>/);
+  assert.match(html, /<tr data-href="https:\/\/unaryx\.com\/events\/by\/' \+ escapeHtml\(o\.slug\)/);
+});
+t('(3) Feedback: To sort / All, newest first', () => {
+  assert.match(html, /<div class="wrap" id="pane-feedback" hidden>/);
+  assert.match(html, /\[\['open', 'To sort', open\.length\], \['all', 'All', fbkRows\.length\]\]/);
+});
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

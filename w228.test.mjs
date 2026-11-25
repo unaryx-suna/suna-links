@@ -30,7 +30,7 @@ t('markup: admin-only menu rows (Payments with a count, Door), both panes, #paym
     assert.match(html, new RegExp(`\\$\\('menu-${m}'\\)\\.hidden = !profile\\.is_admin;`));
     assert.equal((html.match(new RegExp(`if \\(location\\.hash === '#${m}'\\) switchTab\\('${m}'\\);`, 'g')) || []).length, 2, m);
   }
-  assert.match(html, /'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait'\]\) \{/);
+  assert.match(html, /'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback'\]\) \{/);
   assert.match(html, /if \(which === 'door'\) loadTickets\('door'\); else drStop\(\);/, 'the camera stops when the Door is left');
 });
 

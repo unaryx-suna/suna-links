@@ -160,7 +160,7 @@ await t('the page: admin-only menu row (both gates), one pane, build and worker 
   assert.match(html, /<button class="opt" id="menu-addplace" hidden>/);
   assert.match(html, /\$\('menu-addplace'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-addplace'\)\.hidden = !profile\.is_admin;/);
-  assert.match(html, /'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait'\]\) \{/); // W-202 added Claims after it
+  assert.match(html, /'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback'\]\) \{/); // W-202 added Claims after it
   const build = html.match(/const BUILD = '([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE_VERSION = '([^']+)'/)[1], build);
   assert.equal(build, 'field-v68');
