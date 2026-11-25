@@ -20,12 +20,14 @@ await t('the mapping, the same as unaryx.com\'s asc.js', () => {
   assert.equal(storeURL('partner-worq-ttdi', 'web-c'), 'https://apps.apple.com/app/id6759053765?pt=128539200&ct=partners&mt=8');
 });
 
-await t('/u/: iPhone gets the channel, Android\'s Play keeps the full ct', () => {
+await t('/u/: iPhone gets the channel, Android\'s Play keeps the full ct', async () => {
+  const realF = globalThis.fetch; globalThis.fetch = async () => new Response('[]', { status: 200 });   // W-314: no public profile → the redirect
   let L; const res = { setHeader(k, v) { if (k === 'Location') L = v; return res; }, status() { return res; }, end() {} };
-  invite({ url: '/u/aina?ct=creator-elina-lotus', headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)' } }, res);
+  await invite({ url: '/u/aina?ct=creator-elina-lotus', headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)' } }, res);
   assert.match(L, /ct=creators&/);
-  invite({ url: '/u/aina?ct=creator-elina-lotus', headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14)' } }, res);
+  await invite({ url: '/u/aina?ct=creator-elina-lotus', headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14)' } }, res);
   assert.match(decodeURIComponent(new URL(L).searchParams.get('referrer')), /utm_campaign=creator-elina-lotus/);
+  globalThis.fetch = realF;
 });
 
 await t('the hard-coded links: checkpoint → print; i.html groups its via; no ct=partner-/creator- left in an App Store link', () => {
