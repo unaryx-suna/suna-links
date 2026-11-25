@@ -452,6 +452,9 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc{display:flex;border-radius:18px;background:#181b19;border-color:#2a2f2c}
 .sc .stop-pic{width:96px;height:auto;min-height:112px;flex:none}
 .sc .stop-pic::before,.sc .stop-pic::after{display:none}
+/* W-314 OD-web-Q3-11: the map sits inset in its tile, whole, so Apple's logo and Legal are never cut by the card's corner. */
+.sc .stop-pic.map{padding:6px;box-sizing:border-box;display:flex;align-items:center;background:#202020}
+.sc .stop-pic.map img{width:100%;height:auto;aspect-ratio:200/240;object-fit:contain;border-radius:10px}
 .sc .stop-pic.map img{width:100%;height:100%;object-fit:cover;display:block}
 .sc .stop-pic.px-tile{display:flex;align-items:center;justify-content:center;background:#202421}
 .px-tile img{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E;background:#FFF9D5;padding:6px}

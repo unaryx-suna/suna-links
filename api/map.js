@@ -31,7 +31,8 @@ export function mapParams(url) {
 
 /** The path and query Apple signs, without the signature. */
 export function snapshotPath({ lat, lng, w, h }, teamId, keyId) {
-  const annotations = JSON.stringify([{ point: `${lat},${lng}`, color: 'F6CB94', markerStyle: 'dot' }]);
+  // W-314 OD-web-Q3-11: a white balloon pin with an ink dot (Apple draws the glyph dark on a light balloon).
+  const annotations = JSON.stringify([{ point: `${lat},${lng}`, color: 'FFFFFF', markerStyle: 'balloon', glyphText: '•' }]);
   const qs = new URLSearchParams({
     center: `${lat},${lng}`, z: '15', size: `${w}x${h}`, scale: '2', colorScheme: 'dark',
     poi: '0', annotations, teamId, keyId,

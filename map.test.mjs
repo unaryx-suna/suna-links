@@ -16,13 +16,13 @@ await t('only a point and a size come in, rounded and clamped; nonsense is refus
   for (const q of ['lat=x&lng=1', 'lat=0&lng=0', 'lat=91&lng=1', 'lng=1', '']) assert.equal(mapParams(`/api/map?${q}`), null, q);
 });
 
-await t('the signed path: dark, one sand pin, scale 2, our team and key, no signature yet', () => {
+await t('the signed path: dark, one white pin with an ink dot (W-314 OD-web-Q3-11), scale 2, our team and key, no signature yet', () => {
   const path = snapshotPath({ lat: '3.10000', lng: '101.60000', w: 480, h: 260 }, 'TEAM', 'KEY');
   const q = new URL(path, 'https://x').searchParams;
   assert.equal(q.get('center'), '3.10000,101.60000');
   assert.equal(q.get('colorScheme'), 'dark');
   assert.equal(q.get('scale'), '2');
-  assert.deepEqual(JSON.parse(q.get('annotations')), [{ point: '3.10000,101.60000', color: 'F6CB94', markerStyle: 'dot' }]);
+  assert.deepEqual(JSON.parse(q.get('annotations')), [{ point: '3.10000,101.60000', color: 'FFFFFF', markerStyle: 'balloon', glyphText: '•' }]);
   assert.equal(q.get('teamId'), 'TEAM');
   assert.equal(q.get('signature'), null);
 });
