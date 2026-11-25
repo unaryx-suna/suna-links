@@ -535,7 +535,8 @@
     /* D0 Home */
     .dk-h1 { font: 800 30px/1.2 Urbanist, system-ui, sans-serif; margin: 0; }
     .dk-sub { color: var(--muted); font-size: 14.5px; margin: 4px 0 20px; }
-    .dk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dk-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+    .dk-ib { cursor: pointer; } .dk-ib.on b { color: #B3A6FF; } .dk-ib:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .dk-stat { padding: 16px 18px; } .dk-stat b { display: block; font-weight: 800; font-size: 30px; } .dk-stat span { font-weight: 600; font-size: 13px; color: var(--muted); }
     .dk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
     .dk-box { padding: 6px 0; } .dk-box > b { display: block; font-weight: 800; font-size: 16px; padding: 12px 18px; }
@@ -1344,7 +1345,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v66';
+const BUILD = 'field-v67';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8902,6 +8903,7 @@ async function loadInbox(render) {
   ibRows = out.items || [];
   const n = ibRows.filter((x) => !x.read_at && !x.test).length;
   $('inbox-count').textContent = String(n); $('inbox-count').classList.toggle('zero', n === 0);
+  if (typeof dkTab !== 'undefined' && dkTab === 'home' && typeof renderDkHome === 'function') renderDkHome();
   if (render) renderInbox();
 }
 function renderInbox() {
@@ -9794,7 +9796,10 @@ async function renderDkHome() {
     const stats = dkEl('div', 'dk-stats');
     // One source with the sidebar and the phone home (Ops - Design 09:3x): HOME_COUNT's elements.
     const hc = (t) => Number($(HOME_COUNT[t]).textContent) || 0;
-    stats.append(stat(hc('payments'), 'tickets waiting for payment'), stat(hc('orders'), 'orders to deliver'),
+    // W-314 OD-web-Q8-1 / W-Q8-1: the Inbox first, its unread count in purple, and the card opens the Inbox.
+    const ib = stat(hc('inbox'), 'new in the inbox'); ib.classList.add('dk-ib'); if (hc('inbox') > 0) ib.classList.add('on');
+    ib.setAttribute('role', 'button'); ib.tabIndex = 0; ib.onclick = () => switchTab('inbox'); ib.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchTab('inbox'); } };
+    stats.append(ib, stat(hc('payments'), 'tickets waiting for payment'), stat(hc('orders'), 'orders to deliver'),
       stat(hc('claims'), 'claims to answer'), stat(dkVerified, 'places checked this week'));
     box.appendChild(stats);
     const two = dkEl('div', 'dk-two');
