@@ -276,7 +276,7 @@ export default async function handler(req, res) {
     const city = cityFor(tomb.latitude, tomb.longitude);
     const venue = (tomb.venue && String(tomb.venue).trim()) || (city && city.name) || '';
     const html = page({
-      title: `${tomb.name}${venue ? ` · ${venue}` : ''} · ${tomb.cancelled ? 'Cancelled' : 'Ended'} · Suna`,
+      title: `${tomb.name}${venue ? `, ${venue}` : ''}, ${tomb.cancelled ? 'cancelled' : 'ended'} · Suna`,   // W-314 W-Q3-5: commas; only the closing ' · Suna'
       description: tomb.cancelled ? 'The organiser cancelled this. Here’s what else is on nearby.' : 'This has ended. Here’s what’s on nearby this week.',
       canonical: `${ORIGIN}/e/${tomb.id}`,
       body: eventBody(tomb, now, more),
@@ -329,9 +329,10 @@ export default async function handler(req, res) {
   // og:url. An ended event's page there redirects away, so it keeps its own.
   const canonical = (!eventState(e) && eventPageURL(e)) || own;
   const venue = (e.venue && String(e.venue).trim()) || (city && city.name) || '';
-  const description = [whenText(e, tz), venue].filter(Boolean).join(' · ');
+  // W-314 W-Q3-5: the preview reads 'Sun 29 Nov, 7:15pm to 10:30pm, SCG' (commas, 'to'; no middots or dashes).
+  const description = [String(whenText(e, tz) || '').replace(/ · /g, ', ').replace(/\s*[–—]\s*/g, ' to '), venue].filter(Boolean).join(', ');
   send(res, page({
-    title: `${e.name}${venue ? ` · ${venue}` : ''} · Suna`,
+    title: `${e.name}${venue ? `, ${venue}` : ''} · Suna`,
     description,
     canonical,
     ogUrl: own,

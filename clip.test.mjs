@@ -453,7 +453,7 @@ await t('W-51 hours_text is read, and beats the description and the daily times 
   assert(calls.some((u) => u.includes('/rest/v1/world_events') && u.includes('id=eq.') && /select=[^&]*hours_text/.test(u)), 'EVENT_SELECT reads hours_text');
   assert.match(b, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon<\/dd>/);
   // The meta description is one line: its lines fold with commas.
-  assert.match(b, /<meta name="description" content="[^"]*, Tue–Sat 11am–7pm, Sun 11am–5pm · closed Mon/);
+  assert.match(b, /<meta name="description" content="[^"]*, Tue to Sat 11am to 7pm, Sun 11am to 5pm, closed Mon/);   // W-314 W-Q3-5: commas and 'to'
   assert.doesNotMatch(b, /11:00–19:00/);
   // Blank hours_text is no hours_text: the description's hours, as before.
   state.eventRow = ev(U(9), 0, { ...RR, hours_text: '  ' });

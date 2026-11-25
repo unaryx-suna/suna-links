@@ -59,7 +59,7 @@ await t('completed: Ops\'s W4 (200, noindex, Ended), not "isn\'t listed", no Get
   assert.equal(r.code, 200);
   assert.match(r.body, /<meta name="robots" content="noindex">/);
   assert.match(r.body, /<span class="pill pill-over">Ended<\/span>/);
-  assert.match(r.body, /<title>Event aaaaaaaa · Bangsar Shopping Centre · Ended · Suna<\/title>/);
+  assert.match(r.body, /<title>Event aaaaaaaa, Bangsar Shopping Centre, ended · Suna<\/title>/);   // W-314 W-Q3-5
   assert.doesNotMatch(r.body, /This event isn't listed|>Get tickets/);
 });
 
