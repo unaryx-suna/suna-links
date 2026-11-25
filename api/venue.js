@@ -179,5 +179,7 @@ export default async function handler(req, res) {
     : 'Events tonight and places worth the detour, within a short walk. On Suna.';
   const canonical = `${ORIGIN}/c/${venue ? encodeURIComponent(venue.slug) : ''}`;
   // Five minutes at the edge: "on now" goes stale faster than an itinerary.
-  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
+  // W-314 W-Q3-6: the venue's own preview card, drawn on unaryx.com from the same partner venue list.
+  const image = venue ? `https://unaryx.com/api/og/venue/${encodeURIComponent(venue.slug)}.jpg` : null;
+  send(res, page({ title, description, canonical, image, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
 }

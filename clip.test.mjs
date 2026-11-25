@@ -77,6 +77,9 @@ await t('/c/: events within 800 m only, when there are any (Ops W6: Near <venue>
   const r = await render(venue, '/c/worq-ttdi');
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1 class="venue-h1">Near WORQ TTDI<\/h1>/);
+  // W-314 W-Q3-6: the venue's own preview card, large.
+  assert.match(r.body, /<meta property="og:image" content="https:\/\/unaryx\.com\/api\/og\/venue\/worq-ttdi\.jpg">/);
+  assert.match(r.body, /<meta name="twitter:card" content="summary_large_image">/);
   assert.match(r.body, /<p class="sub">Within a 10-minute walk<\/p>/);
   assert.match(r.body, /· Card from WORQ TTDI/);
   assert.match(r.body, new RegExp(`<a class="row" href="/e/${U(1)}">`));
