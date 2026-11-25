@@ -1344,7 +1344,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v65';
+const BUILD = 'field-v66';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -8098,7 +8098,7 @@ async function toggleCreator(p, sw, note) {
    Analytics: none (invariant 24; no web events until after 3.2). */
 
 // W-56 logic begin: pure, tested in add-place.test.mjs against fixtures.
-const AM_FN = '/functions/v1/admin-add-place';
+const AM_FN = '/functions/v1/admin-add-place?forceFunctionRegion=ap-southeast-2';   // W-316: run beside the database (Sydney)
 
 /** One call to the function. `token` is the session's access token. Never
  *  throws: a network failure or a non-JSON body becomes `{ status: 0 }` or
@@ -9056,7 +9056,7 @@ function clOrgFilter(q) {
 let clRows = [], clApproved = [];
 async function clCall(body) {
   const token = await amToken();
-  const res = await fetch(SUPABASE_URL + '/functions/v1/event-claim', {
+  const res = await fetch(SUPABASE_URL + '/functions/v1/event-claim?forceFunctionRegion=ap-southeast-2', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (token || SUPABASE_ANON_KEY) },
     body: JSON.stringify(body),

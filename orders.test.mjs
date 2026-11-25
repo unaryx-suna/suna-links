@@ -17,8 +17,8 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
   assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
-  assert.match(html, /const BUILD = 'field-v65';/);
-  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v65'/);
+  assert.match(html, /const BUILD = 'field-v66';/);
+  assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v66'/);
 });
 t('every action goes to oneoff-order with this session\'s token (the function checks is_admin); the badge is the server\'s due_today', () => {
   // W-308 Role A: through the Panel's own origin (oneoff-order's CORS answers unaryx.com only); the token goes as before.
@@ -109,7 +109,7 @@ const call = async (req) => { const out = {}; await PO({ headers: {}, ...req }, 
   const b = await call({ method: 'POST', body: { action: 'details' }, headers: { authorization: 'Bearer ' + 'x'.repeat(40) } }); assert.equal(b.c, 400, 'buyer actions never come this way');
   const c = await call({ method: 'POST', body: { action: 'inbox_list' }, headers: {} }); assert.equal(c.c, 401);
   const d = await call({ method: 'POST', body: { action: 'inbox_list' }, headers: { authorization: 'Bearer ' + 'x'.repeat(40), apikey: 'k' } });
-  assert.equal(d.c, 200); assert.equal(seen.length, 1); assert.equal(seen[0].u, 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order');
+  assert.equal(d.c, 200); assert.equal(seen.length, 1); assert.equal(seen[0].u, 'https://voogrbonwmvfwtgzzrxc.supabase.co/functions/v1/oneoff-order?forceFunctionRegion=ap-southeast-2');
   assert.equal(seen[0].o.headers.Authorization, 'Bearer ' + 'x'.repeat(40)); assert.equal(JSON.parse(seen[0].o.body).action, 'inbox_list');
   console.log('  ok   panel-order forwarder checks');
 }

@@ -27,7 +27,7 @@ t('markup: an admin-only menu row with a count, the Claims pane, #claims after s
 });
 
 t('every decision goes through event-claim with this session\'s token (the function checks is_admin); no other read of claims', () => {
-  assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/event-claim'/);
+  assert.match(html, /fetch\(SUPABASE_URL \+ '\/functions\/v1\/event-claim\?forceFunctionRegion=ap-southeast-2'/);
   assert.match(html, /Authorization: 'Bearer ' \+ \(token \|\| SUPABASE_ANON_KEY\)/);
   assert.doesNotMatch(html, /from\('event_submissions'\)/);
 });
