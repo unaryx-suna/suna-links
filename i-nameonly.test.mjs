@@ -9,6 +9,7 @@ globalThis.fetch = async (url) => {
     const pat = u.match(/name=ilike\.([^&]+)/)[1].replace(/\*/g, '.*');
     return ok(PLANS.filter((p) => new RegExp(`^${pat}$`, 'i').test(p.name)));
   }
+  if (u.includes('order=published_at.desc')) return ok([{ share_slug: 'zz11yy22xx', name: 'Old KL on foot', resolved_city_name: 'Kuala Lumpur' }]);
   if (u.includes('/rest/v1/')) return ok([]);
   return { ok: false, status: 404, json: async () => ({}), text: async () => '', headers: new Map() };
 };
@@ -23,6 +24,7 @@ const a = await get('/i/a-quieter-day-in-ipoh?via=tiktok');
 assert.equal(a.code, 301); assert.equal(a.hdr.location, 'https://app.unaryx.com/i/a-quieter-day-in-ipoh--ab12cd34ef?via=tiktok');
 const b = await get('/i/a-louder-day-in-ipoh');
 assert.equal(b.code, 404); assert.match(b.body, /<title>This plan isn(?:'|&#39;|&#x27;)t on Suna<\/title>/); assert.match(b.body, /<h1 id="title">This plan isn't on Suna<\/h1>/);
+assert.match(b.body, /<ul class="nf-plans"><li><a href="https:\/\/app\.unaryx\.com\/i\/old-kl-on-foot--zz11yy22xx"><b>Old KL on foot<\/b><span>Kuala Lumpur<\/span>/);
 const c = await get('/i/ab12cd34ef');   // a bare code that isn't public: the friendly generic 404, no name lookup
 assert.equal(c.code, 404); assert.doesNotMatch(c.body, /This plan isn't on Suna/);
 console.log('ok /i/ name-only links');

@@ -283,6 +283,7 @@ export default async function handler(req, res) {
   // that readable name and 301s to it; when none (or several) match, the 404 says the plan isn't on Suna.
   const seg = segmentAfter(new URL(req.url || '/', origin).pathname, 'i') || '';
   let nameOnly = false;
+  let nfPlans = '';
   if (none && slug && !seg.includes('--') && /^[a-z0-9]+(?:-[a-z0-9]+){2,}$/.test(seg)) {
     nameOnly = true;
     try {
@@ -296,6 +297,12 @@ export default async function handler(req, res) {
       }
     } catch { /* fall through to the 404 */ }
     title = "This plan isn't on Suna";
+    // W-314 OD-web-Q3-3: three plans people can open instead (the newest public ones).
+    try {
+      const recent = await rest('public_itineraries?select=share_slug,name,resolved_city_name&share_slug=not.is.null&order=published_at.desc&limit=3');
+      nfPlans = recent.filter((r) => r.share_slug && r.name).map((r) =>
+        `<li><a href="${escapeHtml(canonicalItineraryURL(origin, r.share_slug, r.name))}"><b>${escapeHtml(r.name)}</b>${r.resolved_city_name ? `<span>${escapeHtml(r.resolved_city_name)}</span>` : ''}</a></li>`).join('');
+    } catch { nfPlans = ''; }
     description = 'The link may be cut short. Open Suna to see plans people have walked.';
   }
   const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' || nameOnly ? '' : rawName);
@@ -344,7 +351,7 @@ export default async function handler(req, res) {
   // Replace the static head block rather than appending: a duplicate og:title
   // is resolved differently by each scraper, so leaving both is a coin flip.
   const rendered = html
-    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' : '<h1 id="title">An itinerary on Suna</h1>')
+    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' + (nfPlans ? `<style>.nf-plans{list-style:none;margin:16px 0;padding:0;display:grid;gap:8px;text-align:left}.nf-plans a{display:flex;flex-direction:column;justify-content:center;min-height:56px;padding:10px 16px;border-radius:14px;background:rgba(255,255,255,.08);color:#fff;text-decoration:none}.nf-plans b{font-size:16px}.nf-plans span{font-size:13px;color:rgba(255,255,255,.7)}</style><p class="nf-try">Try one of these:</p><ul class="nf-plans">${nfPlans}</ul>` : '') : '<h1 id="title">An itinerary on Suna</h1>')
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
