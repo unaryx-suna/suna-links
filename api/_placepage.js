@@ -161,6 +161,7 @@ a{color:inherit}
 .pill{background:var(--sand);color:#1d1408;font-weight:700;font-size:15px;border-radius:999px;padding:9px 16px;text-decoration:none}
 .hero{height:440px;position:relative;background:var(--surface2);overflow:hidden}
 .hero img.hi{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .rep{position:absolute;z-index:2;top:12px;right:12px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600}   /* W-314 OD-web-Q9-2 */
 .hero:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,17,16,.55) 0%,rgba(15,17,16,0) 22%,rgba(15,17,16,0) 45%,rgba(15,17,16,.9) 82%,var(--ink) 100%)}
 .hero .in{position:absolute;left:16px;right:16px;bottom:14px;z-index:2}
 .kick{font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--sand);margin:0}
@@ -306,7 +307,7 @@ export function placeBody(d) {
   ].filter(Boolean).join('');
   return `${topBar(d.store)}
 <main>
-<div class="hero">${heroImg(d.cover, p.name)}<div class="in">
+<div class="hero">${heroImg(d.cover, d.stock ? '' : p.name)}${d.stock ? '<span class="rep">Representative photo</span>' : ''}<div class="in">
 ${kicker ? `<p class="kick">${esc(kicker)}</p>` : ''}<h1>${esc(p.name)}</h1>
 ${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>
 <div class="pad">

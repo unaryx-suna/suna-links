@@ -458,7 +458,7 @@ export default async function handler(req, res) {
   if (resolved) {
     body = placeBody({
       place: resolved.place, cityName: resolved.cityName, tz: resolved.tz, hours: resolved.hours,
-      cover: resolved.ownCover || image, events: resolved.events, walks: resolved.walks, tips: resolved.tips,
+      cover: resolved.ownCover || image, stock: !resolved.ownCover && Boolean(image), events: resolved.events, walks: resolved.walks, tips: resolved.tips,
       store, scheme: `suna://place?id=${encodeURIComponent(id)}`, offer, booking, now,
     });
   } else {

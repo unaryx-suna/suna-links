@@ -23,7 +23,7 @@ import { stockFor } from './_stock.js';
 import { sized } from './_preview.js';
 
 const ORIGIN = 'https://app.unaryx.com';
-export const STEPS_KM = [0.8, 3];
+export const STEPS_KM = [0.8, 2];   // W-314 OD-web-Q3-15: 2 km, not 3 (a 1.9 km card read as 'a short walk')
 const MAX_TONIGHT = 4;
 const MAX_WEEK = 4;
 const MAX_PLACES = 2;
@@ -54,10 +54,10 @@ async function eventsNear(venue, now) {
  * (I-95 (a)): within 800 m, else 3 km, else the venue's city. A card must
  * always land on something. { label, events } or null.
  */
-export function pickStep(rows, city) {
+export function pickStep(rows, city, venueName = '') {
   for (const km of STEPS_KM) {
     const hit = rows.filter((e) => e.km <= km);
-    if (hit.length) return { label: km < 1 ? 'Within a 10-minute walk' : `Within ${km} km`, events: hit };
+    if (hit.length) return { label: km < 1 ? 'Within a 10-minute walk' : `Within ${km} km${venueName ? ` of ${venueName}` : ''}`, events: hit };
   }
   if (city) {
     const hit = rows.filter((e) => { const c = cityFor(e.latitude, e.longitude); return c && c.slug === city.slug; });
@@ -167,7 +167,7 @@ export default async function handler(req, res) {
   if (venue) {
     try {
       const near = await eventsNear(venue, now);
-      found = { ...near, step: pickStep(near.rows, near.city) };
+      found = { ...near, step: pickStep(near.rows, near.city, venue.name) };
     } catch {
       found = { city: cityFor(venue.lat, venue.lng), step: null };
     }

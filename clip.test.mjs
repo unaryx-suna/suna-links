@@ -83,10 +83,10 @@ await t('/c/: events within 800 m only, when there are any (Ops W6: Near <venue>
   assert.doesNotMatch(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
 });
-await t('/c/: widens to 3 km, then to the city', async () => {
-  state.events = [ev(U(2), 0.018), ev(U(3), 0.09)];
+await t('/c/: widens to 2 km (W-314 OD-web-Q3-15), then to the city', async () => {
+  state.events = [ev(U(2), 0.016), ev(U(3), 0.09)];   // ~1.8 km: inside the 2 km step
   let r = await render(venue, '/c/worq-ttdi');
-  assert.match(r.body, /Within 3 km/);
+  assert.match(r.body, /Within 2 km of WORQ TTDI/);
   assert.match(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
   state.events = [ev(U(3), 0.09)];
@@ -194,10 +194,12 @@ await t('eyebrow: on now until (closes today), on now, tonight, a later day, a r
   assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar, 8:00pm');
   assert.equal(eyebrow({ start_time: '2027-03-06T02:00:00Z', end_time: '2027-03-20T10:00:00Z', recurrence_type: 'period' }, tz, n), 'From Sat 6 Mar');
 });
-await t('pickStep: 800 m beats 3 km beats the city; nothing → null', async () => {
+await t('pickStep: 800 m beats 2 km beats the city; nothing → null', async () => {
   const at = (km) => ({ km, latitude: VENUE.lat, longitude: VENUE.lng });
   assert.equal(pickStep([at(0.5), at(2)], null).events.length, 1);
-  assert.equal(pickStep([at(2.9)], null).label, 'Within 3 km');
+  assert.equal(pickStep([at(1.9)], null).label, 'Within 2 km');
+  assert.equal(pickStep([at(1.9)], null, 'WORQ TTDI').label, 'Within 2 km of WORQ TTDI');
+  assert.equal(pickStep([at(2.9)], null), null);   // beyond 2 km: the city, or nothing
   assert.equal(pickStep([at(10)], null), null);
 });
 
