@@ -18,7 +18,7 @@ import { segmentAfter, tailOf, decodeSegment, hasLongDash, withHyphens } from '.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
-import { loadItinerary, coverFor, coverVariants, previewBody, isBySuna } from './_preview.js';
+import { loadItinerary, coverFor, coverVariants, coverPreload, previewBody, isBySuna } from './_preview.js';
 import { MAPS_HEAD, MAPS_CSS } from './_maps.js';
 
 // W-183 (Brian via Ops OPS-106, 3 Nov: "the Suna bot is the wrong design"):
@@ -195,6 +195,7 @@ export default async function handler(req, res) {
   let rawName = '';
   // The server-rendered body, or null for the generic page.
   let body = null;
+  let preload = '';   // W-314 W-Q9-3: the cover preload
   // True when the body carries signed moment URLs, which expire in an hour.
   let signed = false;
   // W-179: no public itinerary behind this link (missing, private or a
@@ -233,7 +234,9 @@ export default async function handler(req, res) {
         image = cover;
         // W-309 W3b BETTER 4: the desktop QR points at this plan's canonical address (its /i/ segment).
         data.slug = String(canonicalItineraryURL(origin, slug, rawName)).split('/i/')[1] || '';
-        body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
+        const variants = await coverVariants(cover, imageResolves);
+        preload = coverPreload(cover, variants);
+        body = previewBody(data, cover, variants, mascot());
         signed = data.signedMoments;
       }
     } catch {
@@ -289,7 +292,7 @@ export default async function handler(req, res) {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n</head>`)
+    .replace('</head>', `  ${preload ? `${preload}\n  ` : ''}${tags}\n</head>`)
     // Before first paint, so the Apple Maps button (W-47) never flashes in or out.
     .replace('</head>', () => (/maps-apple/.test(body || '')
       ? `  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>` : '</head>'))

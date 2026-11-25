@@ -508,12 +508,20 @@ body.pv-body{padding-bottom:132px}
  * the nightly sweep has none, and a 400 before the fallback cost the KL test
  * page seconds). Phones get 640, wide screens 1280.
  */
+/** W-314 W-Q9-3: the cover preloaded with the same srcset, so the browser asks for it before it reads the body. */
+export function coverPreload(cover, variants) {
+  if (!cover) return '';
+  if (!variants || !variants[640]) return `<link rel="preload" as="image" href="${escapeHtml(cover)}" fetchpriority="high">`;
+  const set = [variants[320] && `${variants[320]} 320w`, `${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
+  return `<link rel="preload" as="image" href="${escapeHtml(variants[640])}" imagesrcset="${escapeHtml(set)}" imagesizes="(min-width: 700px) 640px, 100vw" fetchpriority="high">`;
+}
+
 function coverImg(cover, variants) {
   const alt = '';
   if (!variants || !variants[640]) {
     return `<img class="cover-img" src="${escapeHtml(cover)}" alt="${alt}" decoding="async" fetchpriority="high" onload="this.classList.add('in')">`;
   }
-  const set = [`${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
+  const set = [variants[320] && `${variants[320]} 320w`, `${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
   return `<img class="cover-img" src="${escapeHtml(variants[640])}" srcset="${escapeHtml(set)}"`
     + ` sizes="(min-width: 700px) 640px, 100vw" data-full="${escapeHtml(cover)}"`
     + ` onerror="if(this.src!==this.dataset.full){this.srcset='';this.src=this.dataset.full}"`
@@ -523,10 +531,11 @@ function coverImg(cover, variants) {
 /** Which sized copies of the cover exist, checked once per render. */
 export async function coverVariants(cover, resolves) {
   if (!cover) return null;
-  const [a, b] = [sized(cover, 640), sized(cover, 1280)];
+  const [s, a, b] = [sized(cover, 320), sized(cover, 640), sized(cover, 1280)];
   if (!a) return null;
-  const [okA, okB] = await Promise.all([resolves(a), resolves(b)]);
-  return { 640: okA ? a : null, 1280: okB ? b : null };
+  // W-314 W-Q9-3: the 320 copy too, for phones.
+  const [okS, okA, okB] = await Promise.all([resolves(s), resolves(a), resolves(b)]);
+  return { 320: okS ? s : null, 640: okA ? a : null, 1280: okB ? b : null };
 }
 
 /** The body of the preview page: Figma B1, "The shared itinerary". */
