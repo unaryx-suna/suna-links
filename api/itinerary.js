@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
 import { loadItinerary, coverFor, coverVariants, coverPreload, previewBody, isBySuna } from './_preview.js';
 import { MAPS_HEAD, MAPS_CSS } from './_maps.js';
+import { rest } from './_clip.js';   // W-314 OD-web-Q3-3: the name lookup
 
 // W-183 (Brian via Ops OPS-106, 3 Nov: "the Suna bot is the wrong design"):
 // today's Suna, the smooth bronze egg with the visor and no limbs (Ops's v5
@@ -278,7 +279,26 @@ export default async function handler(req, res) {
     }
   }
 
-  const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' ? '' : rawName);
+  // W-314 OD-web-Q3-3: a link with its code cut off ('/i/a-quieter-day-in-ipoh') finds the one public plan with
+  // that readable name and 301s to it; when none (or several) match, the 404 says the plan isn't on Suna.
+  const seg = segmentAfter(new URL(req.url || '/', origin).pathname, 'i') || '';
+  let nameOnly = false;
+  if (none && slug && !seg.includes('--') && /^[a-z0-9]+(?:-[a-z0-9]+){2,}$/.test(seg)) {
+    nameOnly = true;
+    try {
+      const rows = await rest(`public_itineraries?name=ilike.${encodeURIComponent(seg.replace(/-/g, '*') + '*')}&select=share_slug,name&limit=3`);
+      const hits = (Array.isArray(rows) ? rows : []).filter((r) => r.share_slug && readablePrefix(r.name) === seg);
+      if (hits.length === 1) {
+        const q = new URL(req.url || '/', origin).search;
+        res.status(301).setHeader('Location', canonicalItineraryURL(origin, hits[0].share_slug, hits[0].name) + q)
+          .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600').end();
+        return;
+      }
+    } catch { /* fall through to the 404 */ }
+    title = "This plan isn't on Suna";
+    description = 'The link may be cut short. Open Suna to see plans people have walked.';
+  }
+  const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' || nameOnly ? '' : rawName);
   // W-227: any other spelling of this address goes to the canonical one, so
   // one itinerary is one URL and a mangled link still lands on the real page.
   // Before the open is recorded: the request the redirect leads to records it.
@@ -324,6 +344,7 @@ export default async function handler(req, res) {
   // Replace the static head block rather than appending: a duplicate og:title
   // is resolved differently by each scraper, so leaving both is a coin flip.
   const rendered = html
+    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' : '<h1 id="title">An itinerary on Suna</h1>')
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
