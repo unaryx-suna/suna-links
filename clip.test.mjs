@@ -216,7 +216,7 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1>Event 4444<\/h1>/);
   assert.match(r.body, /<p class="hero-sub">Taman Tun Park<\/p>/);
-  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar, 7:30pm<\/span><span class="pill">Paid<\/span>/);
+  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar, 7:30pm<\/span><span class="pill">From RM35<\/span><\/div>/);   // W-314 OD-web-Q3-17: the lowest price, never a bare Paid
   assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027, 7:30pm–10:00pm<\/dd>/);
   assert.match(r.body, /<dt>Where<\/dt><dd>Taman Tun Park, Kuala Lumpur<\/dd>/);
   assert.match(r.body, /<dt>Price<\/dt><dd>From RM35<\/dd>/);

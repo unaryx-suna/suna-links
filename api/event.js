@@ -113,7 +113,7 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
   const venue = (e.venue && String(e.venue).trim()) || null;
   const where = withCity(venue, city && city.name);
   const price = priceShort(e);
-  const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
+  const pricePill = e.price_type === 'free' ? 'Free' : (price && price.startsWith('From ') ? price : null);   // W-314 OD-web-Q3-17: no bare PAID chip
   // W-172: this page's App Store link opens Apple's event custom product page.
   const store = `${storeURL(ct, 'web-e')}&ppid=${EVENT_PPID}`;
   const save = (cls) => saveInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, store, cls);

@@ -371,12 +371,13 @@ export function eyebrow(event, timeZone, now = new Date()) {
   return multiDay ? `From ${day}` : `${day}, ${fmtTime(start, timeZone)}`;
 }
 
-/** "Free", "From A$35", "Paid", or null: the price as a row or the facts card says it. */
+/** "Free", "From A$35", or null: the price as a row or the facts card says it. W-314 OD-web-Q3-17: a bare
+ *  "Paid" says nothing, so a paid event with no known price has no price row. */
 export function priceShort(event) {
   if (event.price_type === 'free') return 'Free';
   const p = priceLine(event);
   if (p) return `From ${p}`;
-  return event.price_type === 'paid' ? 'Paid' : null;
+  return null;
 }
 
 /** A whole-row link to an event's /e/ page (Ops: no buttons on rows). */
