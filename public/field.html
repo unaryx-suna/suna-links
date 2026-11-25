@@ -517,6 +517,7 @@
   .wt-h .n { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12px; letter-spacing: 0; }
   .wt-h .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--muted); }
   .wt-h button.r { min-height: 44px; border: 0; background: none; color: #B3A6FF; font: 700 14px/1 inherit; cursor: pointer; }
+  .wt-h button.r[disabled] { color: var(--muted); opacity: .6; cursor: not-allowed; }
   .wt-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; }
   .wt-row.on { background: rgba(179,166,255,.08); box-shadow: inset 3px 0 0 #B3A6FF; }
   .wt-th { flex: none; width: 52px; height: 52px; border-radius: 12px; background: rgba(255,255,255,.08); display: grid; place-items: center; overflow: hidden; color: var(--muted); font: 700 14px/1.1 Urbanist, system-ui, sans-serif; text-align: center; }
@@ -527,6 +528,7 @@
   .wt-tx b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wt-tx span { display: block; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wt-end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .wt-tx { min-width: 140px; }
   .wt-age { color: var(--muted); font-size: 13px; } .wt-age.red { color: #FF7A6B; font-weight: 700; }
   .wt-btns { display: flex; gap: 8px; }
   .wt-btn { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: none; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
@@ -592,7 +594,7 @@
     .dk-side .dk-foot { margin-top: auto; padding-top: 16px; }
     .dk-side .dk-foot .dk-nav { color: var(--muted); font-size: 13.5px; }
     #app > .wrap { max-width: 720px; margin: 0; padding: 28px 36px 120px; }
-    #app > #pane-home, #app > #pane-payments, #app > #pane-orders, #app > #pane-capture { max-width: none; }
+    #app > #pane-home, #app > #pane-payments, #app > #pane-orders, #app > #pane-capture, #app > #pane-wait, #app > #pane-orgs, #app > #pane-feedback { max-width: none; }   /* W-315: the queue and reports use the width */
     #app > #pane-door { max-width: 520px; margin: 0 auto; }
     #app > #queue-bar-wrap { display: none !important; }
     .savebar { left: 260px; }
