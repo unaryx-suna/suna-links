@@ -111,7 +111,7 @@ function placeThumb(p, taken) {
 
 export function placeRow(p, taken = new Set()) {
   const mins = Math.max(1, Math.round(p.km / WALK_KM_PER_MIN));
-  const meta = [p.category, `${mins} min walk`].filter(Boolean).join(' · ');
+  const meta = [p.category, `${mins} min walk`].filter(Boolean).join(', ');   // W-314 OD-web-Q3-16: commas
   return `<li><a class="row row-place" href="/place/${escapeHtml(p.id)}">`
     + placeThumb(p, taken)
     + `<span class="row-text"><span class="row-name">${escapeHtml(p.name)}</span><span class="row-meta">${escapeHtml(meta)}</span></span>`

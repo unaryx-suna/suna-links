@@ -529,7 +529,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .row .stock-tint { position: absolute; inset: 0; }
     .row-text { display: grid; gap: 3px; min-width: 0; }
     .row-eyebrow { color: var(--now); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
-    .row-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-name { font-size: 15px; font-weight: 600; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }   /* W-314 OD-web-Q3-16: two lines */
     .row-meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chev { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 24px; font-weight: 500; }
     .state { background: var(--card); border-radius: 18px; padding: 16px; margin: 20px 0 36px; }

@@ -135,7 +135,7 @@ await t('/c/: Worth a walk: the two nearest places within 800 m, never lodging o
   assert.match(r.body, /<a class="row row-place" href="\/place\/p1">/);
   assert.match(r.body, /<a class="row row-place" href="\/place\/p2">/);
   assert.doesNotMatch(r.body, /\/place\/(p3|hotel|filler|far)"/);
-  assert.match(r.body, /Cafe &amp; Workspace · 3 min walk/);
+  assert.match(r.body, /Cafe &amp; Workspace, 3 min walk/);
   assert.match(calls.find((c) => c.includes('/rest/v1/landmarks')), /is_hidden=eq\.false/);
   state.places = [];
   assert.doesNotMatch((await render(venue, '/c/worq-ttdi')).body, /Worth a walk/);
