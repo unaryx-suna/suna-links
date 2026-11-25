@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
 const pre = 'const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>"\']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;", "\'": "&#39;" }[c]));\nfunction plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }\n';
-const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, set: (k) => { wtSel = k; } };')();
+const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 console.log('w315');
@@ -60,6 +60,21 @@ t('the chips: All, Listings, Edits, Claims, Reported, Orders, Feedback; every ro
   assert.deepEqual(['ready', 'fix', 'claim', 'place', 'flag', 'order', 'feedback'].map((k) => L.wtGroup({ kind: k })), ['listings', 'listings', 'claims', 'reported', 'reported', 'orders', 'feedback']);
   assert.match(html, /const WT_OUR_MOVE = \['paid', 'details_in', 'changes', 'approved'\];/);
   assert.match(html, /kind: 'order', label: 'Order, waiting on us'/);
+});
+t('fix in place: a pin from lat, lng or a Google Maps link; junk is no pin', () => {
+  assert.deepEqual(L.wtPinFrom('3.15123, 101.71234'), { latitude: 3.15123, longitude: 101.71234 });
+  assert.deepEqual(L.wtPinFrom('https://www.google.com/maps/place/Arch/@3.1482,101.7127,17z'), { latitude: 3.1482, longitude: 101.7127 });
+  assert.equal(L.wtPinFrom('The Arch Galeries'), null);
+  assert.equal(L.wtPinFrom('123.4, 500.1'), null);
+});
+t('fix in place: price (Not set / Free / Paid + amount), credit, kind, venue, pin; values escaped', () => {
+  const h = L.wtEditHTML({ e: { price_type: 'paid', price_amount: 35, image_credit: 'A "B"', category: null, venue: 'Arch <G>', latitude: 3.15, longitude: 101.7 } });
+  assert.match(h, /<option value="paid" selected>Paid<\/option><\/select><input id="wt-pa" inputmode="decimal" placeholder="From \(amount\)" value="35">/);
+  assert.match(h, /id="wt-cr" value="A &quot;B&quot;"/); assert.match(h, /id="wt-ven" value="Arch &lt;G&gt;"/);
+  assert.match(h, /id="wt-pin" value="3\.15000, 101\.70000"/);
+  assert.match(L.wtEditHTML({ e: { price_type: null } }), /<option value="" selected>Not set<\/option>[\s\S]*id="wt-pa"[^>]* hidden>/);
+  assert.match(html, /update\(patch\)\.eq\('id', it\.e\.id\)\.eq\('status', 'pending'\)/);
+  assert.match(html, /queueCountryWork\(\{ kind: 'event_photo', eventID: it\.e\.id/);
 });
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

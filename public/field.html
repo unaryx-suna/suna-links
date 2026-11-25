@@ -549,6 +549,13 @@
   .wt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
   .wt-foot p { flex: 1 1 200px; margin: 0; color: var(--muted); font-size: 13.5px; }
   .wt-nofm { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+  .wt-edit { display: grid; gap: 10px; margin: 16px 0 0; }
+  @media (min-width: 900px) { .wt-edit { grid-template-columns: 1fr 1fr; } .wt-edit .wt-saved { grid-column: 1 / -1; } }
+  .wt-edit label { display: grid; gap: 4px; } .wt-edit label > span:first-child { color: var(--muted); font-size: 13px; }
+  .wt-edit input, .wt-edit select { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; width: 100%; box-sizing: border-box; }
+  .wt-price { display: flex; gap: 8px; } .wt-price select { flex: 0 0 110px; }
+  .wt-saved { margin: 0; min-height: 18px; color: var(--muted); font-size: 13px; }
+  .wt-drop { cursor: pointer; text-align: center; } .wt-drop small { color: var(--muted); }
   .wt-why { width: 100%; min-height: 88px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px/1.4 inherit; }
   .wt-toast { position: fixed; z-index: 40; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 18px; border-radius: 14px; background: #fff; color: #140F2E; font-weight: 700; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
   .wt-toast button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #140F2E; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
@@ -9040,7 +9047,7 @@ async function loadWait(render) {
   try {
     const nowIso = new Date().toISOString();
     const [ev, live, rp, fl, fb] = await Promise.all([
-      db.from('world_events').select('id,name,start_time,venue,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
+      db.from('world_events').select('id,name,start_time,venue,category,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
         .eq('status', 'pending').gte('end_time', nowIso).order('created_at', { ascending: true }).limit(200),
       db.from('world_events').select('id,name,image_url').in('status', ['pending', 'approved']).gte('end_time', nowIso).not('image_url', 'is', null).limit(1000),
       db.from('reports').select('id,created_at,landmark_id,issue_type,landmark_name,status')
@@ -9058,9 +9065,10 @@ async function loadWait(render) {
     for (const e of ev.data || []) {
       const twins = e.image_url ? (byPhoto.get(String(e.image_url).split('?')[0]) || []).filter((x) => x.id !== e.id) : [];
       const miss = wtMissing(e, twins.length ? twins[0].name : null);
+      const dupUrl = twins.length ? e.image_url : null;
       const where = [wtWhen(e), e.venue].filter(Boolean).join(', ');
       if (!miss.length) items.push({ key: 'ev:' + e.id, part: 'need', kind: 'ready', label: 'Listing, ready', title: e.name, sub: where, at: e.created_at, thumb: e.image_url, e });
-      else items.push({ key: 'ev:' + e.id, part: 'ai', kind: 'fix', label: 'Listing, missing info', title: e.name, sub: miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()), at: e.created_at, thumb: e.image_url, e, miss });
+      else items.push({ key: 'ev:' + e.id, part: 'ai', kind: 'fix', label: 'Listing, missing info', title: e.name, sub: miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()), at: e.created_at, thumb: e.image_url, e, miss, dupUrl });
     }
     for (const c of (typeof clRows !== 'undefined' ? clRows : [])) {
       items.push({ key: 'cl:' + c.id, part: 'need', kind: 'claim', label: 'Claim', title: (c.event && c.event.name) || 'Claim', sub: c.domain_match ? 'Email matches the website' : (c.role ? 'Says they are the ' + String(c.role) : 'Organiser claim'), at: c.created_at, c });
@@ -9128,11 +9136,75 @@ function wtDetail() {
   else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   else actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
-    + '<div class="wt-dtop">' + (e ? '<div class="wt-pic">' + pic + '</div>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
-    + plan + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
+    + '<div class="wt-dtop">' + (e ? '<label class="wt-pic wt-drop" title="Drop a photo here, or tap to choose one">' + (it.thumb ? pic : 'No photo yet<br><small>Drop one here or tap to add</small>') + '<input type="file" accept="image/*" id="wt-photo" hidden></label>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
+    + (e ? wtEditHTML(it) : '') + plan + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
     + '<div class="wt-foot">' + actions + '</div>';
   box.hidden = false;
 }
+/** W-315 (6-one-queue.png, desktop listing open): fix a listing in place. Each field saves as it changes,
+ *  only while the listing is still pending; a listing that becomes complete moves up to Needs you. */
+function wtEditHTML(it) {
+  const e = it.e, v = (x) => escapeHtml(x == null ? '' : String(x));
+  const pin = e.latitude != null && e.longitude != null ? Number(e.latitude).toFixed(5) + ', ' + Number(e.longitude).toFixed(5) : '';
+  return '<div class="wt-edit">'
+    + '<label><span>Price</span><span class="wt-price"><select id="wt-pt"><option value=""' + (!e.price_type ? ' selected' : '') + '>Not set</option><option value="free"' + (e.price_type === 'free' ? ' selected' : '') + '>Free</option><option value="paid"' + (e.price_type === 'paid' ? ' selected' : '') + '>Paid</option></select>'
+    + '<input id="wt-pa" inputmode="decimal" placeholder="From (amount)" value="' + v(e.price_amount) + '"' + (e.price_type === 'paid' ? '' : ' hidden') + '></span></label>'
+    + '<label><span>Photo credit</span><input id="wt-cr" value="' + v(e.image_credit) + '" placeholder="Who took it"></label>'
+    + '<label><span>Kind</span><input id="wt-cat" value="' + v(e.category) + '" placeholder="Festival, Market, Music…"></label>'
+    + '<label><span>Venue</span><input id="wt-ven" value="' + v(e.venue) + '" placeholder="Venue and street"></label>'
+    + '<label><span>Pin</span><input id="wt-pin" value="' + v(pin) + '" placeholder="Paste a Google Maps link or lat, lng"></label>'
+    + '<p class="wt-saved" id="wt-saved" role="status"></p></div>';
+}
+/** lat, lng from '3.15, 101.71' or a Google Maps link (@lat,lng or ?q=lat,lng); null if neither. */
+function wtPinFrom(t) {
+  const m = String(t || '').match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { latitude: lat, longitude: lng } : null;
+}
+async function wtSave(it, patch) {
+  const note = $('wt-saved'); if (note) note.textContent = 'Saving…';
+  const { data, error } = await db.from('world_events').update(patch).eq('id', it.e.id).eq('status', 'pending').select('id');
+  if (error || !data || !data.length) { if (note) note.textContent = error ? 'Not saved: ' + error.message : 'Not saved: it was decided elsewhere.'; return false; }
+  Object.assign(it.e, patch);
+  wtRecheck(it);
+  if (note) note.textContent = 'Saved';
+  return true;
+}
+/** After an edit: the missing list again; complete -> Needs you (ready), else stays in AI can fix. */
+function wtRecheck(it) {
+  const miss = wtMissing(it.e, null).concat((it.miss || []).filter((m) => m[0] === 'dup' && it.e.image_url === it.dupUrl));
+  const was = it.part;
+  if (!miss.length) { it.part = 'need'; it.kind = 'ready'; it.label = 'Listing, ready'; it.miss = null; it.sub = [wtWhen(it.e), it.e.venue].filter(Boolean).join(', '); }
+  else { it.part = 'ai'; it.kind = 'fix'; it.label = 'Listing, missing info'; it.miss = miss; it.sub = miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()); }
+  it.thumb = it.e.image_url || it.thumb;
+  if (was !== it.part) renderWait(); else { const r = document.querySelector('#pane-wait .wt-row[data-wt="' + CSS.escape(it.key) + '"]'); if (r) r.outerHTML = wtRowHTML(it, Date.now()); }
+  const n = wtItems.filter((x) => x.part === 'need').length; $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0);
+}
+let wtTyping = null;
+function wtField(ev) {
+  const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e) return;
+  const id = ev.target.id;
+  if (id === 'wt-pt') { $('wt-pa').hidden = ev.target.value !== 'paid'; wtSave(it, { price_type: ev.target.value || null, price_amount: ev.target.value === 'paid' ? (Number($('wt-pa').value) || null) : null }); return; }
+  const map = { 'wt-pa': () => ({ price_amount: Number(ev.target.value) || null }), 'wt-cr': () => ({ image_credit: ev.target.value.trim() || null }), 'wt-cat': () => ({ category: ev.target.value.trim() || null }), 'wt-ven': () => ({ venue: ev.target.value.trim() || null }),
+    'wt-pin': () => { const p = wtPinFrom(ev.target.value); if (!p) { $('wt-saved').textContent = ev.target.value.trim() ? "That isn't a pin: paste a Google Maps link or lat, lng" : ''; return null; } return p; } };
+  if (!map[id]) return;
+  clearTimeout(wtTyping);
+  wtTyping = setTimeout(() => { const patch = map[id](); if (patch) wtSave(it, patch); }, ev.type === 'change' ? 0 : 700);
+}
+async function wtPhoto(file) {
+  const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e || !file) return;
+  if (!/^image\//.test(file.type || '') && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '')) { $('wt-saved').textContent = 'That file is not a photo.'; return; }
+  try {
+    $('wt-saved').textContent = 'Preparing…';
+    const { blob } = await evResize(file);
+    await queueCountryWork({ kind: 'event_photo', eventID: it.e.id, credit: (($('wt-cr') || {}).value || '').trim() || null, bytes: await blob.arrayBuffer() }, it.e.name || 'Event', crypto.randomUUID());
+    const url = URL.createObjectURL(blob);
+    const pic = document.querySelector('#wt-detail .wt-drop'); if (pic) { pic.replaceChildren(); const im = document.createElement('img'); im.src = url; im.alt = ''; pic.appendChild(im); }
+    $('wt-saved').textContent = 'Photo uploading; the listing keeps it when the upload lands.';
+  } catch (err) { $('wt-saved').textContent = (err && err.message) || 'Could not read that photo.'; }
+}
+
 /** Approve / Turn down / Mark sorted: off the list now, written after the Undo window. */
 function wtDecide(it, what, why) {
   wtFlush();
@@ -9187,6 +9259,10 @@ $('pane-wait').addEventListener('click', (ev) => {
   }
   const row = ev.target.closest('.wt-row[data-wt]'); if (row) { wtSel = row.dataset.wt; wtDetail(); if (!DK.matches) window.scrollTo(0, 0); }
 });
+$('pane-wait').addEventListener('input', wtField);
+$('pane-wait').addEventListener('change', (ev) => { if (ev.target.id === 'wt-photo') wtPhoto(ev.target.files && ev.target.files[0]); else wtField(ev); });
+$('pane-wait').addEventListener('dragover', (ev) => { if (ev.target.closest('.wt-drop')) ev.preventDefault(); });
+$('pane-wait').addEventListener('drop', (ev) => { const d = ev.target.closest('.wt-drop'); if (!d) return; ev.preventDefault(); wtPhoto(ev.dataTransfer.files && ev.dataTransfer.files[0]); });
 $('pane-wait').addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.wt-row[data-wt]')) { ev.preventDefault(); ev.target.click(); } });
 /* ── W-315 (3): report views. Organisers and partners (tiles + table; a row opens their page) and Feedback. ── */
 let ogRows = [], ogLive = new Map(), ogFilter = 'all';
