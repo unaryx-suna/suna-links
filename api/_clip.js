@@ -489,7 +489,10 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .pills { display: flex; gap: 7px; margin: 0 0 7px; }
     .pill { padding: 4px 9px; border-radius: 999px; background: var(--pill); color: #fff; font-size: 11px; font-weight: 700;
       text-transform: uppercase; letter-spacing: .02em; }
-    .pill-now { background: var(--now); }
+    /* W-314 OD-web-Q3-4: the date is orange text, no fill (white on #FF8C18 was 2.3:1); the price chip white 8% / 65%. */
+    .pills { align-items: center; }
+    .pill { background: rgba(255,255,255,.08); color: rgba(255,255,255,.65); }
+    .pill-now { background: none; padding: 0; color: var(--now); font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
     .pill-over { background: #4a4a4a; color: var(--body); text-transform: none; letter-spacing: 0; }
     h1 { font-size: 30px; line-height: 1.2; font-weight: 700; margin: 0; }
     .hero-sub { color: var(--body); font-size: 14px; margin: 6px 0 0; }
