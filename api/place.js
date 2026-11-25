@@ -336,6 +336,20 @@ ${PAGE_SCRIPT}
 </html>`;
 }
 
+/** '<Name>, <City> · Suna', at most 60 characters; an all-caps name is title-cased, short acronyms kept. */
+export function placeTitle(name, city) {
+  let n = String(name || '').trim().replace(/\s+/g, ' ');
+  if (/[A-Z]{4,}/.test(n) && n === n.toUpperCase()) {
+    n = n.toLowerCase().replace(/(^|[\s\-/(&'’])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+      .replace(/\b(\p{L}{1,4})\b/gu, (w) => (/^(kl|klcc|ttdi|usj|mrt|lrt|ktm|bbq|nyc|uk|usa|sg|ss\d*)$/i.test(w) ? w.toUpperCase() : w));
+  }
+  const end = ' · Suna';
+  const full = city && !n.toLowerCase().includes(String(city).toLowerCase()) ? `${n}, ${city}` : n;
+  if ((full + end).length <= 60) return full + end;
+  if ((n + end).length <= 60) return n + end;
+  return n.slice(0, 60 - end.length - 1).replace(/\s+\S*$/, '') + '…' + end;
+}
+
 export default async function handler(req, res) {
   const ref = placeRefFrom(req.url || '');
   // The full UUID. A short link has none until exactly one row answers it.
@@ -375,9 +389,8 @@ export default async function handler(req, res) {
           cityName = cityRows?.[0]?.name || '';
         }
 
-        // "Tal Barahi Temple — Architecture in Pokhara | Suna"
-        const middle = [place.category, cityName ? `in ${cityName}` : ''].filter(Boolean).join(' ');
-        title = [place.name, middle].filter(Boolean).join(' — ') + ' | Suna';
+        // W-314 OD-web-Q9-5: 'Tal Barahi Temple, Pokhara · Suna' (60 at most; the name in title case if it was all caps).
+        title = placeTitle(place.name, cityName);
 
         const text = (place.description || '').trim().replace(/\s+/g, ' ');
         // About 155 characters, on a word (W-61): what a results page shows.

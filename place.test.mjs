@@ -168,7 +168,7 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
 
   await t('W-59 the full UUID: the real preview, canonical to itself', async () => {
     const b = (await render(`/place/${NOTRE}`)).body;
-    assert.equal(og(b, 'title'), 'Notre-Dame de Paris — Architecture | Suna');
+    assert.equal(og(b, 'title'), 'Notre-Dame de Paris · Suna');
     assert.equal(canon(b), `https://app.unaryx.com/place/${NOTRE}`);
     assert.equal(sunaPlace(b), NOTRE);
   });
@@ -176,7 +176,7 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
     landmarkURLs.length = 0;
     const r = await render(`/place/notre-dame-de-paris--${SHORT}?ctx=evening&via=share`);
     assert.equal(r.code, 200);
-    assert.equal(og(r.body, 'title'), 'Notre-Dame de Paris — Architecture | Suna');
+    assert.equal(og(r.body, 'title'), 'Notre-Dame de Paris · Suna');
     assert.equal(canon(r.body), `https://app.unaryx.com/place/${NOTRE}`);
     assert.equal(og(r.body, 'url'), `https://app.unaryx.com/place/${NOTRE}`);
     assert.equal(og(r.body, 'image'), NOTRE_COVER, 'our cover');
@@ -190,7 +190,7 @@ await t('W-50 outbound links open a new tab, internal ones never', async () => {
   });
   await t('W-59 a non-Latin slug, percent-encoded as a chat sends it', async () => {
     const b = (await render(`/place/${encodeURIComponent('хиймэл-нуур')}--c0ffee00?via=share`)).body;
-    assert.equal(og(b, 'title'), 'Хиймэл нуур — Park | Suna');
+    assert.equal(og(b, 'title'), 'Хиймэл нуур · Suna');
     assert.equal(sunaPlace(b), 'c0ffee00-1111-4222-8333-444455556666');
   });
   await t('W-59 an unknown short id: the generic card, no canonical', async () => {
