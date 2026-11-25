@@ -157,7 +157,7 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
     actions = `<a class="btn" href="${go}" target="_blank" rel="nofollow noopener">Get tickets ↗</a>`
       + dir('btn btn-outline half') + save('btn btn-outline half');
   } else {
-    actions = (e.price_type === 'free' ? '<p class="note">Free entry · no ticket needed</p>' : '')
+    actions = (e.price_type === 'free' ? '<p class="note">Free entry, no ticket needed</p>' : '')
       + save('btn') + '<p class="caption">Opens Suna, or the App Store if you don’t have it</p>'
       + dir('btn btn-outline');
   }

@@ -118,7 +118,7 @@ await t('/c/: On tonight and This week split at the venue\'s midnight; rows have
   assert(r.body.indexOf(U(1)) > tonight && r.body.indexOf(U(1)) < week);
   assert(r.body.indexOf(U(2)) > week);
   assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"|ev-maps/);
-  assert.match(r.body, /<span class="row-meta">From RM35 · Taman Tun Park · 500 m<\/span>/);
+  assert.match(r.body, /<span class="row-meta">From RM35, Taman Tun Park, 500 m<\/span>/);
   const s2 = splitTonight([{ start_time: iso(now - H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
   assert.deepEqual([s2.tonight.length, s2.week.length], [1, 1]);
 });
@@ -187,11 +187,11 @@ await t('eyebrow: on now until (closes today), on now, tonight, a later day, a r
   const { eyebrow } = await import('./api/_clip.js');
   const tz = 'Asia/Kuala_Lumpur';
   const n = new Date('2027-03-05T04:00:00Z'); // 12:00 in KL
-  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now · until 7:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now, until 7:00pm');
   assert.equal(eyebrow({ start_time: '2027-03-01T01:00:00Z', end_time: '2027-04-05T11:00:00Z', recurrence_type: 'period' }, tz, n), 'On now');
-  assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight · 7:30pm');
-  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today · 2:00pm');
-  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar · 8:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight, 7:30pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today, 2:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar, 8:00pm');
   assert.equal(eyebrow({ start_time: '2027-03-06T02:00:00Z', end_time: '2027-03-20T10:00:00Z', recurrence_type: 'period' }, tz, n), 'From Sat 6 Mar');
 });
 await t('pickStep: 800 m beats 3 km beats the city; nothing → null', async () => {
@@ -216,8 +216,8 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1>Event 4444<\/h1>/);
   assert.match(r.body, /<p class="hero-sub">Taman Tun Park<\/p>/);
-  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar · 7:30pm<\/span><span class="pill">Paid<\/span>/);
-  assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027 · 7:30pm–10:00pm<\/dd>/);
+  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar, 7:30pm<\/span><span class="pill">Paid<\/span>/);
+  assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027, 7:30pm–10:00pm<\/dd>/);
   assert.match(r.body, /<dt>Where<\/dt><dd>Taman Tun Park, Kuala Lumpur<\/dd>/);
   assert.match(r.body, /<dt>Price<\/dt><dd>From RM35<\/dd>/);
   const actions = r.body.match(/<div class="actions">([\s\S]*?)<\/div><\/div><\/div><\/div>|<div class="actions">([\s\S]*?)<\/div>\n/)[0];
@@ -311,7 +311,7 @@ await t('/e/: no price → no offers, Save in Suna; free → price 0, More from 
   ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers.price, 0);
   assert.match(r.body, new RegExp(`<a class="link" href="https://unaryx\\.com/go/e-${U(6)}" target="_blank" rel="nofollow noopener">More from the organiser ↗</a>`));
-  assert.match(r.body, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"/);
+  assert.match(r.body, /<p class="note">Free entry, no ticket needed<\/p><a class="btn save-suna"/);
   assert.doesNotMatch(r.body, /Get tickets|commission/);
 });
 await t('/e/: unknown and junk → 404 + noindex (W-179); database failure → 200 + noindex; all link to /events', async () => {
@@ -451,7 +451,7 @@ await t('W-51 hours_text is read, and beats the description and the daily times 
   assert(calls.some((u) => u.includes('/rest/v1/world_events') && u.includes('id=eq.') && /select=[^&]*hours_text/.test(u)), 'EVENT_SELECT reads hours_text');
   assert.match(b, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon<\/dd>/);
   // The meta description is one line: its lines fold with commas.
-  assert.match(b, /<meta name="description" content="[^"]*· Tue–Sat 11am–7pm, Sun 11am–5pm · closed Mon/);
+  assert.match(b, /<meta name="description" content="[^"]*, Tue–Sat 11am–7pm, Sun 11am–5pm · closed Mon/);
   assert.doesNotMatch(b, /11:00–19:00/);
   // Blank hours_text is no hours_text: the description's hours, as before.
   state.eventRow = ev(U(9), 0, { ...RR, hours_text: '  ' });
@@ -464,10 +464,10 @@ await t('W-48 the description sits under About, after the facts', async () => {
   const b = (await render(event, `/e/${U(9)}`)).body;
   assert(b.indexOf('<dl class="facts">') < b.indexOf('<h2>About</h2>') && b.indexOf('<h2>About</h2>') < b.indexOf('<p class="desc">'));
 });
-await t('W-48 free with no link: "Free entry · no ticket needed" above Save in Suna, no organiser link', async () => {
+await t('W-48 free with no link: "Free entry, no ticket needed" above Save in Suna, no organiser link', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
-  assert.match(b, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"[^>]*>Save in Suna<\/a><p class="caption">Opens Suna, or the App Store if you don’t have it<\/p>/);
+  assert.match(b, /<p class="note">Free entry, no ticket needed<\/p><a class="btn save-suna"[^>]*>Save in Suna<\/a><p class="caption">Opens Suna, or the App Store if you don’t have it<\/p>/);
   assert.match(b, /<dt>Price<\/dt><dd>Free<\/dd>/);
   assert.doesNotMatch(b, /unaryx\.com\/go\/|More from the organiser/);
 });

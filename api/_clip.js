@@ -199,13 +199,13 @@ export function whenLine(event, timeZone, now = new Date()) {
     const days = Array.isArray(event.recurrence_days) && event.recurrence_days.length
       ? event.recurrence_days.join(', ') : 'weekly';
     const tail = until ? ` until ${fmtDate(until, timeZone, crossesYear)}` : '';
-    return `${days}${tail}${daily ? ` · ${daily}` : ''}`;
+    return `${days}${tail}${daily ? `, ${daily}` : ''}`;
   }
   if (event.recurrence_type === 'period' || !sameLocalDay(start, end, timeZone)) {
-    return `${fmtDate(start, timeZone, crossesYear)} – ${fmtDate(end, timeZone, crossesYear)}${daily ? ` · ${daily} daily` : ''}`;
+    return `${fmtDate(start, timeZone, crossesYear)} – ${fmtDate(end, timeZone, crossesYear)}${daily ? `, ${daily} daily` : ''}`;
   }
   const hours = daily || `${fmtTime(start, timeZone)}–${fmtTime(end, timeZone)}`;
-  return `${fmtWeekday(start, timeZone)} ${fmtDate(start, timeZone, crossesYear)} · ${hours}`;
+  return `${fmtWeekday(start, timeZone)} ${fmtDate(start, timeZone, crossesYear)}, ${hours}`;
 }
 
 // ---- opening hours written in the description (W-48) ----
@@ -237,7 +237,7 @@ export function whenText(event, timeZone, now = new Date()) {
   if (!hours) return whenLine(event, timeZone, now);
   const base = whenLine({ ...event, daily_start_time: null, daily_end_time: null }, timeZone, now);
   // A one-day event's line already carries its times; only a run gets the hours.
-  return / – |until|weekly|, /.test(base) || event.recurrence_type ? `${base.split(' · ')[0]} · ${hours}` : base;
+  return / – |until|weekly|, /.test(base) || event.recurrence_type ? `${base.split(', ')[0]}, ${hours}` : base;
 }
 
 /** The facts card's When (Ops's W2): a run that has started reads "Until Sun 1 Nov"; its hours go under Hours. */
@@ -350,8 +350,8 @@ export function eventLD(event, url) {
 // ---- W-48 (2): the rows and labels on Ops's cleaner /e/ and /c/ ----
 
 /**
- * The short orange label over an event: "On now · until 7pm", "Tonight ·
- * 7:30pm", "Today · 10am", "Sat 17 Oct · 8pm", "From Sat 17 Oct". Shown in
+ * The short orange label over an event: "On now, until 7pm", "Tonight,
+ * 7:30pm", "Today, 10am", "Sat 17 Oct, 8pm", "From Sat 17 Oct". Shown in
  * small caps (an eyebrow), so it's written in sentence case here.
  */
 export function eyebrow(event, timeZone, now = new Date()) {
@@ -359,16 +359,16 @@ export function eyebrow(event, timeZone, now = new Date()) {
   const end = new Date(event.end_time);
   const tonight = endOfLocalDay(now, timeZone);
   if (start <= now) {
-    if (end <= tonight) return `On now · until ${fmtTime(end, timeZone)}`;
+    if (end <= tonight) return `On now, until ${fmtTime(end, timeZone)}`;
     return 'On now';
   }
   const multiDay = event.recurrence_type === 'period' || !sameLocalDay(start, end, timeZone);
   if (start <= tonight) {
     const z = zoned(start, timeZone);
-    return `${z.hour >= 17 ? 'Tonight' : 'Today'} · ${fmtTime(start, timeZone)}`;
+    return `${z.hour >= 17 ? 'Tonight' : 'Today'}, ${fmtTime(start, timeZone)}`;
   }
   const day = `${fmtWeekday(start, timeZone)} ${fmtDate(start, timeZone, false)}`;
-  return multiDay ? `From ${day}` : `${day} · ${fmtTime(start, timeZone)}`;
+  return multiDay ? `From ${day}` : `${day}, ${fmtTime(start, timeZone)}`;
 }
 
 /** "Free", "From A$35", "Paid", or null: the price as a row or the facts card says it. */
@@ -383,7 +383,7 @@ export function priceShort(event) {
 export function eventRow(event, { timeZone, now = new Date(), km = null } = {}) {
   const img = ourImage(event.image_url);
   const venue = event.venue && String(event.venue).trim();
-  const meta = [priceShort(event), venue, km != null ? distanceLabel(km) : null].filter(Boolean).join(' · ');
+  const meta = [priceShort(event), venue, km != null ? distanceLabel(km) : null].filter(Boolean).join(', ');
   return `<li><a class="row" href="/e/${escapeHtml(event.id)}">`
     + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
     + `<span class="row-text"><span class="row-eyebrow">${escapeHtml(eyebrow(event, timeZone, now))}</span>`
@@ -415,12 +415,13 @@ export async function eventsAround(lat, lng, { km, days = 7, now = new Date(), l
 
 /** The line at the foot of every page; the commission note only where a page links to tickets. */
 export function footer({ tickets = false } = {}) {
-  return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a> · events and places within a short walk'
+  return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a>, events and places within a short walk'
     + (tickets ? '<br>Affiliate links: we may earn a commission on some ticket links.' : '') + '</footer>';
 }
 
 /** The Suna mark, top left, back to unaryx.com/events (Ops's W1). */
-export const MARK = '<a class="mark" href="https://unaryx.com/events"><span class="mark-dot" aria-hidden="true"></span>Suna</a>';
+// W-314 OD-web-Q3-5 / W-Q3-2: the real Suna mark (not a sand dot), wordmark in a white 10% pill, 44 px, to unaryx.com.
+export const MARK = '<a class="mark" href="https://unaryx.com/events"><svg class="mark-svg" viewBox="0 0 368 772" width="12" height="25" aria-hidden="true"><polygon points="193.5,6 6.5,350.5 142,337.5 178,334" fill="#FDE4B1"/><polygon points="178,334 142,337.5 142,417" fill="#DDB17C"/><polygon points="193.5,6 178,334 142,417 231,351.5" fill="#F7CC94"/><polygon points="193.5,6 231,351.5 348.5,403" fill="#FDE4B1"/><polygon points="29.5,381.5 179,765.5 143,431" fill="#FDE4B1"/><polygon points="143,431 229.5,368 195,447 179,765.5" fill="#F7CC94"/><polygon points="229.5,368 229.5,446 195,447" fill="#DDB17C"/><polygon points="195,447 229.5,446 360.5,433 179,765.5" fill="#FDE4B1"/></svg>Suna</a>';
 
 /**
  * The page around a body. Same palette and font as /i/. The meta tag is what
@@ -477,6 +478,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .mark { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 6px; border-radius: 999px;
       background: rgba(0,0,0,.45); color: var(--text); font-weight: 700; font-size: 14px; text-decoration: none; }
     .mark-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--sand); }
+    .mark { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 12px; border-radius: 999px; background: rgba(255,255,255,.1); } .mark-svg { width: 12px; height: 25px; flex: none; }
     .hero { position: relative; margin: 0 -16px; min-height: 360px; display: flex; flex-direction: column;
       justify-content: space-between; padding: 16px; background: linear-gradient(#5c4d3d, var(--bg)); overflow: hidden; }
     .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -502,7 +504,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .actions > * { grid-column: 1 / -1; }
     .actions .half { grid-column: auto; }
     .btn { display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 16px; border-radius: 999px;
-      text-decoration: none; font-weight: 600; font-size: 16px; background: var(--sand); color: var(--ink-on-sand); border: 0; }
+      text-decoration: none; font-weight: 600; font-size: 16px; background: #fff; color: #140F2E; border: 0; }   /* W-314 W-Q3-2 / W-Q3-3 / OD-web-Q3-6: white primary, never sand */
     .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .note { text-align: center; font-size: 14px; font-weight: 600; margin: 0; }
     .caption { text-align: center; color: var(--muted); font-size: 12px; margin: -2px 0 4px; }
@@ -513,7 +515,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .facts dd { margin: 0; flex: 1; font-size: 14px; line-height: 19px; white-space: pre-line; }
     h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
     .desc { color: var(--body); font-size: 15px; line-height: 21px; margin: 0 0 10px; white-space: pre-line; }
-    .link { color: var(--sand); font-size: 14px; font-weight: 600; text-decoration: none; }
+    .link { display: inline-flex; align-items: center; min-height: 44px; color: #B3A6FF; font-size: 14px; font-weight: 600; text-decoration: none; }
     .about { margin: 0 0 32px; }
     .rows { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
     .row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 10px 40px 10px 10px;
@@ -551,7 +553,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .sheet { width: 100%; max-width: 386px; display: grid; gap: 12px; }
     .sheet-group { background: var(--sheet); border-radius: 16px; overflow: hidden; display: grid; text-align: center; }
     .sheet-title { color: var(--muted); font-size: 13px; font-weight: 500; margin: 0; padding: 18px 16px; }
-    .sheet-opt { color: var(--sand); font-size: 18px; font-weight: 600; text-decoration: none; padding: 18px 16px;
+    .sheet-opt { color: #fff; font-size: 18px; font-weight: 600; text-decoration: none; padding: 18px 16px;
       border-top: 1px solid rgba(90,90,90,.6); }
     .sheet-cancel { color: var(--text); font: 700 18px var(--font); border: 0; height: 60px; cursor: pointer; }
   </style>

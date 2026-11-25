@@ -124,7 +124,7 @@ export function checkpointBody(code, place = null) {
       <li>2. Sign in</li>
       <li>3. Tap “Claim my 5 points” or scan the card again</li>
     </ol>
-    <p class="cp-rules">Rules: <a href="${RULES}">unaryx.com/checkpoints</a> · 18+</p>
+    <p class="cp-rules">Rules: <a href="${RULES}">unaryx.com/checkpoints</a>, 18+</p>
   </div>
   <div class="cp-actions">
     <a class="store" href="${escapeHtml(STORE)}" rel="noopener" data-android="store" data-cta="checkpoint_app_store">Download on the App Store</a>
