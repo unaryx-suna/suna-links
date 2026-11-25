@@ -222,11 +222,13 @@ export default async function handler(req, res) {
         // The creator's own opening line is the best description available;
         // fall back to something true rather than something promotional.
         const story = (it.intro_story || '').trim().replace(/\s+/g, ' ');
-        description = story
-          ? (story.length > 200 ? `${story.slice(0, 197)}…` : story)
+        // W-314 OD-web-Q9-C3: the preview ends with what to do: 'Copy this plan to Suna.' (the story is cut to fit 160).
+        const END = ' Copy this plan to Suna.';
+        description = (story
+          ? (story.length > 160 - END.length ? `${story.slice(0, 160 - END.length - 1).replace(/\s+\S*$/, '')}…` : story)
           : (it.resolved_city_name
               ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
-              : description);
+              : description)) + END;
 
         // The itinerary's own cover when it resolves, else the first stop's
         // place photo: the same picture the page opens on.
