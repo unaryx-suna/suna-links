@@ -16,7 +16,7 @@ t('markup: an admin-only menu row with the due-today count, the Orders pane, on 
   assert.match(html, /<div class="wrap" id="pane-orders" hidden>/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !\(profile && profile\.is_admin\);/);
   assert.match(html, /\$\('menu-orders'\)\.hidden = !profile\.is_admin;/);
-  assert.match(html, /if \(which === 'orders'\) loadOrders\(true\);/);
+  assert.match(html, /if \(which === 'orders'\) \{ if \(orRows\.length\) renderOrders\(\); else pnSkel\('or-list'\); loadOrders\(true\); \}/);
   assert.match(html, /const BUILD = 'field-v68';/);
   assert.match(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8'), /CACHE_VERSION = 'field-v68'/);
 });

@@ -563,6 +563,9 @@
   .wt-chips button { flex: none; }
   @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } .wt-chips:has(~ .wt-cols.open) { display: none; } }
   @media (min-width: 900px) { .wt-nofm .wt-back { display: none; } }
+  .pn-skel { height: 64px; margin: 8px 0; border-radius: 14px; background: rgba(255,255,255,.08); }
+  @media (prefers-reduced-motion: no-preference) { .pn-skel { animation: pn-skel 1.4s ease-in-out infinite; } }
+  @keyframes pn-skel { 50% { background: rgba(255,255,255,.14); } }
   /* W-315 (3): report views (tiles + a table). */
   .rp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
   @media (min-width: 900px) { .rp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -5644,6 +5647,8 @@ $('menu-feedback').onclick = () => { closeMenu(); switchTab('feedback'); };
 $('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
+/** W-314 OD-web-Q8-4: three grey rows while a list loads for the first time. */
+function pnSkel(id) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="pn-skel"></div><div class="pn-skel"></div><div class="pn-skel"></div>'; }
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
   for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback']) {
@@ -5664,14 +5669,15 @@ function switchTab(which) {
   if (which === 'country') renderCountryTab();
   if (which === 'events') loadEventList();
   if (which === 'creators') loadCreators();
-  if (which === 'claims') loadClaims(true);
+  // W-314 W-Q8-5 / OD-web-Q8-4: a tab shows its last list at once (or grey rows the first time) and refreshes in place.
+  if (which === 'claims') { if (clRows.length) renderClaims(); else pnSkel('cl-list'); loadClaims(true); }
   if (which === 'review') openReview();
   if (which === 'payments') loadTickets('payments');
-  if (which === 'orders') loadOrders(true);
-  if (which === 'inbox') loadInbox(true);
-  if (which === 'wait') loadWait(true); else wtFlush();
-  if (which === 'orgs') loadOrgs();
-  if (which === 'feedback') loadFeedback();
+  if (which === 'orders') { if (orRows.length) renderOrders(); else pnSkel('or-list'); loadOrders(true); }
+  if (which === 'inbox') { if (ibRows.length) renderInbox(); else pnSkel('ib-list'); loadInbox(true); }
+  if (which === 'wait') { if (wtItems.length) renderWait(); else { pnSkel('wt-need'); pnSkel('wt-ai'); } loadWait(true); } else wtFlush();
+  if (which === 'orgs') { if (ogRows.length) renderOrgs(); else pnSkel('og-table'); loadOrgs(); }
+  if (which === 'feedback') { if (fbkRows.length) renderFeedback(); else pnSkel('fbk-table'); loadFeedback(); }
   if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();

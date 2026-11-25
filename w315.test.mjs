@@ -80,5 +80,11 @@ t('fix in place: price (Not set / Free / Paid + amount), credit, kind, venue, pi
   assert.match(html, /update\(patch\)\.eq\('id', it\.e\.id\)\.eq\('status', 'pending'\)/);
   assert.match(html, /queueCountryWork\(\{ kind: 'event_photo', eventID: it\.e\.id/);
 });
+t('W-314 W-Q8-5 / OD-web-Q8-4: each tab shows its last list at once (grey rows the first time) and refreshes in place', () => {
+  for (const [tab, rows, render, box] of [['claims', 'clRows', 'renderClaims', 'cl-list'], ['orders', 'orRows', 'renderOrders', 'or-list'], ['inbox', 'ibRows', 'renderInbox', 'ib-list'], ['orgs', 'ogRows', 'renderOrgs', 'og-table'], ['feedback', 'fbkRows', 'renderFeedback', 'fbk-table']]) {
+    assert.match(html, new RegExp(`if \\(which === '${tab}'\\) \\{ if \\(${rows}\\.length\\) ${render}\\(\\); else pnSkel\\('${box}'\\);`));
+  }
+  assert.match(html, /function pnSkel\(id\) \{ const el = \$\(id\); if \(el && !el\.children\.length\) el\.innerHTML = '<div class="pn-skel">/);
+});
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);
