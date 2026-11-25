@@ -436,6 +436,13 @@ export function androidTag({ from = 'page', city = '' } = {}) {
   return `<script src="/android.js" data-from="${escapeHtml(from)}"${city ? ` data-city="${escapeHtml(city)}"` : ''}></script>`;
 }
 
+/** W-314 OD-web-Q3-18: the desktop QR for an /e/<uuid> or /c/<slug> page (unaryx.com/api/qr draws it). */
+export function qrTile(canonical) {
+  const m = /^https:\/\/app\.unaryx\.com\/(e|c)\/([A-Za-z0-9-]{1,160})$/.exec(String(canonical || ''));
+  if (!m) return '';
+  return `<figure class="qrtile"><img src="https://unaryx.com/api/qr?${m[1]}=${m[2]}" width="112" height="112" alt="QR code for this page" loading="lazy"><figcaption><b>Open it on your phone</b><span>Point your phone camera here.</span></figcaption></figure>`;
+}
+
 export function page({ title, description, canonical, ogUrl, image, body, ld, noindex = false, bodyClass = '', android = null, ct = null }) {
   const tags = [
     noindex ? '<meta name="robots" content="noindex">' : '',
@@ -557,10 +564,19 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .sheet-opt { color: #fff; font-size: 18px; font-weight: 600; text-decoration: none; padding: 18px 16px;
       border-top: 1px solid rgba(90,90,90,.6); }
     .sheet-cancel { color: var(--text); font: 700 18px var(--font); border: 0; height: 60px; cursor: pointer; }
+    /* W-314 OD-web-Q3-18: the same desktop QR tile as /i/, at 1024+ with a pointer. */
+    .qrtile { display: none; }
+    @media (min-width: 1024px) and (hover: hover) {
+      .qrtile { display: flex; align-items: center; gap: 16px; position: fixed; right: 24px; bottom: 24px; z-index: 20; margin: 0; padding: 14px 18px 14px 14px; border: 1px solid #2a2f2c; border-radius: 20px; background: #181b19; box-shadow: 0 10px 30px rgba(0,0,0,.4); color: #fff; }
+      .qrtile img { width: 112px; height: 112px; border-radius: 14px; background: #fff9d5; }
+      .qrtile b { display: block; font-size: 16px; margin: 0 0 4px; }
+      .qrtile span { font-size: 14px; color: rgba(255,255,255,.7); }
+    }
   </style>
 </head>
 <body${bodyClass ? ` class="${bodyClass}"` : ''}>
 ${body}
+${noindex ? "" : qrTile(canonical)}
 ${PAGE_SCRIPT}
 ${androidTag(android || undefined)}
 </body>
