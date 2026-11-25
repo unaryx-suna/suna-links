@@ -344,7 +344,9 @@ export default async function handler(req, res) {
   }
 
   res
-    .status(200)
+    // W-314 W-Q3-7: no public plan behind the link is a 404 with the same friendly page (the app still opens
+    // a private plan for its owner through the universal link; the status only tells crawlers there's no page).
+    .status(none ? 404 : 200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     // Short enough that publishing a fix propagates, long enough that a viral
     // link is not re-resolved per scrape.

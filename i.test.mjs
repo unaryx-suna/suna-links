@@ -26,7 +26,7 @@ let bad = 0;
 const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
 const WEB_I = 'https://apps.apple.com/app/id6759053765?pt=128539200&ct=web-i&mt=8';
 
-await t('W-179 a public itinerary has no noindex; a link to none (missing, private, draft) is noindex, still 200', async () => {
+await t('W-179 a public itinerary has no noindex; a link to none (missing, private, draft) is noindex and a 404 (W-314 W-Q3-7)', async () => {
   assert.doesNotMatch(html, /name="robots"/);
   const real = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' });
@@ -34,7 +34,7 @@ await t('W-179 a public itinerary has no noindex; a link to none (missing, priva
   await handler({ url: '/i/nobody--zzzzzzzz', headers: { host: 'app.unaryx.com' } },
     { setHeader() { return this; }, status(c) { code = c; return this; }, send(b) { none = b; return this; }, end() {} });
   globalThis.fetch = real;
-  assert.equal(code, 200);
+  assert.equal(code, 404);
   assert.match(none, /<meta name="robots" content="noindex">/);
   assert.equal((none.match(/name="robots"/g) || []).length, 1);
 });
