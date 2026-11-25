@@ -5974,7 +5974,8 @@ function buildFinishScope() {
   if (!sel || sel.dataset.built) return;
   const fix = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
 
-  const opts = ['<option value="near">Near me</option>'];
+  // W-314 W-Q8-2 / OD-web-Q8-2: with location off, 'near me' would list the world; say so and start in KL.
+  const opts = ['<option value="near">' + (fix && fix.lat != null ? 'Near me' : 'Near me (location is off)') + '</option>'];
 
   const seen = new Set();
   cities.forEach((c) => { if (c.country_code) seen.add(c.country_code); });
@@ -5987,9 +5988,20 @@ function buildFinishScope() {
     opts.push('<option value="city:' + c.id + '">City, ' + escapeHtml(c.name) + '</option>');
   });
 
+  const kl = cities.find((c) => /kuala lumpur/i.test(c.name || ''));
+  if (!(fix && fix.lat != null) && kl && !near.some((c) => c.id === kl.id)) opts.splice(1, 0, '<option value="city:' + kl.id + '">City, ' + escapeHtml(kl.name) + '</option>');
   sel.innerHTML = opts.join('');
+  if (!(fix && fix.lat != null) && kl) sel.value = 'city:' + kl.id;
   sel.dataset.built = '1';
   sel.onchange = () => loadFinishList(false);
+}
+/** Where the finish list is, in words: 'near you' only with a real location, else the city or country. */
+function finishWhere() {
+  const v = finishScopeValue();
+  if (v === 'near') return (cap.lat != null || (liveFix && liveFix.lat != null)) ? 'near you' : 'everywhere (location is off)';
+  if (v.startsWith('city:')) { const c = cities.find((x) => String(x.id) === v.slice(5)); return 'in ' + (c ? c.name : 'that city'); }
+  if (v.startsWith('country:')) return 'in ' + v.slice(8);
+  return 'near you';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10326,7 +10338,7 @@ async function renderDkHome() {
     two.append(pay, ord); box.appendChild(two);
   }
   const fin = dkEl('div', 'card dk-fin');
-  const ft = dkEl('div'); ft.append(dkEl('b', '', (finishRows.length ? finishRows.length + (finishServerPaged ? '+' : '') + ' places' : 'Places') + ' to finish near you'), dkEl('small', '', 'Missing a photo, hours or a description'));
+  const ft = dkEl('div'); ft.append(dkEl('b', '', (finishRows.length ? finishRows.length + (finishServerPaged ? '+' : '') + ' places' : 'Places') + ' to finish ' + finishWhere()), dkEl('small', '', 'Missing a photo, hours or a description'));
   const fb = dkEl('button', 'ghost', 'Open Finish these'); fb.type = 'button'; fb.onclick = () => switchTab('finish');
   fin.append(ft, fb); box.appendChild(fin);
   if (admin && dkVerified == null) {
