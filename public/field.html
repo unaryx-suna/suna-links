@@ -510,7 +510,7 @@
   /* W-315 (Brian 22:18, panel-gaps 6-one-queue + 7-needs-you-and-ai): Waiting on you. Needs you, then AI can fix;
      a row opens beside the list (900 px and up) or full screen with "N of M" (phone). */
   .wt-sub { color: var(--muted); margin: -6px 0 16px; }
-  .wt-cols { display: grid; gap: 16px; }
+  .wt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; } .wt-cols > * { min-width: 0; }
   @media (min-width: 900px) { .wt-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .wt-detail { position: sticky; top: 16px; } }
   .wt-box { border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.03); overflow: hidden; }
   .wt-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; font: 800 13px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; }
@@ -552,7 +552,9 @@
   .wt-why { width: 100%; min-height: 88px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px/1.4 inherit; }
   .wt-toast { position: fixed; z-index: 40; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 18px; border-radius: 14px; background: #fff; color: #140F2E; font-weight: 700; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
   .wt-toast button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #140F2E; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
-  @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } }
+  #pane-wait .wt-chips { margin: 0 0 14px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .wt-chips button { flex: none; }
+  @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } .wt-chips:has(~ .wt-cols.open) { display: none; } }
   @media (min-width: 900px) { .wt-nofm .wt-back { display: none; } }
   /* W-315 (3): report views (tiles + a table). */
   .rp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
@@ -1079,6 +1081,7 @@
   <div class="wrap" id="pane-wait" hidden>
     <h1>Waiting on you</h1>
     <p class="wt-sub">Only what needs your call. The rest AI can fix first.</p>
+    <div class="rp-chips wt-chips" id="wt-chips"></div>
     <div class="wt-cols" id="wt-cols">
       <div class="wt-list">
         <div class="wt-box"><div class="wt-h">Needs you <span class="n" id="wt-n-need">0</span><span class="r">oldest first</span></div><div id="wt-need"></div></div>
@@ -8991,7 +8994,11 @@ function ibWaiting(it) { return !it.read_at && !!(IB_KIND[it.kind] || [])[2]; }
    reported places; the older place flags; feedback to sort. Send to AI stays disabled until panel-ai is
    deployed (STATUS 25 Nov 23:5x); nothing here calls a model. A decision waits 6 s with Undo before it is
    written (approving sends the submitter "Your event is live", which can't be taken back). */
-let wtItems = [], wtSel = null, wtPending = null, wtBusy = false;
+let wtItems = [], wtSel = null, wtPending = null, wtBusy = false, wtFilter = 'all';
+// The chips (6-one-queue.png): every row belongs to one group.
+const WT_GROUPS = [['all', 'All'], ['listings', 'Listings'], ['edits', 'Edits'], ['claims', 'Claims'], ['reported', 'Reported'], ['orders', 'Orders'], ['feedback', 'Feedback']];
+const wtGroup = (it) => (it.kind === 'ready' || it.kind === 'fix' ? 'listings' : it.kind === 'claim' ? 'claims' : it.kind === 'place' || it.kind === 'flag' ? 'reported' : it.kind === 'order' ? 'orders' : it.kind === 'feedback' ? 'feedback' : 'other');
+const WT_OUR_MOVE = ['paid', 'details_in', 'changes', 'approved'];
 const WT_DAY = 86400000;
 const WT_UNDO_MS = 6000;
 function wtAge(at, now) {
@@ -9044,6 +9051,7 @@ async function loadWait(render) {
     ]);
     for (const r of [ev, live, rp, fl, fb]) if (r.error) throw new Error(r.error.message);
     try { await loadClaims(false); } catch (err) { /* claims: their own note */ }
+    try { await loadOrders(false); } catch (err) { /* orders: their own note */ }
     const byPhoto = new Map();
     for (const r of live.data || []) { const k = String(r.image_url).split('?')[0]; if (!byPhoto.has(k)) byPhoto.set(k, []); byPhoto.get(k).push(r); }
     const items = [];
@@ -9056,6 +9064,9 @@ async function loadWait(render) {
     }
     for (const c of (typeof clRows !== 'undefined' ? clRows : [])) {
       items.push({ key: 'cl:' + c.id, part: 'need', kind: 'claim', label: 'Claim', title: (c.event && c.event.name) || 'Claim', sub: c.domain_match ? 'Email matches the website' : (c.role ? 'Says they are the ' + String(c.role) : 'Organiser claim'), at: c.created_at, c });
+    }
+    for (const o of (typeof orRows !== 'undefined' ? orRows : []).filter((x) => WT_OUR_MOVE.includes(x.step))) {
+      items.push({ key: 'or:' + o.session_id, part: 'need', kind: 'order', label: 'Order, waiting on us', title: o.business || 'Order', sub: (o.ready_by ? 'Ready by ' + o.ready_by : '') + (o.step ? (o.ready_by ? ', ' : '') + String(o.step).replace(/_/g, ' ') : ''), at: o.step_at || o.created_at, o });
     }
     for (const r of rp.data || []) items.push({ key: 'rp:' + r.id, part: 'ai', kind: 'place', label: 'Reported place', title: r.landmark_name || 'A place', sub: String(r.issue_type || 'Something is wrong').replace(/_/g, ' '), at: r.created_at, r });
     for (const f of fl.data || []) items.push({ key: 'fl:' + f.id, part: 'ai', kind: 'flag', label: 'Place check', title: f.suspected_problem || (f.flag_reasons || []).join(', ') || 'Place to check', sub: (f.flag_reasons || []).join(', ').replace(/_/g, ' '), at: f.created_at, f });
@@ -9082,13 +9093,17 @@ function wtRowHTML(it, now) {
 }
 function renderWait() {
   const now = Date.now();
-  const need = wtItems.filter((x) => x.part === 'need'), ai = wtItems.filter((x) => x.part === 'ai');
+  const counts = {}; for (const [k] of WT_GROUPS) counts[k] = k === 'all' ? wtItems.length : wtItems.filter((x) => wtGroup(x) === k).length;
+  $('wt-chips').innerHTML = WT_GROUPS.map(([k, l]) => '<button type="button" data-wtf="' + k + '" aria-pressed="' + (wtFilter === k) + '">' + l + '<em>' + counts[k] + '</em></button>').join('');
+  const shown = wtItems.filter((x) => wtFilter === 'all' || wtGroup(x) === wtFilter);
+  const need = shown.filter((x) => x.part === 'need'), ai = shown.filter((x) => x.part === 'ai');
   $('wt-n-need').textContent = String(need.length); $('wt-n-ai').textContent = String(ai.length);
   // Reported posts and people, and organiser edits, need a server read (STATUS 25 Nov): shown, never counted.
   const gap = '<div class="wt-row" aria-disabled="true" style="cursor:default"><span class="wt-th">…</span><span class="wt-tx"><small>Reported posts and people, organiser edits</small><b>Connect the server read</b><span>Coming with panel-ai (iOS)</span></span></div>';
-  $('wt-need').innerHTML = (need.length ? need.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing needs you</b><span>New listings and claims land here.</span></span></div>') + gap;
+  $('wt-need').innerHTML = (need.length ? need.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing needs you</b><span>New listings and claims land here.</span></span></div>') + (['all', 'edits', 'reported'].includes(wtFilter) ? gap : '');
   $('wt-ai').innerHTML = ai.length ? ai.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing to fix</b></span></div>';
   if (wtSel && !wtItems.some((x) => x.key === wtSel)) wtSel = null;
+  if (wtSel && !shown.some((x) => x.key === wtSel)) wtSel = null;
   if (!wtSel && DK.matches) { const first = need[0] || ai[0]; if (first) wtSel = first.key; }
   wtDetail();
 }
@@ -9097,7 +9112,7 @@ function wtDetail() {
   $('wt-cols').classList.toggle('open', Boolean(it) && !DK.matches);
   for (const r of document.querySelectorAll('#pane-wait .wt-row[data-wt]')) r.classList.toggle('on', r.dataset.wt === wtSel);
   if (!it) { box.hidden = true; box.replaceChildren(); return; }
-  const list = wtItems.filter((x) => x.part === it.part), i = list.indexOf(it);
+  const list = wtItems.filter((x) => x.part === it.part && (wtFilter === 'all' || wtGroup(x) === wtFilter)), i = list.indexOf(it);
   const e = it.e;
   const pic = it.thumb ? '<img src="' + escapeHtml(it.thumb) + '" alt="">' : 'No photo yet';
   const miss = it.miss ? '<p class="wt-miss">' + it.miss.map((m) => '<span>' + escapeHtml(m[1]) + '</span>').join('') + '</p>' : '';
@@ -9109,6 +9124,7 @@ function wtDetail() {
   let actions = '';
   if (it.kind === 'ready') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="down" data-wt="' + escapeHtml(it.key) + '">Turn down</button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="' + escapeHtml(it.key) + '"' + (e.latitude == null ? ' disabled title="No pin yet"' : '') + '>Approve</button>';
   else if (it.kind === 'claim') actions = '<p>Claims are decided in Claims, with the proof.</p><button type="button" class="wt-btn w" data-wt-go="claims">Open in Claims</button>';
+  else if (it.kind === 'order') actions = '<p>Its checklist and the organiser\'s messages are in Orders.</p><button type="button" class="wt-btn w" data-wt-go="orders">Open in Orders</button>';
   else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   else actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
@@ -9156,6 +9172,7 @@ function alertOnce(msg) { const n = $('wt-note'); n.hidden = false; n.textConten
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') wtFlush(); });
 window.addEventListener('pagehide', wtFlush);
 $('pane-wait').addEventListener('click', (ev) => {
+  const f = ev.target.closest('[data-wtf]'); if (f) { wtFilter = f.dataset.wtf; wtSel = null; renderWait(); return; }
   const go = ev.target.closest('[data-wt-go]'); if (go) { switchTab(go.dataset.wtGo); return; }
   if (ev.target.closest('[data-wt-back]')) { wtSel = null; wtDetail(); return; }
   if (ev.target.closest('[data-wt-cancel]')) { $('wt-why-box').hidden = true; return; }

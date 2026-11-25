@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
 const pre = 'const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>"\']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;", "\'": "&#39;" }[c]));\nfunction plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }\n';
-const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtMissing, wtAge, wtRowHTML, WT_PLAN, set: (k) => { wtSel = k; } };')();
+const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, set: (k) => { wtSel = k; } };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 console.log('w315');
@@ -54,6 +54,12 @@ t('(3) Organisers and partners: four tiles, All / Listed / Partner / Founding wi
 t('(3) Feedback: To sort / All, newest first', () => {
   assert.match(html, /<div class="wrap" id="pane-feedback" hidden>/);
   assert.match(html, /\[\['open', 'To sort', open\.length\], \['all', 'All', fbkRows\.length\]\]/);
+});
+t('the chips: All, Listings, Edits, Claims, Reported, Orders, Feedback; every row in one group; orders waiting on us are Needs you', () => {
+  assert.deepEqual(L.WT_GROUPS.map((g) => g[1]), ['All', 'Listings', 'Edits', 'Claims', 'Reported', 'Orders', 'Feedback']);
+  assert.deepEqual(['ready', 'fix', 'claim', 'place', 'flag', 'order', 'feedback'].map((k) => L.wtGroup({ kind: k })), ['listings', 'listings', 'claims', 'reported', 'reported', 'orders', 'feedback']);
+  assert.match(html, /const WT_OUR_MOVE = \['paid', 'details_in', 'changes', 'approved'\];/);
+  assert.match(html, /kind: 'order', label: 'Order, waiting on us'/);
 });
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);
