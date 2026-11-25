@@ -436,9 +436,9 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .cover{height:400px}
 .fade-bottom{top:auto;bottom:0;height:280px;background:linear-gradient(180deg,rgba(15,17,16,0) 0%,rgba(15,17,16,.85) 60%,#0f1110 100%)}
 .intro.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.more{background:none;border:0;padding:0;margin:4px 0 0;color:#B3A6FF;font:700 14px var(--font);cursor:pointer}
+.more{background:none;border:0;padding:0;margin:0;min-height:44px;color:#B3A6FF;font:700 14px var(--font);cursor:pointer}
 .cover-text{bottom:18px}
-.cover-text .kick{margin:0;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.65)}
+.cover-text .kick{margin:0;font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.65)}
 .cover-text h1{font-size:32px;line-height:1.08;font-weight:800}
 .cover-sub{font-size:16px;line-height:1.4;color:#d9d5cc}
 .daychips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 16px 0}
@@ -458,9 +458,9 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}
 .sc .stop-name{font-size:16.5px;font-weight:800;line-height:1.2}
 .sc .stop-note{border:0;padding:0;margin:2px 0 0;font-size:14px;line-height:1.4;color:#cfcbc2}
-.sc .dir{font-size:13.5px;color:#B3A6FF;font-weight:700;margin-top:6px;text-decoration:none}
+.sc .dir{display:inline-flex;align-items:center;min-height:44px;font-size:13.5px;color:#B3A6FF;font-weight:700;text-decoration:none}
 .photo-credit{display:none}
-.cover-credit{margin:6px 16px 0;font-size:11px;line-height:1.3;color:#a3a8a4;text-align:right}
+.cover-credit{margin:6px 16px 0;font-size:12px;line-height:1.3;color:#a3a8a4;text-align:right}
 .day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:rgba(255,255,255,.65)}
 .stop-locked{list-style:none;margin:4px 0 0 -34px}
 .lock{position:relative;border-radius:20px;overflow:hidden;border:1px solid #2a2f2c;background:#181b19;min-height:300px}

@@ -163,7 +163,7 @@ a{color:inherit}
 .hero img.hi{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,17,16,.55) 0%,rgba(15,17,16,0) 22%,rgba(15,17,16,0) 45%,rgba(15,17,16,.9) 82%,var(--ink) 100%)}
 .hero .in{position:absolute;left:16px;right:16px;bottom:14px;z-index:2}
-.kick{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--sand);margin:0}
+.kick{font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--sand);margin:0}
 h1{font-size:34px;line-height:1.05;font-weight:800;margin:8px 0;letter-spacing:-.3px;overflow-wrap:anywhere}
 .lede{font-size:16px;color:#d9d5cc;line-height:1.4;margin:0}
 .pad{padding:0 16px}
