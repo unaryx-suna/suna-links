@@ -554,6 +554,7 @@
   .wt-edit label { display: grid; gap: 4px; } .wt-edit label > span:first-child { color: var(--muted); font-size: 13px; }
   .wt-edit input, .wt-edit select { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; width: 100%; box-sizing: border-box; }
   .wt-price { display: flex; gap: 8px; } .wt-price select { flex: 0 0 110px; }
+  .wt-dup { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: rgba(255,122,107,.12); color: #fff; font-size: 14.5px; } .wt-dup a { color: #B3A6FF; margin-left: 8px; display: inline-flex; min-height: 44px; align-items: center; }
   .wt-saved { margin: 0; min-height: 18px; color: var(--muted); font-size: 13px; }
   .wt-drop { cursor: pointer; text-align: center; } .wt-drop small { color: var(--muted); }
   .wt-why { width: 100%; min-height: 88px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px/1.4 inherit; }
@@ -9063,7 +9064,7 @@ async function loadWait(render) {
     const [ev, live, rp, fl, fb] = await Promise.all([
       db.from('world_events').select('id,name,start_time,venue,category,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
         .eq('status', 'pending').gte('end_time', nowIso).order('created_at', { ascending: true }).limit(200),
-      db.from('world_events').select('id,name,image_url').in('status', ['pending', 'approved']).gte('end_time', nowIso).not('image_url', 'is', null).limit(1000),
+      db.from('world_events').select('id,name,image_url,start_time,venue,status').in('status', ['pending', 'approved']).gte('end_time', nowIso).limit(1500),
       db.from('reports').select('id,created_at,landmark_id,issue_type,landmark_name,status')
         .or('status.is.null,status.not.in.(ignored,resolved_deleted,resolved_updated)').order('created_at', { ascending: true }).limit(100),
       db.from('flagged_places').select('id,place_id,flag_reasons,suspected_problem,status,created_at')
@@ -9074,15 +9075,20 @@ async function loadWait(render) {
     try { await loadClaims(false); } catch (err) { /* claims: their own note */ }
     try { await loadOrders(false); } catch (err) { /* orders: their own note */ }
     const byPhoto = new Map();
-    for (const r of live.data || []) { const k = String(r.image_url).split('?')[0]; if (!byPhoto.has(k)) byPhoto.set(k, []); byPhoto.get(k).push(r); }
+    for (const r of live.data || []) { if (!r.image_url) continue; const k = String(r.image_url).split('?')[0]; if (!byPhoto.has(k)) byPhoto.set(k, []); byPhoto.get(k).push(r); }
+    // DX-3: the same name (any case) as another upcoming listing on the same day or at the same venue.
+    const day = (t) => { try { return new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }); } catch (err) { return ''; } };
+    const norm = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const twinOf = (e) => (live.data || []).find((r) => r.id !== e.id && norm(r.name) === norm(e.name) && (day(r.start_time) === day(e.start_time) || (norm(r.venue) && norm(r.venue) === norm(e.venue)))) || null;
     const items = [];
     for (const e of ev.data || []) {
       const twins = e.image_url ? (byPhoto.get(String(e.image_url).split('?')[0]) || []).filter((x) => x.id !== e.id) : [];
       const miss = wtMissing(e, twins.length ? twins[0].name : null);
       const dupUrl = twins.length ? e.image_url : null;
+      const same = twinOf(e);
       const where = [wtWhen(e), e.venue].filter(Boolean).join(', ');
-      if (!miss.length) items.push({ key: 'ev:' + e.id, part: 'need', kind: 'ready', label: 'Listing, ready', title: e.name, sub: where, at: e.created_at, thumb: e.image_url, e });
-      else items.push({ key: 'ev:' + e.id, part: 'ai', kind: 'fix', label: 'Listing, missing info', title: e.name, sub: miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()), at: e.created_at, thumb: e.image_url, e, miss, dupUrl });
+      if (!miss.length) items.push({ key: 'ev:' + e.id, part: 'need', kind: 'ready', label: same ? 'Listing, possible duplicate' : 'Listing, ready', title: e.name, sub: same ? 'Possible duplicate of ' + same.name + (same.status === 'approved' ? ' (live)' : ' (in review)') : where, at: e.created_at, thumb: e.image_url, e, same });
+      else items.push({ key: 'ev:' + e.id, part: 'ai', kind: 'fix', label: 'Listing, missing info', title: e.name, sub: miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()), at: e.created_at, thumb: e.image_url, e, miss, dupUrl, same });
     }
     for (const c of (typeof clRows !== 'undefined' ? clRows : [])) {
       items.push({ key: 'cl:' + c.id, part: 'need', kind: 'claim', label: 'Claim', title: (c.event && c.event.name) || 'Claim', sub: c.domain_match ? 'Email matches the website' : (c.role ? 'Says they are the ' + String(c.role) : 'Organiser claim'), at: c.created_at, c });
@@ -9151,7 +9157,7 @@ function wtDetail() {
   else actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
     + '<div class="wt-dtop">' + (e ? '<label class="wt-pic wt-drop" title="Drop a photo here, or tap to choose one">' + (it.thumb ? pic : 'No photo yet<br><small>Drop one here or tap to add</small>') + '<input type="file" accept="image/*" id="wt-photo" hidden></label>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
-    + (e ? wtEditHTML(it) : '') + plan + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
+    + (it.same ? '<p class="wt-dup">Possible duplicate of <b>' + escapeHtml(it.same.name) + '</b>' + (it.same.status === 'approved' ? ' (live)' : ' (in review)') + '. <a href="https://app.unaryx.com/e/' + escapeHtml(it.same.id) + '" target="_blank" rel="noopener">Open that one ↗</a> <a href="https://app.unaryx.com/e/' + escapeHtml(it.e.id) + '" target="_blank" rel="noopener">Open this one ↗</a></p>' : '') + (e ? wtEditHTML(it) : '') + plan + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
     + '<div class="wt-foot">' + actions + '</div>';
   box.hidden = false;
 }

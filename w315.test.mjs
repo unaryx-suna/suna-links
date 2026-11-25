@@ -86,5 +86,10 @@ t('W-314 W-Q8-5 / OD-web-Q8-4: each tab shows its last list at once (grey rows t
   }
   assert.match(html, /function pnSkel\(id\) \{ const el = \$\(id\); if \(el && !el\.children\.length\) el\.innerHTML = '<div class="pn-skel">/);
 });
+t('DX-3: a pending listing with the same name as another upcoming one on the same day or at the same venue says Possible duplicate, with both links', () => {
+  assert.match(html, /const twinOf = \(e\) => \(live\.data \|\| \[\]\)\.find\(\(r\) => r\.id !== e\.id && norm\(r\.name\) === norm\(e\.name\) && \(day\(r\.start_time\) === day\(e\.start_time\) \|\| \(norm\(r\.venue\) && norm\(r\.venue\) === norm\(e\.venue\)\)\)\)/);
+  assert.match(html, /label: same \? 'Listing, possible duplicate' : 'Listing, ready'/);
+  assert.match(html, /Open that one ↗<\/a> <a href="https:\/\/app\.unaryx\.com\/e\/' \+ escapeHtml\(it\.e\.id\)/);
+});
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);
