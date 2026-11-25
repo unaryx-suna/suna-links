@@ -479,6 +479,10 @@ a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:
 .cover-img{opacity:0;transition:opacity .35s ease}
 .cover-img.in{opacity:1}
 .by-mark{background:rgba(255,255,255,.12)!important}
+/* W-314 OD-web-Q3-10: a visible white 8% shape that pulses until the cover paints (QA saw near-black boxes); the creator's photo the same. */
+.by-avatar{background:rgba(255,255,255,.12)}
+@media (prefers-reduced-motion:no-preference){.cover:has(.cover-img:not(.in)){animation:pv-skel 1.4s ease-in-out infinite}}
+@keyframes pv-skel{50%{background-color:rgba(255,255,255,.16)}}
 @media (prefers-reduced-motion:reduce){.cover-img{transition:none}}
 /* FIX 3: "Suna's pick" is a white 20% chip (no orange surfaces; #FF8C18 is for event labels only). */
 .pick:not(.creator){background:rgba(255,255,255,.2);color:#fff}
