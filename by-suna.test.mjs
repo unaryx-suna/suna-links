@@ -65,7 +65,11 @@ await t('suna: <title> and og:title say "by Suna"', async () => {
   assert.equal(tag(head(suna), /<meta property="og:title" content="([^"]*)"/), 'KL in a day, by Suna');
   assert.equal(tag(head(suna), /<meta name="twitter:title" content="([^"]*)"/) ?? 'KL in a day, by Suna', 'KL in a day, by Suna');
 });
-await t('suna: no JSON-LD on /i/ to leak through', async () => { assert(!/application\/ld\+json/.test(suna)); });
+// W-314 OD-web-Q9-6: /i/ now has an ItemList (plan name, url, stop names); it must never carry the owner.
+await t('suna: the JSON-LD on /i/ never names the owner or an author', async () => {
+  const ld = (suna.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1] || '';
+  assert(!ld.includes(OWNER)); assert(!/"author"|"creator"/.test(ld));
+});
 await t('suna: ?via= still renders the same page (via is client-side)', async () => {
   const v = await render('suna', '?via=tiktok-jass');
   assert(v.includes('By Suna') && !v.includes(OWNER));

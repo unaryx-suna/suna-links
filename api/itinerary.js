@@ -165,6 +165,38 @@ export function openVia(params) {
   return ct ? `ct:${ct}` : null;
 }
 
+const MAX_DESC = 155 - ' Copy this plan to Suna.'.length;   // 131
+/** The story when it fits whole and says enough; else 'Start at A, then B, in City: summary.' trimmed by parts. */
+export function planDescription(story, city, shown, summary) {
+  if (story && story.length >= 70 && story.length <= MAX_DESC) return story;
+  if (story && story.length > MAX_DESC) {
+    const cut = story.slice(0, MAX_DESC).match(/^.*[.!?](?=\s|$)/);
+    if (cut && cut[0].length >= 70) return cut[0];
+  }
+  const names = shown.map((x) => String(x.place_name || '').trim()).filter(Boolean).slice(0, 2);
+  const where = city ? ` in ${city}` : '';
+  const NOTE = ', with photos and notes for each stop';
+  const two = names.length === 2 ? `Start at ${names[0]}, then ${names[1]}${where}` : '';
+  const tries = [
+    two && summary ? `${two}${NOTE}. ${summary[0].toUpperCase()}${summary.slice(1)}.` : '',
+    two ? `${two}${NOTE}.` : '',
+    two && summary ? `${two}: ${summary}.` : '',
+    two ? `${two}.` : '',
+    names.length ? `Start at ${names[0]}${where}, with photos and notes for each stop.` : '',
+    city ? `A route through ${city}, with photos and notes for each stop.` : '',
+    "A route someone actually walked, with their own photos and notes.",
+  ].filter(Boolean);
+  return tries.find((t) => t.length <= MAX_DESC) || tries[tries.length - 1];
+}
+
+/** The stops a visitor can see, as a schema.org ItemList (names only; no private notes). */
+export function planLd(url, name, shown) {
+  const items = shown.map((x) => String(x.place_name || '').trim()).filter(Boolean);
+  if (!items.length) return null;
+  return { '@context': 'https://schema.org', '@type': 'ItemList', name: name || 'A plan on Suna', url,
+    itemListElement: items.map((n, i) => ({ '@type': 'ListItem', position: i + 1, name: n })) };
+}
+
 export default async function handler(req, res) {
   const slug = slugFrom(req.url || '');
   // Stamped before any awaiting happens, so the row records when the visitor
@@ -190,6 +222,7 @@ export default async function handler(req, res) {
   let title = 'An itinerary on Suna';
   let description = 'A route someone actually walked, with their own photos and notes.';
   let image = null;
+  let ld = null;   // W-314 OD-web-Q9-6: JSON-LD ItemList of the shown stops
   // The itinerary's own name, kept separate from the composed title so the
   // canonical prefix matches what the app generates rather than "Name — by @x".
   let rawName = '';
@@ -224,16 +257,15 @@ export default async function handler(req, res) {
         const story = (it.intro_story || '').trim().replace(/\s+/g, ' ');
         // W-314 OD-web-Q9-C3: the preview ends with what to do: 'Copy this plan to Suna.' (the story is cut to fit 160).
         const END = ' Copy this plan to Suna.';
-        description = (story
-          ? (story.length > 160 - END.length ? `${story.slice(0, 160 - END.length - 1).replace(/\s+\S*$/, '')}…` : story)
-          : (it.resolved_city_name
-              ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
-              : description)) + END;
+        // W-314 OD-web-Q9-6: 120-155 characters, from the first two stops when the story doesn't fit; no '…'.
+        description = planDescription(story, it.resolved_city_name, data.shown || [], data.summary) + END;
+        ld = planLd(canonicalItineraryURL(origin, slug, rawName), it.name, data.shown || []);
 
         // The itinerary's own cover when it resolves, else the first stop's
         // place photo: the same picture the page opens on.
         const cover = coverFor(data, await imageResolves(data.cover));
-        image = cover;
+        // W-314 OD-web-Q9-6: every plan has a preview image; Suna's 1200x630 card when it has no photo.
+        image = cover || 'https://unaryx.com/assets/og.png';
         // W-309 W3b BETTER 4: the desktop QR points at this plan's canonical address (its /i/ segment).
         data.slug = String(canonicalItineraryURL(origin, slug, rawName)).split('/i/')[1] || '';
         const variants = await coverVariants(cover, imageResolves);
@@ -286,6 +318,7 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     none ? '<meta name="robots" content="noindex">' : '',
+    ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` : '',
   ].filter(Boolean).join('\n  ');
 
   // Replace the static head block rather than appending: a duplicate og:title
