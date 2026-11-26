@@ -147,7 +147,11 @@ export function venueBody(venue, found, now, places = []) {
     const { tonight, week } = step ? splitTonight(step.events, found.tz, now) : { tonight: [], week: [] };
     const rows = (list) => `<ul class="rows">${list.map((e) => eventRow(e, { timeZone: found.tz, now, km: e.km })).join('')}</ul>`;
     const taken = new Set(); // one stock image at most once on the page
+    // W-323 (Brian 15:31, OD-web-C-2611a): one lilac line, 'Follow <venue> in Suna': opens Suna on the venue with
+    // follow on (the app sends one push per new event there, I-781 (6)); without the app, the App Store with ct=c-follow.
+    const follow = saveInSuna(`suna://venue?slug=${encodeURIComponent(venue.slug)}&follow=1`, storeURL('c-follow', 'web-c'), 'follow-link', `Follow ${escapeHtml(name)} in Suna`);
     content = `<h1 class="venue-h1">Near ${escapeHtml(name)}</h1>
+  <p class="follow">${follow}</p>
   <p class="sub">${escapeHtml(step ? step.label : 'Nothing listed nearby this week')}</p>
   ${tonight.length ? `<h2>On tonight</h2>${rows(tonight)}` : ''}
   ${week.length ? `<h2>This week</h2>${rows(week)}` : ''}

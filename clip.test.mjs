@@ -190,11 +190,11 @@ await t('eyebrow: on now until (closes today), on now, tonight, a later day, a r
   const { eyebrow } = await import('./api/_clip.js');
   const tz = 'Asia/Kuala_Lumpur';
   const n = new Date('2027-03-05T04:00:00Z'); // 12:00 in KL
-  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now, until 7:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now, until 7pm');
   assert.equal(eyebrow({ start_time: '2027-03-01T01:00:00Z', end_time: '2027-04-05T11:00:00Z', recurrence_type: 'period' }, tz, n), 'On now');
   assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight, 7:30pm');
-  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today, 2:00pm');
-  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar, 8:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today, 2pm');
+  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar, 8pm');
   assert.equal(eyebrow({ start_time: '2027-03-06T02:00:00Z', end_time: '2027-03-20T10:00:00Z', recurrence_type: 'period' }, tz, n), 'From Sat 6 Mar');
 });
 await t('pickStep: 800 m beats 2 km beats the city; nothing → null', async () => {
@@ -253,7 +253,7 @@ await t('/e/ (W-197 (5), Ops OPS-135): the hero has its own darker scrim under t
   state.events = [];
   const r = await render(event, `/e/${U(4)}`);
   assert.match(r.body, /<header class="hero hero-e( hero-fold)?">/);
-  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(0,0,0,\.4\) 0, rgba\(0,0,0,0\) 120px, rgba\(0,0,0,0\) 30%, rgba\(0,0,0,\.85\) 52%/);
+  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(0,0,0,\.4\) 0, rgba\(0,0,0,0\) 120px, rgba\(0,0,0,0\) 24%, rgba\(0,0,0,\.9\) 46%/);
   assert.match(r.body, /\.hero::after \{ content: ""; position: absolute; inset: 0; background: linear-gradient\(rgba\(17,17,17,0\) 30%, var\(--bg\)\); \}/, 'the shared scrim unchanged');
 });
 

@@ -180,7 +180,7 @@ export function localISO(date, timeZone) {
 const fmtDate = (d, tz, y) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', ...(y ? { year: 'numeric' } : {}) }).format(d);
 const fmtWeekday = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(d);
 export const fmtTime = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true })
-  .format(d).replace(/\s/g, '').toLowerCase();
+  .format(d).replace(/\s/g, '').replace(':00', '').toLowerCase();   // OD-web-Q3-35: '2pm', one time format on the page
 const sameLocalDay = (a, b, tz) => {
   const x = zoned(a, tz); const y = zoned(b, tz);
   return x.year === y.year && x.month === y.month && x.day === y.day;
@@ -507,7 +507,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(17,17,17,0) 30%, var(--bg)); }
     /* W-314 OD-web-Q3-19, -Q3-20: black 40% over the top 120 px (the Suna pill reads on any cover), then 0 to 85%
        from the middle down, so only our date, title and venue read there, not the poster's own words. */
-    .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 30%, rgba(0,0,0,.85) 52%, rgba(0,0,0,.95) 70%, var(--bg)); }
+    .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 24%, rgba(0,0,0,.9) 46%, rgba(0,0,0,.95) 64%, var(--bg)); }
     .hero-e .hero-top .mark { background: rgba(20,15,46,.6); }
     .hero-e.hero-fold { min-height: 0; gap: 20px; padding-bottom: 8px; } .hero-e.hero-fold::after { display: none; }   /* OD-web-Q3-21: date and title right under the pill */   /* OD-web-Q3-19: the pill reads on a light cover */
     .hero-e h1, .hero-e .hero-sub { text-shadow: 0 1px 12px rgba(0,0,0,.55); }
@@ -570,6 +570,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .clipbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; color: var(--muted); font-size: 13px; }
     .clipbar a { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; font-size: 16px; text-decoration: none; }
     .clipbar .mark-dot { width: 22px; height: 22px; }
+    .follow { margin: -4px 0 10px; } .follow-link { display: inline-flex; align-items: center; min-height: 44px; color: #B3A6FF; font-weight: 700; font-size: 15px; text-decoration: none; }   /* W-323 */
     .inline-cta { margin: 24px 0 8px; } .inline-cta .btn { display: flex; justify-content: center; width: 100%; } .inline-cta .caption { text-align: center; }   /* OD-web-Q3-30 */
     .clipbar-c { flex-direction: column; align-items: flex-start; gap: 6px; } .clipbar-c .clip-from { color: rgba(255,255,255,.65); font-size: 14px; }
     .venue-h1 { font-size: 28px; margin: 16px 0 4px; }
