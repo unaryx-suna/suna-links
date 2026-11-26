@@ -595,7 +595,7 @@ export function previewBody(data, cover, variants, mascot) {
     }
     return head + stopBlock(s, i + 1, images.get(s), credits.get(s));
   }).join('\n    ') + lockedBlock(lockedCount, dayCounts, shown.map(stopDay).filter((d) => d !== null));
-  const kicker = ['Plan', it.resolved_city_name].filter(Boolean).join(', ');
+  const kicker = 'Plan';   // OD-web-Q3-37: the city is in the line under the title ('Ipoh, 1 day, 4 stops'), not twice
 
   return `${W197_CSS}<noscript><style>.cover-img{opacity:1}</style></noscript><main class="pv">
   <header class="cover${cover ? '' : ' cover-plain'}">

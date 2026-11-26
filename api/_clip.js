@@ -180,7 +180,7 @@ export function localISO(date, timeZone) {
 const fmtDate = (d, tz, y) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', ...(y ? { year: 'numeric' } : {}) }).format(d);
 const fmtWeekday = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(d);
 export const fmtTime = (d, tz) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true })
-  .format(d).replace(/\s/g, '').toLowerCase();
+  .format(d).replace(/\s/g, '').replace(':00', '').toLowerCase();   // OD-web-Q3-35: '2pm', one time format on the page
 const sameLocalDay = (a, b, tz) => {
   const x = zoned(a, tz); const y = zoned(b, tz);
   return x.year === y.year && x.month === y.month && x.day === y.day;
@@ -384,13 +384,22 @@ export function priceShort(event) {
 }
 
 /** A whole-row link to an event's /e/ page (Ops: no buttons on rows). */
+/** W-314 OD-web-Q3-33: an event without a photo shows the city page's white date tile (month, day), never a blank tile. */
+function dateTile(event, timeZone, now) {
+  try {
+    const start = new Date(event.start_time); const end = event.end_time ? new Date(event.end_time) : start;
+    const d = start < now && end > now ? now : start;   // a run that's on now shows today
+    const f = (o) => new Intl.DateTimeFormat('en-GB', { timeZone: timeZone || 'Asia/Kuala_Lumpur', ...o }).format(d);
+    return `<span class="dtile" aria-hidden="true"><b>${escapeHtml(f({ month: 'short' }).toUpperCase())}</b><span>${escapeHtml(f({ day: 'numeric' }))}</span></span>`;
+  } catch { return '<span class="dtile" aria-hidden="true"></span>'; }
+}
 export function eventRow(event, { timeZone, now = new Date(), km = null } = {}) {
   const img = ourImage(event.image_url);
   const venue = event.venue && String(event.venue).trim();
   // W-314 OD-web-Q3-25: price, then distance, then the venue, so the distance is never cut off ('From RM358, 3 km, idea Live Arena').
   const meta = [priceShort(event), km != null ? distanceLabel(km) : null, venue].filter(Boolean).join(', ');
   return `<li><a class="row" href="/e/${escapeHtml(event.id)}">`
-    + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
+    + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : dateTile(event, timeZone, now))
     + `<span class="row-text"><span class="row-eyebrow">${escapeHtml(eyebrow(event, timeZone, now))}</span>`
     + `<span class="row-name">${escapeHtml(event.name)}</span>`
     + (meta ? `<span class="row-meta">${escapeHtml(meta)}</span>` : '')
@@ -498,7 +507,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(17,17,17,0) 30%, var(--bg)); }
     /* W-314 OD-web-Q3-19, -Q3-20: black 40% over the top 120 px (the Suna pill reads on any cover), then 0 to 85%
        from the middle down, so only our date, title and venue read there, not the poster's own words. */
-    .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 30%, rgba(0,0,0,.85) 52%, rgba(0,0,0,.95) 70%, var(--bg)); }
+    .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 24%, rgba(0,0,0,.9) 46%, rgba(0,0,0,.95) 64%, var(--bg)); }
     .hero-e .hero-top .mark { background: rgba(20,15,46,.6); }
     .hero-e.hero-fold { min-height: 0; gap: 20px; padding-bottom: 8px; } .hero-e.hero-fold::after { display: none; }   /* OD-web-Q3-21: date and title right under the pill */   /* OD-web-Q3-19: the pill reads on a light cover */
     .hero-e h1, .hero-e .hero-sub { text-shadow: 0 1px 12px rgba(0,0,0,.55); }
@@ -537,6 +546,8 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .rows { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
     .row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 10px 40px 10px 10px;
       border-radius: 20px; background: var(--card); color: inherit; text-decoration: none; }
+    .row .dtile { width: 64px; height: 64px; border-radius: 14px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; color: #140F2E; font: 800 24px/1 var(--font, inherit); }
+    .row .dtile b { color: #B45F06; font-size: 13px; letter-spacing: .08em; margin-bottom: 4px; }
     .row img, .row .ph { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #3b332b; flex: none; }
     .row-place { min-height: 72px; }
     .row-place img, .row-place .ph { width: 52px; height: 52px; }
@@ -559,6 +570,8 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .clipbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; color: var(--muted); font-size: 13px; }
     .clipbar a { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; font-size: 16px; text-decoration: none; }
     .clipbar .mark-dot { width: 22px; height: 22px; }
+    .follow { margin: -4px 0 10px; } .follow-link { display: inline-flex; align-items: center; min-height: 44px; color: #B3A6FF; font-weight: 700; font-size: 15px; text-decoration: none; }   /* W-323 */
+    .inline-cta { margin: 24px 0 8px; } .inline-cta .btn { display: flex; justify-content: center; width: 100%; } .inline-cta .caption { text-align: center; }   /* OD-web-Q3-30 */
     .clipbar-c { flex-direction: column; align-items: flex-start; gap: 6px; } .clipbar-c .clip-from { color: rgba(255,255,255,.65); font-size: 14px; }
     .venue-h1 { font-size: 28px; margin: 16px 0 4px; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 26px; }
