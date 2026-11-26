@@ -31,8 +31,9 @@ export function mapParams(url) {
 
 /** The path and query Apple signs, without the signature. */
 export function snapshotPath({ lat, lng, w, h }, teamId, keyId) {
-  // W-314 OD-web-Q3-11: a white balloon pin with an ink dot (Apple draws the glyph dark on a light balloon).
-  const annotations = JSON.stringify([{ point: `${lat},${lng}`, color: 'FFFFFF', markerStyle: 'balloon', glyphText: '•' }]);
+  // W-314 OD-web-Q3-11: a white balloon pin. HOTFIX 26 Nov: no glyphText; the '•' (the one non-ASCII character
+  // in the signed request) came in with the batch and every snapshot has been a 404 since. Plain ASCII only.
+  const annotations = JSON.stringify([{ point: `${lat},${lng}`, color: 'FFFFFF', markerStyle: 'balloon' }]);
   const qs = new URLSearchParams({
     center: `${lat},${lng}`, z: '15', size: `${w}x${h}`, scale: '2', colorScheme: 'dark',
     poi: '0', annotations, teamId, keyId,
