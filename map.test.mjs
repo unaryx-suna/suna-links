@@ -22,7 +22,8 @@ await t('the signed path: dark, one white pin with an ink dot (W-314 OD-web-Q3-1
   assert.equal(q.get('center'), '3.10000,101.60000');
   assert.equal(q.get('colorScheme'), 'dark');
   assert.equal(q.get('scale'), '2');
-  assert.deepEqual(JSON.parse(q.get('annotations')), [{ point: '3.10000,101.60000', color: 'FFFFFF', markerStyle: 'balloon', glyphText: '•' }]);
+  assert.deepEqual(JSON.parse(q.get('annotations')), [{ point: '3.10000,101.60000', color: 'FFFFFF', markerStyle: 'balloon' }]);
+  assert.match(q.toString(), /^[\x20-\x7e]*$/, 'the signed request is plain ASCII (the glyph broke every snapshot, 26 Nov)');
   assert.equal(q.get('teamId'), 'TEAM');
   assert.equal(q.get('signature'), null);
 });
