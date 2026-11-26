@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
 const pre = 'const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>"\']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;", "\'": "&#39;" }[c]));\nfunction plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }\n';
-const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtIso, wtLocal, wtWhen, wtWord, wtDay, wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
+const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtDayLong, wtClockOptions, wtIso, wtLocal, wtWhen, wtWord, wtDay, wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 console.log('w315');
@@ -106,6 +106,14 @@ t('W315-6: the line gives start to end; local time round-trips in KL and in Sydn
   assert.equal(L.wtIso('2027-01-13', '18:00', 'Asia/Kuala_Lumpur'), '2027-01-13T10:00:00.000Z');
   assert.equal(L.wtIso('2027-01-13', '18:00', 'Australia/Sydney'), '2027-01-13T07:00:00.000Z');
   assert.deepEqual(L.wtLocal('2027-01-13T07:00:00Z', 'Australia/Sydney'), { day: '2027-01-13', hm: '18:00' });
+});
+
+t('W315-17: When reads like the list form: Sat 30 Jan 2027; 15-minute lists; Add end time; an off-grid time kept', () => {
+  assert.equal(L.wtDayLong('2027-01-30'), 'Sat 30 Jan 2027');
+  const o = L.wtClockOptions('', 'Add end time');
+  assert.match(o, /^<option value="">Add end time<\/option><option value="00:00">12:00 am<\/option>/);
+  assert.equal((o.match(/<option /g) || []).length, 97);
+  assert.match(L.wtClockOptions('18:10', 'Start time'), /<option value="18:10" selected>6:10 pm<\/option>/);
 });
 
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
