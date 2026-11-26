@@ -24,7 +24,7 @@ const a = await get('/i/a-quieter-day-in-ipoh?via=tiktok&path=a-quieter-day-in-i
 assert.equal(a.code, 301); assert.equal(a.hdr.location, 'https://app.unaryx.com/i/a-quieter-day-in-ipoh--ab12cd34ef?via=tiktok');
 const b = await get('/i/a-louder-day-in-ipoh');
 assert.equal(b.code, 404); assert.match(b.body, /<title>This plan isn(?:'|&#39;|&#x27;)t on Suna<\/title>/); assert.match(b.body, /<h1 id="title">This plan isn't on Suna<\/h1>/);
-assert.match(b.body, /<ul class="nf-plans"><li><a href="https:\/\/app\.unaryx\.com\/i\/old-kl-on-foot--zz11yy22xx"><b>Old KL on foot<\/b><span>Kuala Lumpur<\/span>/);
+assert.match(b.body, /<ul class="nf-plans"><li><a href="https:\/\/app\.unaryx\.com\/i\/old-kl-on-foot--zz11yy22xx">(<img[^>]+>|<i aria-hidden="true"><\/i>)<span class="t"><b>Old KL on foot<\/b><span>Kuala Lumpur<\/span>/);
 const c = await get('/i/ab12cd34ef');   // a bare code that isn't public: the friendly generic 404, no name lookup
 assert.equal(c.code, 404); assert.doesNotMatch(c.body, /This plan isn't on Suna/);
 console.log('ok /i/ name-only links');

@@ -387,7 +387,8 @@ export function priceShort(event) {
 export function eventRow(event, { timeZone, now = new Date(), km = null } = {}) {
   const img = ourImage(event.image_url);
   const venue = event.venue && String(event.venue).trim();
-  const meta = [priceShort(event), venue, km != null ? distanceLabel(km) : null].filter(Boolean).join(', ');
+  // W-314 OD-web-Q3-25: price, then distance, then the venue, so the distance is never cut off ('From RM358, 3 km, idea Live Arena').
+  const meta = [priceShort(event), km != null ? distanceLabel(km) : null, venue].filter(Boolean).join(', ');
   return `<li><a class="row" href="/e/${escapeHtml(event.id)}">`
     + (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">` : '<span class="ph" aria-hidden="true"></span>')
     + `<span class="row-text"><span class="row-eyebrow">${escapeHtml(eyebrow(event, timeZone, now))}</span>`
@@ -419,7 +420,8 @@ export async function eventsAround(lat, lng, { km, days = 7, now = new Date(), l
 
 /** The line at the foot of every page; the commission note only where a page links to tickets. */
 export function footer({ tickets = false } = {}) {
-  return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a>, events and places within a short walk'
+  // W-314 OD-web-Q3-26: a whole sentence, not half of one.
+  return '<footer class="foot"><a href="https://unaryx.com/events">Suna</a> shows what\'s on near you, updated every day.'
     + (tickets ? '<br>Affiliate links: we may earn a commission on some ticket links.' : '') + '</footer>';
 }
 

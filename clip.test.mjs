@@ -121,7 +121,7 @@ await t('/c/: On tonight and This week split at the venue\'s midnight; rows have
   assert(r.body.indexOf(U(1)) > tonight && r.body.indexOf(U(1)) < week);
   assert(r.body.indexOf(U(2)) > week);
   assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"|ev-maps/);
-  assert.match(r.body, /<span class="row-meta">From RM35, Taman Tun Park, 500 m<\/span>/);
+  assert.match(r.body, /<span class="row-meta">From RM35, 500 m, Taman Tun Park<\/span>/);
   const s2 = splitTonight([{ start_time: iso(now - H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
   assert.deepEqual([s2.tonight.length, s2.week.length], [1, 1]);
 });

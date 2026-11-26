@@ -64,7 +64,7 @@
     .mascot { display: flex; justify-content: center; height: 96px; margin-bottom: 18px; }
     .eyebrow {
       font-size: 12px; font-weight: 600; letter-spacing: 1.4px;
-      color: var(--sand); text-transform: uppercase; margin-bottom: 12px;
+      color: rgba(255,255,255,.65); text-transform: uppercase; margin-bottom: 12px;   /* OD-web-Q3-27: sand is never text */
     }
     h1 { font-size: 28px; line-height: 1.25; margin: 0 0 12px; font-weight: 700; }
     p.lede { font-size: 15px; line-height: 21px; color: var(--body); margin: 0 0 8px; }
@@ -73,7 +73,7 @@
       /* QA 23 Nov (LIGHT-DARK-ROLE-MAP: sand is never a button colour): the primary on dark is white with ink. */
       background: #fff; color: #140F2E;
       padding: 15px 34px; border-radius: 26px; text-decoration: none;
-      font-weight: 600; font-size: 17px; display: inline-block;
+      font-weight: 600; font-size: 17px; display: block; text-align: center; max-width: 448px; margin: 0 auto;   /* OD-web-Q3-27: full width, as /c/ and the plan bar */
     }
     .byline { display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 22px; }
     .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--card); object-fit: cover; }
@@ -212,7 +212,7 @@
   <!--BODY-->
   <div class="wrap">
     <div class="mascot"><!--MASCOT--></div>
-    <div class="eyebrow" id="eyebrow">Itinerary</div>
+    <div class="eyebrow" id="eyebrow">Plan</div>
     <h1 id="title">An itinerary on Suna</h1>
 
     <div class="byline" id="byline" hidden>

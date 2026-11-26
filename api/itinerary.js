@@ -301,9 +301,10 @@ export default async function handler(req, res) {
     title = "This plan isn't on Suna";
     // W-314 OD-web-Q3-3: three plans people can open instead (the newest public ones).
     try {
-      const recent = await rest('public_itineraries?select=share_slug,name,resolved_city_name&share_slug=not.is.null&order=published_at.desc&limit=3');
+      const recent = await rest('public_itineraries?select=share_slug,name,resolved_city_name,cover_media_path&share_slug=not.is.null&order=published_at.desc&limit=3');
       nfPlans = recent.filter((r) => r.share_slug && r.name).map((r) =>
-        `<li><a href="${escapeHtml(canonicalItineraryURL(origin, r.share_slug, r.name))}"><b>${escapeHtml(r.name)}</b>${r.resolved_city_name ? `<span>${escapeHtml(r.resolved_city_name)}</span>` : ''}</a></li>`).join('');
+        // W-314 OD-web-Q3-27: each with its cover and a chevron, as the /c/ rows, so they read as tappable.
+        `<li><a href="${escapeHtml(canonicalItineraryURL(origin, r.share_slug, r.name))}">${r.cover_media_path && coverURL(r.cover_media_path) ? `<img src="${escapeHtml(coverURL(r.cover_media_path))}" alt="" width="52" height="52" loading="lazy">` : '<i aria-hidden="true"></i>'}<span class="t"><b>${escapeHtml(r.name)}</b>${r.resolved_city_name ? `<span>${escapeHtml(r.resolved_city_name)}</span>` : ''}</span></a></li>`).join('');
     } catch { nfPlans = ''; }
     description = 'The link may be cut short. Open Suna to see plans people have walked.';
   }
@@ -353,7 +354,7 @@ export default async function handler(req, res) {
   // Replace the static head block rather than appending: a duplicate og:title
   // is resolved differently by each scraper, so leaving both is a coin flip.
   const rendered = html
-    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' + (nfPlans ? `<style>.nf-plans{list-style:none;margin:16px 0;padding:0;display:grid;gap:8px;text-align:left}.nf-plans a{display:flex;flex-direction:column;justify-content:center;min-height:56px;padding:10px 16px;border-radius:14px;background:rgba(255,255,255,.08);color:#fff;text-decoration:none}.nf-plans b{font-size:16px}.nf-plans span{font-size:13px;color:rgba(255,255,255,.7)}</style><p class="nf-try">Try one of these:</p><ul class="nf-plans">${nfPlans}</ul>` : '') : '<h1 id="title">An itinerary on Suna</h1>')
+    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' + (nfPlans ? `<style>.nf-plans{list-style:none;margin:16px 0;padding:0;display:grid;gap:8px;text-align:left}.nf-plans a{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 16px 8px 8px;border-radius:14px;background:rgba(255,255,255,.08);color:#fff;text-decoration:none}.nf-plans a::after{content:'\\203A';margin-left:auto;font-size:22px;color:rgba(255,255,255,.65)}.nf-plans img,.nf-plans i{flex:none;width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.08)}.nf-plans .t{display:flex;flex-direction:column;min-width:0}.nf-plans b{font-size:16px}.nf-plans .t span{font-size:13px;color:rgba(255,255,255,.7)}</style><p class="nf-try">Try one of these:</p><ul class="nf-plans">${nfPlans}</ul>` : '') : '<h1 id="title">An itinerary on Suna</h1>')
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
