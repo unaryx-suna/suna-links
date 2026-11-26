@@ -36,6 +36,17 @@ export function eventId(rawURL) {
   return UUID.test(s) ? s.toLowerCase() : null;
 }
 
+/** DEX-150 (9): the short form printed on a story image, `/e/<first 8 hex>`, else null. */
+export function shortId(rawURL) {
+  const s = segment(rawURL, 'e').replace(/^e-/i, '');
+  return /^[0-9a-f]{8}$/i.test(s) ? s.toLowerCase() : null;
+}
+/** The one approved or ended event whose id starts with `p`, or null when none or several do. */
+export async function byShort(p) {
+  const rows = await rest(`world_events?id=gte.${p}-0000-0000-0000-000000000000&id=lte.${p}-ffff-ffff-ffff-ffffffffffff&select=id&limit=2`);
+  return Array.isArray(rows) && rows.length === 1 ? rows[0].id : null;
+}
+
 async function loadEvent(id) {
   // W-217 (1): events-cleanup marks an ended event `completed` (or it was
   // `cancelled`) and keeps the row, so those are read too and get the W4/W5
@@ -254,6 +265,12 @@ export async function sellsTickets(id) {
 }
 
 export default async function handler(req, res) {
+  // DEX-150 (9): unaryx.com/e/<8 hex> (typed from a story image) goes to the event's own address.
+  const short = !eventId(req.url) && shortId(req.url);
+  if (short) {
+    let full = null; try { full = await byShort(short); } catch { /* the not-found page */ }
+    if (full) { res.status(301).setHeader('Location', `${ORIGIN}/e/${full}`).setHeader('Cache-Control', 'public, max-age=3600').end(); return; }
+  }
   const id = eventId(req.url);
   let e = null, failed = false;
   try { e = id ? await loadEvent(id) : null; } catch { failed = true; /* the honest page below, never a 500 */ }

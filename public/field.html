@@ -568,6 +568,8 @@
   @media (min-width: 900px) { .wt-edit { grid-template-columns: 1fr 1fr; } .wt-edit .wt-saved { grid-column: 1 / -1; } }
   .wt-wrow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; } .wt-wrow > #wt-day { grid-column: 1 / -1; } .wt-wrow input { min-width: 0; }   /* the date on its own line, start to end under it: fits 390 */ .wt-wrow > span { color: var(--muted); }
   .wt-when, .wt-pinbox { grid-column: 1 / -1; } .wt-pinbox { display: grid; gap: 8px; } .wt-pinl { color: var(--muted); font-size: 13px; }
+  .wt-livemap { width: 100%; height: 220px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .wt-mv { margin-left: 6px; min-height: 44px; padding: 0 4px; border: 0; background: none; color: #B3A6FF; font: 600 14px inherit; cursor: pointer; }
   .wt-map { width: 100%; height: 180px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); } .wt-pinst { margin: 0; color: var(--muted); font-size: 13.5px; }
   .wt-xy > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); font-size: 14px; } .wt-xy input { min-height: 44px; }
   .wt-edit label { display: grid; gap: 4px; } .wt-edit label > span:first-child { color: var(--muted); font-size: 13px; }
@@ -1470,7 +1472,7 @@
   window.__mapkitReady = new Promise((resolve) => { window.__mapkitLoaded = resolve; });
 </script>
 <script async src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js"
-        data-libraries="services"
+        data-libraries="services,map,annotations"   <!-- map + annotations: W315-5 drag-to-move pin -->
         data-callback="__mapkitLoaded"></script>
 <script>
 'use strict';
@@ -9244,7 +9246,7 @@ function wtEditHTML(it) {
     + '<select id="wt-t1" aria-label="Starts">' + wtClockOptions(a.hm, 'Start time') + '</select><span>to</span><select id="wt-t2" aria-label="Ends">' + wtClockOptions(b.hm, 'Add end time') + '</select></span></label>';
   // W315-5: a map with the pin and the paste-a-link field; raw coordinates only behind 'Enter coordinates'.
   const map = pin ? '<img class="wt-map" alt="The pin on a map" src="/api/map?lat=' + Number(e.latitude).toFixed(5) + '&lng=' + Number(e.longitude).toFixed(5) + '&w=560&h=180" onerror="this.hidden=true">' : '';
-  const pinF = '<div class="wt-pinbox"><span class="wt-pinl">Pin</span>' + map + '<p class="wt-pinst">' + (pin ? 'Pin set.' : 'No pin yet.') + '</p>'
+  const pinF = '<div class="wt-pinbox"><span class="wt-pinl">Pin</span>' + map + '<p class="wt-pinst">' + (pin ? 'Pin set. <button type="button" class="wt-mv" data-wt-movepin>Move the pin</button>' : 'No pin yet.') + '</p>'
     + '<input id="wt-pin" value="" placeholder="Paste a Google Maps link" aria-label="Paste a Google Maps link">'
     + '<details class="wt-xy"><summary>Enter coordinates</summary><input id="wt-pinxy" value="' + v(pin) + '" placeholder="lat, lng" aria-label="Coordinates"></details></div>';
   return '<div class="wt-edit">' + when
@@ -9283,6 +9285,30 @@ function wtRecheck(it) {
   const n = wtItems.filter((x) => x.part === 'need').length; $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0);
 }
 let wtTyping = null;
+async function wtMovePin(btn) {
+  const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e || it.e.latitude == null) return;
+  const box = btn.closest('.wt-pinbox'); const note = $('wt-saved');
+  btn.disabled = true; btn.textContent = 'Opening the map…';
+  try {
+    await initMapkit();
+    if (typeof mapkit.Map !== 'function') throw new Error('map library');
+    const host = document.createElement('div'); host.className = 'wt-livemap';
+    const old = box.querySelector('.wt-map'); if (old) old.replaceWith(host); else box.insertBefore(host, box.querySelector('.wt-pinst'));
+    const at = new mapkit.Coordinate(Number(it.e.latitude), Number(it.e.longitude));
+    const map = new mapkit.Map(host, { center: at, colorScheme: mapkit.Map.ColorSchemes.Dark, showsPointsOfInterest: false, isRotationEnabled: false });
+    map.region = new mapkit.CoordinateRegion(at, new mapkit.CoordinateSpan(0.006, 0.006));
+    const pinA = new mapkit.MarkerAnnotation(at, { color: '#FFFFFF', glyphColor: '#140F2E', draggable: true, title: it.e.venue || '' });
+    map.addAnnotation(pinA);
+    pinA.addEventListener('drag-end', async () => {
+      const c = pinA.coordinate, patch = { latitude: Number(c.latitude.toFixed(6)), longitude: Number(c.longitude.toFixed(6)) };
+      if (await wtSave(it, patch)) { const xy = $('wt-pinxy'); if (xy) xy.value = patch.latitude.toFixed(5) + ', ' + patch.longitude.toFixed(5); if (note) note.textContent = 'Pin moved and saved.'; }
+    });
+    btn.textContent = 'Drag the pin, it saves where you drop it';
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Move the pin';
+    if (note) note.textContent = "The map didn't open. Paste a Google Maps link instead.";
+  }
+}
 /** W315-6: the When field's patch: start and end in the event's zone; an end before the start is the next day. */
 function wtWhenPatch(it) {
   const day = $('wt-day').value, t1 = $('wt-t1').value, t2 = $('wt-t2').value, tz = wtTz(it.e);
@@ -9357,6 +9383,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', wtFlush);
 $('pane-wait').addEventListener('click', (ev) => {
   const f = ev.target.closest('[data-wtf]'); if (f) { wtFilter = f.dataset.wtf; wtSel = null; renderWait(); return; }
+  // OD-web-W315-5: 'Move the pin' swaps the snapshot for a live map with a draggable pin; dropping it saves.
+  const mv = ev.target.closest('[data-wt-movepin]'); if (mv) { wtMovePin(mv); return; }
   const fx = ev.target.closest('[data-wt-fixme]'); if (fx) { const d = $('wt-fixme'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); const f = d.querySelector('input,textarea,select'); if (f) f.focus({ preventScroll: true }); } return; }   // W-314 OD-web-W315-3: opens the fields in place
   const go = ev.target.closest('[data-wt-go]'); if (go) { switchTab(go.dataset.wtGo); return; }
   if (ev.target.closest('[data-wt-back]')) { wtSel = null; wtDetail(); return; }

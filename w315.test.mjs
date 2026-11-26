@@ -76,7 +76,7 @@ t('fix in place: price (Not set / Free / Paid + amount), credit, kind, venue, pi
   const h = L.wtEditHTML({ e: { price_type: 'paid', price_amount: 35, image_credit: 'A "B"', category: null, venue: 'Arch <G>', latitude: 3.15, longitude: 101.7 } });
   assert.match(h, /<option value="paid" selected>Paid<\/option><\/select><input id="wt-pa" inputmode="decimal" placeholder="From \(amount\)" value="35">/);
   assert.match(h, /id="wt-cr" value="A &quot;B&quot;"/); assert.match(h, /id="wt-ven" value="Arch &lt;G&gt;"/);
-  assert.match(h, /id="wt-pinxy" value="3\.15000, 101\.70000"/); assert.match(h, /<img class="wt-map"[^>]*src="\/api\/map\?lat=3\.15000&lng=101\.70000&w=560&h=180"/); assert.match(h, /Pin set\.<\/p><input id="wt-pin" value=""/);
+  assert.match(h, /id="wt-pinxy" value="3\.15000, 101\.70000"/); assert.match(h, /<img class="wt-map"[^>]*src="\/api\/map\?lat=3\.15000&lng=101\.70000&w=560&h=180"/); assert.match(h, /Pin set\. <button type="button" class="wt-mv" data-wt-movepin>Move the pin<\/button><\/p><input id="wt-pin" value=""/);
   assert.match(L.wtEditHTML({ e: { price_type: null } }), /<option value="" selected>Not set<\/option>[\s\S]*id="wt-pa"[^>]* hidden>/);
   assert.match(html, /update\(patch\)\.eq\('id', it\.e\.id\)\.eq\('status', 'pending'\)/);
   assert.match(html, /queueCountryWork\(\{ kind: 'event_photo', eventID: it\.e\.id/);
