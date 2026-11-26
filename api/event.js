@@ -161,9 +161,13 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
       + save('btn') + '<p class="caption">Opens Suna, or the App Store if you don’t have it</p>'
       + dir('btn btn-outline');
   }
-  const hours = hoursFact(e, tz);
+  // W-314 OD-web-Q3-22: one time format ('2pm to 8pm'); a one-day event's Hours only repeats When, so it goes.
+  const oneFmt = (t) => String(t || '').replace(/:00(?=\s*(am|pm))/gi, '').replace(/\s*[–—]\s*/g, ' to ');
+  const oneDay = !e.recurrence_type || e.recurrence_type === 'once'
+    ? new Date(e.start_time).toLocaleDateString('en-GB', { timeZone: tz }) === new Date(Date.parse(e.end_time) - 1).toLocaleDateString('en-GB', { timeZone: tz }) : false;
+  const hours = oneDay ? '' : oneFmt(hoursFact(e, tz));
   const facts = [
-    ['When', whenFact(e, tz, now)],
+    ['When', oneFmt(whenFact(e, tz, now))],
     ['Hours', hours],
     ['Where', where],
     ['Price', price],
