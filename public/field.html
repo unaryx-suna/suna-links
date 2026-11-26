@@ -567,6 +567,8 @@
   .wt-toast button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #140F2E; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
   #pane-wait .wt-chips { margin: 0 0 14px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .wt-chips button { flex: none; }
+  /* Never a counter at zero (Brian 26 Nov 12:20): zeroSweep() hides them. */
+  .rp-chips em[hidden], .rp-tile[hidden], .wt-h .n[hidden], .badge[hidden], [id$="-count"][hidden] { display: none !important; }
   @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } .wt-chips:has(~ .wt-cols.open) { display: none; } }
   @media (min-width: 900px) { .wt-nofm .wt-back { display: none; } }
   .pn-skel { height: 64px; margin: 8px 0; border-radius: 14px; background: rgba(255,255,255,.08); }
@@ -9334,7 +9336,7 @@ function renderOrgs() {
   const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
   const planPill = (o) => o.is_listed === false ? '<span class="rp-pill">Not listed</span>' : '<span class="rp-pill' + (ogPlan(o) !== 'listed' ? ' p' : '') + '">' + escapeHtml(ogPlan(o).replace(/^./, (c) => c.toUpperCase())) + '</span>';
   $('og-table').innerHTML = rows.length ? '<table><thead><tr><th>Organiser</th><th class="dk">City</th><th>Plan</th><th>Live</th><th class="dk">Renews</th><th class="dk">Joined</th></tr></thead><tbody>'
-    + rows.map((o) => '<tr data-og-id="' + escapeHtml(o.id) + '"' + (ogSel === o.id ? ' class="on"' : '') + '><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || 0)
+    + rows.map((o) => '<tr data-og-id="' + escapeHtml(o.id) + '"' + (ogSel === o.id ? ' class="on"' : '') + '><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || '')
       + '</td><td class="dk">' + (o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</td><td class="dk">' + escapeHtml(day(o.created_at)) + '</td></tr>').join('') + '</tbody></table>'
     : '<p class="sub" style="padding:16px;margin:0">No organisers match.</p>';
 }
@@ -10490,6 +10492,19 @@ function dkAfter(which) {
   DK.addEventListener('change', () => { if (!$('app').hidden) dkAfter(dkTab); });
 }
 
+
+/* Never a counter at zero, anywhere in the Panel (Brian 26 Nov 12:20): chip counts, section counts, badges and
+   the nav's *-count are hidden at 0; a report tile whose number is 0 goes. One pass a frame after any change. */
+(function () {
+  let queued = false;
+  const sweep = () => {
+    queued = false;
+    document.querySelectorAll('.rp-chips em, .wt-h .n, .badge, [id$="-count"]').forEach((el) => { el.hidden = el.textContent.trim() === '0'; });
+    document.querySelectorAll('.rp-tile').forEach((t) => { const b = t.querySelector('b'); t.hidden = Boolean(b) && b.textContent.trim() === '0'; });
+  };
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(sweep); } }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  sweep();
+})();
 </script>
 </body>
 </html>
