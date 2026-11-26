@@ -115,6 +115,13 @@ function placeLD(place, canonical, cover) {
 }
 
 /** Cut to about `max` characters on a word boundary, with an ellipsis. */
+/** W-314 OD-web-Q9-10/-13: a description of 70 to 160: a short one gets the closing line, a long one is cut on a word. */
+export function fitDescription(text, closing) {
+  let d = String(text || '').trim();
+  if (d.length < 70 && closing) d = (d ? d.replace(/[.!?]?$/, '.') + ' ' : '') + closing;
+  return cutWords(d, 158);
+}
+export const OG_FALLBACK = 'https://unaryx.com/assets/og-2.png';
 function cutWords(text, max) {
   if (text.length <= max) return text;
   const head = text.slice(0, max - 1);
@@ -395,7 +402,9 @@ export default async function handler(req, res) {
         const text = (place.description || '').trim().replace(/\s+/g, ' ');
         // About 155 characters, on a word (W-61): what a results page shows.
         if (text) description = cutWords(text, 155);
-        else if (place.address) description = `${place.name} — ${place.address}`;
+        else if (place.address) description = `${place.name}, ${place.address}`;   // no dash
+        // W-314 OD-web-Q9-13: under 70, the closing line /i/ uses.
+        description = fitDescription(description, "Save it in Suna and get a nudge when you're nearby.");
 
         // The preview image (I-112, W-53): the place's own cover when it
         // resolves, else the stock image the app deals it. Never Google.
@@ -413,7 +422,7 @@ export default async function handler(req, res) {
           rest(`place_hints?landmark_id=eq.${encodeURIComponent(id)}&${PUBLISHED_TIPS}&select=body,attribution&order=id`),
         ]);
         const ownCover = ok ? candidate : null;
-        image = ownCover || (stock ? stock.url : null);
+        image = ownCover || (stock ? stock.url : null) || OG_FALLBACK;   // OD-web-Q9-10: every page has a preview image
         const tz = tzFor(place.city && place.city.country_code, place.longitude);
         resolved = { place, ownCover, cityName, tz, events, walks, tips: Array.isArray(tips) ? tips : [], hours: hoursInfo(place.operating_hours, tz, now) };
 

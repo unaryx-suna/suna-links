@@ -25,6 +25,7 @@ import {
   eventsAround, footer, MARK,
 } from './_clip.js';
 import { directions, saveInSuna } from './_maps.js';
+import { placeTitle, fitDescription } from './place.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -336,8 +337,9 @@ export default async function handler(req, res) {
   // W-314 W-Q3-5: the preview reads 'Sun 29 Nov, 7:15pm to 10:30pm, SCG' (commas, 'to'; no middots or dashes).
   const description = [String(whenText(e, tz) || '').replace(/ · /g, ', ').replace(/\s*[–—]\s*/g, ' to '), venue].filter(Boolean).join(', ');
   send(res, page({
-    title: `${e.name}${venue ? `, ${venue}` : ''} · Suna`,
-    description,
+    // W-314 OD-web-Q9-10: 60 at most (the venue only when it fits); 70 to 160 for the description.
+    title: placeTitle(e.name, venue),
+    description: fitDescription(description, 'Save it in Suna and get a reminder before it starts.'),
     canonical,
     ogUrl: own,
     // W-112 (Dex 16:24): the event's own preview from unaryx.com, as its page there uses.
