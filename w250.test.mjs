@@ -19,7 +19,7 @@ const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name);
 await t('the AASA claims /first-light (exact path) after the others, appID and appclips unchanged', () => {
   const a = JSON.parse(readFileSync('public/.well-known/apple-app-site-association', 'utf8'));
   const paths = a.applinks.details[0].components.map((c) => c['/']);
-  assert.deepEqual(paths, ['/place/*', '/trip/*', '/i/*', '/city/*', '/c/*', '/e/*', '/u/*', '/cp/*', '/first-light']);
+  assert.deepEqual(paths, ['/place/*', '/trip/*', '/i/*', '/city/*', '/c/*', '/e/*', '/u/*', '/cp/*', '/first-light', '/pro', '/pro/*']);
   assert.deepEqual(a.applinks.details[0].appIDs, ['29XRVFHL4F.com.unaryx.TravelMug']);
   assert.deepEqual(a.appclips, { apps: ['29XRVFHL4F.com.unaryx.TravelMug.Clip'] });
 });

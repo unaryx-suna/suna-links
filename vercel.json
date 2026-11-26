@@ -108,6 +108,16 @@
   },
   "redirects": [
     {
+      "source": "/pro/:path*",
+      "destination": "https://unaryx.com/pro",
+      "permanent": false
+    },
+    {
+      "source": "/pro",
+      "destination": "https://unaryx.com/pro",
+      "permanent": false
+    },
+    {
       "source": "/",
       "destination": "https://unaryx.com/",
       "statusCode": 301
