@@ -15,7 +15,7 @@
 
 import {
   VENUES_URL, rest, escapeHtml, distanceKm, cityFor, zoneFor, endOfLocalDay, ourImage,
-  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer, MARK,
+  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer, MARK, CITIES,
 } from './_clip.js';
 import { saveInSuna } from './_maps.js';
 import { isLodging, hasRealContent, LIST_DESCRIPTION_LENGTH } from './sitemap.js';
@@ -33,9 +33,17 @@ const WALK_KM_PER_MIN = 0.08;
 let venuesCache = null;
 async function loadVenues() {
   if (venuesCache && venuesCache.until > Date.now()) return venuesCache.list;
-  const r = await fetch(VENUES_URL, { signal: AbortSignal.timeout(3000) });
-  if (!r.ok) throw new Error(`venues ${r.status}`);
-  const body = await r.json();
+  // W-314 OD-web-Q3-30: a failed read (a firewall challenge, a timeout) keeps the last good list rather than
+  // dropping a venue's page to the plain one.
+  let body;
+  try {
+    const r = await fetch(VENUES_URL, { signal: AbortSignal.timeout(3000), headers: { accept: 'application/json' } });
+    if (!r.ok) throw new Error(`venues ${r.status}`);
+    body = await r.json();
+  } catch (e) {
+    if (venuesCache && venuesCache.list.length) return venuesCache.list;
+    throw e;
+  }
   const list = Array.isArray(body && body.venues) ? body.venues : [];
   venuesCache = { list, until: Date.now() + 10 * 60000 };
   return list;
@@ -123,7 +131,14 @@ export function venueBody(venue, found, now, places = []) {
   // W-246: a /c/ code is a printed card, so Apple's link says ct=print (the page's data-ct keeps the venue's own ct).
   const store = venue && venue.ct ? storeURL('print', 'web-c') : storeURL(null, 'web-c');
   let content;
-  if (!venue) {
+  if (!venue && found && found.city && found.rows && found.rows.length) {
+    // W-314 OD-web-Q3-30: no venue (an unknown card, or the list unreachable): this week in the nearest Suna city.
+    const rows = found.rows.slice(0, 8).map((e) => eventRow(e, { timeZone: found.tz, now })).join('');
+    content = `<h1 class="venue-h1">What's on near you</h1>
+  <p class="sub">This week in ${escapeHtml(found.city.name)}</p>
+  <ul class="rows">${rows}</ul>
+  <p class="empty"><a class="link" href="${escapeHtml(eventsPage(found.city))}">See everything on in ${escapeHtml(found.city.name)}</a></p>`;
+  } else if (!venue) {
     content = `<h1 class="venue-h1">What's on near you</h1>
   <p class="empty">Suna shows what's on within a short walk of wherever you are: events tonight and places worth the detour.
   <a class="link" href="https://unaryx.com/events">See this week's events</a>.</p>`;
@@ -143,6 +158,13 @@ export function venueBody(venue, found, now, places = []) {
   const cta = venue
     ? saveInSuna(`suna://venue?slug=${encodeURIComponent(venue.slug)}`, store, 'btn', 'See it all in Suna')
     : `<a class="btn" href="${escapeHtml(store)}">Get Suna</a>`;
+  // OD-web-Q3-30: without a venue the button sits under the content, not pinned below empty space.
+  if (!venue) return `<main>
+  <div class="clipbar clipbar-c">${MARK}</div>
+  ${content}
+  <div class="inline-cta">${cta}<p class="caption">Opens the App Store. Free.</p></div>
+  ${footer()}
+</main>`;
   return `<main>
   <div class="clipbar clipbar-c">${MARK}${name ? `<span class="clip-from">Card from ${escapeHtml(name)}</span>` : ''}</div>   ${''/* OD-web-Q3-23: the mark and wordmark as on /e/ and /q/, 'Card from' on its own line, no dot */}
   ${content}
@@ -171,6 +193,16 @@ export default async function handler(req, res) {
       found = { city: cityFor(venue.lat, venue.lng), step: null };
     }
     try { places = await placesNear(venue); } catch { /* the page without Worth a walk */ }
+  } else {
+    // OD-web-Q3-30: the nearest Suna city to the visitor (Vercel's IP location), else Kuala Lumpur.
+    const lat = Number(req.headers['x-vercel-ip-latitude']), lng = Number(req.headers['x-vercel-ip-longitude']);
+    const near = Number.isFinite(lat) && Number.isFinite(lng) && (lat || lng)
+      ? CITIES.reduce((b, c) => (distanceKm(lat, lng, c.lat, c.lng) < distanceKm(lat, lng, b.lat, b.lng) ? c : b))
+      : CITIES.find((c) => c.slug === 'kuala-lumpur') || CITIES[0];
+    try {
+      const rows = await eventsAround(near.lat, near.lng, { km: near.radius_km, now });
+      found = { city: near, tz: zoneFor(near.lat, near.lng), rows };
+    } catch { found = null; }
   }
   const title = venue ? `What's on near ${venue.name} · Suna` : "What's on near you · Suna";
   const description = venue
@@ -180,5 +212,5 @@ export default async function handler(req, res) {
   // Five minutes at the edge: "on now" goes stale faster than an itinerary.
   // W-314 W-Q3-6: the venue's own preview card, drawn on unaryx.com from the same partner venue list.
   const image = venue ? `https://unaryx.com/api/og/venue/${encodeURIComponent(venue.slug)}.jpg` : null;
-  send(res, page({ title, description, canonical, image, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
+  send(res, page({ title, description, canonical, image, body: venueBody(venue, found, now, places), bodyClass: venue ? 'has-bar' : '', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
 }
