@@ -290,7 +290,9 @@ export default async function handler(req, res) {
       const rows = await rest(`public_itineraries?name=ilike.${encodeURIComponent(seg.replace(/-/g, '*') + '*')}&select=share_slug,name&limit=3`);
       const hits = (Array.isArray(rows) ? rows : []).filter((r) => r.share_slug && readablePrefix(r.name) === seg);
       if (hits.length === 1) {
-        const q = new URL(req.url || '/', origin).search;
+        // The visitor's query only: Vercel's rewrite adds `path` (the /i/:path* capture), which is ours.
+        const sp = new URL(req.url || '/', origin).searchParams; sp.delete('path');
+        const q = sp.toString() ? `?${sp}` : '';
         res.status(301).setHeader('Location', canonicalItineraryURL(origin, hits[0].share_slug, hits[0].name) + q)
           .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600').end();
         return;

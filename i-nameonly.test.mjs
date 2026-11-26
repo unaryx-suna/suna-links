@@ -20,7 +20,7 @@ async function get(url) {
   await I.default({ url, headers: { host: 'app.unaryx.com' } }, res);
   return o;
 }
-const a = await get('/i/a-quieter-day-in-ipoh?via=tiktok');
+const a = await get('/i/a-quieter-day-in-ipoh?via=tiktok&path=a-quieter-day-in-ipoh');   // as Vercel's rewrite hands it over
 assert.equal(a.code, 301); assert.equal(a.hdr.location, 'https://app.unaryx.com/i/a-quieter-day-in-ipoh--ab12cd34ef?via=tiktok');
 const b = await get('/i/a-louder-day-in-ipoh');
 assert.equal(b.code, 404); assert.match(b.body, /<title>This plan isn(?:'|&#39;|&#x27;)t on Suna<\/title>/); assert.match(b.body, /<h1 id="title">This plan isn't on Suna<\/h1>/);
