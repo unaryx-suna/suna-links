@@ -13,7 +13,7 @@ t('everything desktop sits behind min-width 900px; the phone layout has no new r
 });
 t('the sidebar: brand, white Add a place, Home, the four groups from HOME_GROUPS with their counts, the current tool highlighted; the phone menu stays one click away', () => {
   assert.match(h, /<nav class="dk-side" id="dk-side" aria-label="Panel"><\/nav>/);
-  assert.match(h, /async function renderSide\(\)[\s\S]*for \(const \[title, rows\] of HOME_GROUPS\)[\s\S]*HOME_COUNT\[t\][\s\S]*'Account and build'[\s\S]*openMenu\(\)/);
+  assert.match(h, /async function renderSide\(\)[\s\S]*const groups = profile && profile\.is_admin \? SIDE_GROUPS : HOME_GROUPS;[\s\S]*for \(const \[title, rows\] of groups\)[\s\S]*HOME_COUNT\[t\][\s\S]*'Account and build'[\s\S]*openMenu\(\)/);   // W-315 (3): an admin's sidebar is SIDE_GROUPS
 });
 t('Payments and Orders tables reuse the phone actions (data-tk / data-or), so the existing click handlers run them', () => {
   assert.match(h, /function dkPay\(\)[\s\S]*data-tk="paid"[\s\S]*Amount matches, mark paid<\/button><button type="button" class="ghost" data-tk="release"[\s\S]*class="ghost" data-tk="paid" data-ref="' \+ ref \+ '">Mark paid<\/button>/);

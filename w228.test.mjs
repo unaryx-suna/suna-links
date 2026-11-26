@@ -30,7 +30,7 @@ t('markup: admin-only menu rows (Payments with a count, Door), both panes, #paym
     assert.match(html, new RegExp(`\\$\\('menu-${m}'\\)\\.hidden = !profile\\.is_admin;`));
     assert.equal((html.match(new RegExp(`if \\(location\\.hash === '#${m}'\\) switchTab\\('${m}'\\);`, 'g')) || []).length, 2, m);
   }
-  assert.match(html, /'claims', 'review', 'payments', 'door', 'orders', 'inbox'\]\) \{/);
+  assert.match(html, /'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback'\]\) \{/);
   assert.match(html, /if \(which === 'door'\) loadTickets\('door'\); else drStop\(\);/, 'the camera stops when the Door is left');
 });
 
@@ -41,7 +41,7 @@ t('the server: only I-604\'s admin RPCs with this session (each checks is_admin)
   assert.match(html, /tkRpc\(TK_API\.list, \{ p_event_id: null \}\)/);
   assert.match(html, /tkRpc\(TK_API\.checkIn, \{ p_ticket: code \}\)/);
   const build = html.match(/const BUILD = '([^']+)'/)[1];
-  assert.equal(build, 'field-v67');
+  assert.equal(build, 'field-v68');
   assert.ok(readFileSync(new URL('./public/field-sw.js', import.meta.url), 'utf8').includes(`const CACHE_VERSION = '${build}';`));
 });
 

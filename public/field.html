@@ -507,6 +507,106 @@
   .evgal-item { position: relative; }
   .evgal-item .evgal-rm { position: absolute; top: 12px; right: 12px; z-index: 1; min-height: 0; padding: 4px 8px; border: 0; border-radius: 8px; background: rgba(17,19,18,.85); color: var(--danger); font-size: 12.5px; font-weight: 700; width: auto; }
   .evgal .addphoto { width: auto; height: auto; min-height: 120px; }
+  /* W-315 (Brian 22:18, panel-gaps 6-one-queue + 7-needs-you-and-ai): Waiting on you. Needs you, then AI can fix;
+     a row opens beside the list (900 px and up) or full screen with "N of M" (phone). */
+  .wt-sub { color: var(--muted); margin: -6px 0 16px; }
+  .wt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; } .wt-cols > * { min-width: 0; }
+  @media (min-width: 900px) { .wt-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .wt-detail { position: sticky; top: 16px; } }
+  .wt-box { border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.03); overflow: hidden; }
+  .wt-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; font: 800 13px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; }
+  .wt-h .n { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12px; letter-spacing: 0; }
+  .wt-h .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--muted); }
+  .wt-h button.r { min-height: 44px; border: 0; background: none; color: #B3A6FF; font: 700 14px/1 inherit; cursor: pointer; }
+  .wt-h button.r[disabled] { color: var(--muted); opacity: .6; cursor: not-allowed; }
+  .wt-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+  .wt-row.on { background: rgba(179,166,255,.08); box-shadow: inset 3px 0 0 #B3A6FF; }
+  .wt-th { flex: none; width: 52px; height: 52px; border-radius: 12px; background: rgba(255,255,255,.08); display: grid; place-items: center; overflow: hidden; color: var(--muted); font: 700 14px/1.1 Urbanist, system-ui, sans-serif; text-align: center; }
+  .wt-th img { width: 100%; height: 100%; object-fit: cover; }
+  .wt-tx { flex: 1; min-width: 0; }
+  .wt-tx small { display: block; font: 800 11.5px/1.3 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: #B3A6FF; }
+  .wt-tx small.red { color: #FF7A6B; }
+  .wt-tx b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt-tx span { display: block; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt-end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .wt-tx { min-width: 140px; }
+  .wt-age { color: var(--muted); font-size: 13px; } .wt-age.red { color: #FF7A6B; font-weight: 700; }
+  .wt-btns { display: flex; gap: 8px; }
+  .wt-btn { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: none; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
+  .wt-btn.w { background: #fff; color: #140F2E; border-color: #fff; }
+  .wt-btn[disabled], .wt-btn.w[disabled], .wt-h button.r[disabled] { opacity: 1; background: rgba(255,255,255,.06); border-color: transparent; color: rgba(255,255,255,.4); cursor: not-allowed; }   /* W315-8: one disabled style (role map, dark disabled) */
+  .wt-soon { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 13px; }
+  @media (max-width: 600px) { .wt-tx b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } }   /* W315-7 */
+  .wt-pill { padding: 4px 8px; border-radius: 8px; background: rgba(179,166,255,.16); color: #B3A6FF; font-size: 12.5px; font-weight: 700; }
+  .wt-detail { border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: rgba(255,255,255,.03); }
+  .wt-detail[hidden] { display: none; }
+  .wt-dtop { display: grid; gap: 14px; }
+  @media (min-width: 900px) { .wt-dtop { grid-template-columns: 200px minmax(0, 1fr); } .wt-pic { aspect-ratio: 1; max-height: none; } }
+  .wt-pic { aspect-ratio: 16 / 9; max-height: 220px; border-radius: 14px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); overflow: hidden; }
+  .wt-pic img { width: 100%; height: 100%; object-fit: cover; }
+  .wt-dtop h2 { margin: 4px 0 8px; font: 800 24px/1.15 Urbanist, system-ui, sans-serif; }
+  .wt-miss { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; } .wt-miss span { padding: 4px 8px; border-radius: 8px; background: rgba(245,181,68,.16); color: #F5B544; font-size: 13px; font-weight: 700; }
+  .wt-plan { margin: 16px 0 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .wt-plan div { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 15px; } .wt-plan div:first-child { border-top: 0; }
+  .wt-plan dt { color: var(--muted); } .wt-plan dd { margin: 0; }
+  .wt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding: 14px 0 12px; border-top: 1px solid var(--line);
+    position: sticky; bottom: 0; z-index: 3; background: var(--bg, #0F1110); }   /* W-314 OD-web-W315-3: the actions always on screen */
+  .wt-fixme { margin: 14px 0 0; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; }
+  .wt-fixme > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; list-style: none; }
+  .wt-fixme > summary::-webkit-details-marker { display: none; }
+  .wt-fixme > summary::after { content: ' +'; margin-left: 4px; } .wt-fixme[open] > summary::after { content: ' –'; }
+  .wt-foot p { flex: 1 1 200px; margin: 0; color: var(--muted); font-size: 13.5px; }
+  .wt-nofm { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+  .wt-edit { display: grid; gap: 10px; margin: 16px 0 0; }
+  @media (min-width: 900px) { .wt-edit { grid-template-columns: 1fr 1fr; } .wt-edit .wt-saved { grid-column: 1 / -1; } }
+  .wt-wrow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; } .wt-wrow > #wt-day { grid-column: 1 / -1; } .wt-wrow input { min-width: 0; }   /* the date on its own line, start to end under it: fits 390 */ .wt-wrow > span { color: var(--muted); }
+  .wt-when, .wt-pinbox { grid-column: 1 / -1; } .wt-pinbox { display: grid; gap: 8px; } .wt-pinl { color: var(--muted); font-size: 13px; }
+  .wt-map { width: 100%; height: 180px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); } .wt-pinst { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .wt-xy > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); font-size: 14px; } .wt-xy input { min-height: 44px; }
+  .wt-edit label { display: grid; gap: 4px; } .wt-edit label > span:first-child { color: var(--muted); font-size: 13px; }
+  .wt-edit input, .wt-edit select { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; width: 100%; box-sizing: border-box; }
+  .wt-price { display: flex; gap: 8px; } .wt-price select { flex: 0 0 110px; }
+  .wt-dup { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: rgba(255,122,107,.12); color: #fff; font-size: 14.5px; } .wt-dup a { color: #B3A6FF; margin-left: 8px; display: inline-flex; min-height: 44px; align-items: center; }
+  .wt-saved { margin: 0; min-height: 18px; color: var(--muted); font-size: 13px; }
+  .wt-drop { cursor: pointer; text-align: center; } .wt-drop small { color: var(--muted); }
+  .wt-why { width: 100%; min-height: 88px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px/1.4 inherit; }
+  .wt-toast { position: fixed; z-index: 40; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 18px; border-radius: 14px; background: #fff; color: #140F2E; font-weight: 700; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+  .wt-toast button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #140F2E; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
+  #pane-wait .wt-chips { margin: 0 0 14px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .wt-chips button { flex: none; }
+  /* Never a counter at zero (Brian 26 Nov 12:20): zeroSweep() hides them. */
+  .rp-chips em[hidden], .rp-tile[hidden], .wt-h .n[hidden], .badge[hidden], [id$="-count"][hidden] { display: none !important; }
+  @media (max-width: 899px) { .wt-cols.open .wt-list { display: none; } .wt-row .wt-btns { display: none; } .wt-chips:has(~ .wt-cols.open) { display: none; } }
+  @media (min-width: 900px) { .wt-nofm .wt-back { display: none; } }
+  .pn-skel { height: 64px; margin: 8px 0; border-radius: 14px; background: rgba(255,255,255,.08); }
+  @media (prefers-reduced-motion: no-preference) { .pn-skel { animation: pn-skel 1.4s ease-in-out infinite; } }
+  @keyframes pn-skel { 50% { background: rgba(255,255,255,.14); } }
+  /* W-315 (3): report views (tiles + a table). */
+  .rp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+  @media (min-width: 900px) { .rp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .rp-tile { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.03); }
+  .rp-tile b { display: block; font: 800 28px/1.1 Urbanist, system-ui, sans-serif; } .rp-tile span { color: var(--muted); font-size: 14px; }
+  .rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .rp-chips { display: flex; flex-wrap: nowrap; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; } .rp-chips > * { flex: none; }   /* W315-12: one sideways row */
+  .rp-chips button { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: none; color: #fff; font: 600 14px/1 inherit; cursor: pointer; }
+  .rp-chips button[aria-pressed="true"] { background: #5A44C8; border-color: #5A44C8; }
+  .rp-chips button em { font-style: normal; color: var(--muted); margin-left: 4px; } .rp-chips button[aria-pressed="true"] em { color: #fff; }
+  .rp-bar input[type=search] { min-height: 44px; flex: 1 1 100%; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; }
+  .rp-table { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .rp-table table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .rp-table th { text-align: left; padding: 12px 14px; font: 800 11.5px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+  .rp-table td { padding: 12px 14px; border-top: 1px solid var(--line); }
+  .rp-table tr[data-href], .rp-table tr[data-og-id] { cursor: pointer; } .rp-table tr[data-og-id]:hover td, .rp-table tr.on td { background: rgba(255,255,255,.04); } .rp-table tr.on td:first-child { box-shadow: inset 3px 0 0 #B3A6FF; }
+  .og-h { margin: 0; font: 800 26px/1.15 Urbanist, system-ui, sans-serif; }
+  .og-sec { margin: 18px 0 8px; font: 800 12px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+  .wt-plan dd.dim { color: var(--muted); }
+  .og-ev { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); } .og-ev:first-child { border-top: 0; }
+  .og-ev b { display: block; } .og-ev small { color: var(--muted); }
+  .og-st { flex: none; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; } .og-st.live { background: rgba(90,200,120,.16); color: #7ee2a0; } .og-st.rev { background: rgba(246,203,148,.16); color: #f6cb94; }
+  .og-cancel { color: #FF7A6B; border-color: rgba(255,122,107,.4); }
+  @media (max-width: 899px) { #og-cols.open .wt-list, #pane-orgs:has(#og-cols.open) .rp-tiles, #pane-orgs:has(#og-cols.open) .rp-bar { display: none; } }
+  .rp-pill { display: inline-block; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 12.5px; font-weight: 700; }
+  .rp-pill.p { background: rgba(179,166,255,.18); color: #B3A6FF; }
+  @media (max-width: 899px) { .rp-table th.dk, .rp-table td.dk { display: none; } }
   /* ════ W-288 DESKTOP (Ops - Design 09:0x, claude/design/panel-v2/desktop/): above 900 px a 260 px sidebar on every
      tool, a desktop Home, tables for Payments and Orders, Finish these beside its editor, Add a place in two
      columns. Under 900 px nothing here applies: the phone Panel is unchanged. */
@@ -528,7 +628,7 @@
     .dk-side .dk-foot { margin-top: auto; padding-top: 16px; }
     .dk-side .dk-foot .dk-nav { color: var(--muted); font-size: 13.5px; }
     #app > .wrap { max-width: 720px; margin: 0; padding: 28px 36px 120px; }
-    #app > #pane-home, #app > #pane-payments, #app > #pane-orders, #app > #pane-capture { max-width: none; }
+    #app > #pane-home, #app > #pane-payments, #app > #pane-orders, #app > #pane-capture, #app > #pane-wait, #app > #pane-orgs, #app > #pane-feedback { max-width: none; }   /* W-315: the queue and reports use the width */
     #app > #pane-door { max-width: 520px; margin: 0 auto; }
     #app > #queue-bar-wrap { display: none !important; }
     .savebar { left: 260px; }
@@ -1008,6 +1108,39 @@
     <label class="ib-test"><span>Show test payments</span><input type="checkbox" role="switch" id="ib-test"></label>
   </div>
 
+  <!-- ════ Waiting on you (W-315, Brian 22:18; panel-gaps/6-one-queue.png + 7-needs-you-and-ai.png) ════════
+       Needs you (the sidebar badge counts only these) and AI can fix. Nothing goes live without Approve. Admin only. -->
+  <div class="wrap" id="pane-wait" hidden>
+    <h1>Waiting on you</h1>
+    <p class="wt-sub">Only what needs your call. The rest AI can fix first.</p>
+    <div class="rp-chips wt-chips" id="wt-chips"></div>
+    <div class="wt-cols" id="wt-cols">
+      <div class="wt-list">
+        <div class="wt-box"><div class="wt-h">Needs you <span class="n" id="wt-n-need">0</span><span class="r">oldest first</span></div><div id="wt-need"></div></div>
+        <div class="wt-box" style="margin-top:16px"><div class="wt-h">AI can fix <span class="n" id="wt-n-ai">0</span><button type="button" class="r" id="wt-sendall" disabled title="Send to AI needs the panel-ai server piece">Send all</button></div><div id="wt-ai"></div></div>
+        <p class="sub" id="wt-note" hidden></p>
+      </div>
+      <div class="wt-detail" id="wt-detail" hidden></div>
+    </div>
+  </div>
+
+  <!-- ════ W-315 (3): report views, to look things up (anything that needs Brian is in Waiting on you) ════ -->
+  <div class="wrap" id="pane-orgs" hidden>
+    <h1>Organisers and partners</h1>
+    <p class="wt-sub">To look things up. Anything that needs you is in Waiting on you.</p>
+    <div class="rp-tiles" id="og-tiles"></div>
+    <div class="rp-bar"><div class="rp-chips" id="og-chips"></div><input type="search" id="og-q" placeholder="Search organisers" aria-label="Search organisers"></div>
+    <div class="wt-cols" id="og-cols"><div class="wt-list"><div class="rp-table" id="og-table"></div></div><div class="wt-detail" id="og-detail" hidden></div></div>
+    <p class="sub" id="og-note" hidden></p>
+  </div>
+  <div class="wrap" id="pane-feedback" hidden>
+    <h1>Feedback</h1>
+    <p class="wt-sub">What people sent from the app, newest first.</p>
+    <div class="rp-bar"><div class="rp-chips" id="fbk-chips"></div></div>
+    <div class="rp-table" id="fbk-table"></div>
+    <p class="sub" id="fbk-note" hidden></p>
+  </div>
+
   <!-- ════ Payments (W-228, Ops OPS-188; Brian 14 Nov) ═══════════════════
        Tickets to events Suna hosts, paid by DuitNow or bank transfer with a
        reference. Brian checks his bank, finds the reference here and marks
@@ -1257,6 +1390,9 @@
     <button class="opt" id="menu-addplace" hidden>Add from Google Maps link<small>A tipped place, straight from Google Maps</small></button>
     <button class="opt" id="menu-review" hidden>Review places<small>Keep every place's details current, the most used first</small></button>
     <button class="opt" id="menu-claims" hidden>Claims <span class="badge zero" id="claims-count">0</span><small>"Claim this page" requests to decide</small></button>
+    <button class="opt" id="menu-wait" hidden>Waiting on you <span class="badge zero" id="wait-count">0</span><small>Only what needs your call</small></button>
+    <button class="opt" id="menu-orgs" hidden>Organisers and partners<small>Every organiser, their plan and live events</small></button>
+    <button class="opt" id="menu-feedback" hidden>Feedback<small>What people sent from the app</small></button>
     <button class="opt" id="menu-inbox" hidden>Inbox <span class="badge zero" id="inbox-count">0</span><small>Everything that happened, newest first</small></button>
     <button class="opt" id="menu-orders" hidden>Orders <span class="badge zero" id="orders-count">0</span><small>One-off packages: due today first</small></button>
     <button class="opt" id="menu-payments" hidden>Payments <span class="badge zero" id="payments-count">0</span><small>Tickets waiting to be marked paid</small></button>
@@ -1345,7 +1481,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v67';
+const BUILD = 'field-v68';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5490,6 +5626,9 @@ function openMenu() {
   $('menu-payments').hidden = !(profile && profile.is_admin);
   $('menu-orders').hidden = !(profile && profile.is_admin);
   $('menu-inbox').hidden = !(profile && profile.is_admin);
+  $('menu-wait').hidden = !(profile && profile.is_admin);
+  $('menu-orgs').hidden = !(profile && profile.is_admin);
+  $('menu-feedback').hidden = !(profile && profile.is_admin);
   $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
     const failed = items.filter((i) => i.state === 'failed').length;
@@ -5516,12 +5655,17 @@ $('menu-review').onclick = () => { closeMenu(); switchTab('review'); };
 $('menu-payments').onclick = () => { closeMenu(); switchTab('payments'); };
 $('menu-orders').onclick = () => { closeMenu(); switchTab('orders'); };
 $('menu-inbox').onclick = () => { closeMenu(); switchTab('inbox'); };
+$('menu-wait').onclick = () => { closeMenu(); switchTab('wait'); };
+$('menu-orgs').onclick = () => { closeMenu(); switchTab('orgs'); };
+$('menu-feedback').onclick = () => { closeMenu(); switchTab('feedback'); };
 $('menu-door').onclick = () => { closeMenu(); switchTab('door'); };
 $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 
+/** W-314 OD-web-Q8-4: three grey rows while a list loads for the first time. */
+function pnSkel(id) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="pn-skel"></div><div class="pn-skel"></div><div class="pn-skel"></div>'; }
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox']) {
+  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
@@ -5539,11 +5683,15 @@ function switchTab(which) {
   if (which === 'country') renderCountryTab();
   if (which === 'events') loadEventList();
   if (which === 'creators') loadCreators();
-  if (which === 'claims') loadClaims(true);
+  // W-314 W-Q8-5 / OD-web-Q8-4: a tab shows its last list at once (or grey rows the first time) and refreshes in place.
+  if (which === 'claims') { if (clRows.length) renderClaims(); else pnSkel('cl-list'); loadClaims(true); }
   if (which === 'review') openReview();
   if (which === 'payments') loadTickets('payments');
-  if (which === 'orders') loadOrders(true);
-  if (which === 'inbox') loadInbox(true);
+  if (which === 'orders') { if (orRows.length) renderOrders(); else pnSkel('or-list'); loadOrders(true); }
+  if (which === 'inbox') { if (ibRows.length) renderInbox(); else pnSkel('ib-list'); loadInbox(true); }
+  if (which === 'wait') { if (wtItems.length) renderWait(); else { pnSkel('wt-need'); pnSkel('wt-ai'); } loadWait(true); } else wtFlush();
+  if (which === 'orgs') { if (ogRows.length) renderOrgs(); else pnSkel('og-table'); loadOrgs(); }
+  if (which === 'feedback') { if (fbkRows.length) renderFeedback(); else pnSkel('fbk-table'); loadFeedback(); }
   if (which === 'door') loadTickets('door'); else drStop();
   // The quiet line hides itself on the Queue tab and comes back off it.
   refreshQueueBadge();
@@ -5553,14 +5701,19 @@ function switchTab(which) {
    Built from the menu's own entries, so a row shows exactly when its menu entry does (the admin
    rule lives in one place) and its count is the menu badge's. A count turns purple when > 0. */
 const HOME_GROUPS = [
+  ['Waiting on you', [['wait', 'Waiting on you', 'Only what needs your call']]],   // W-315: first
   ['Places', [['finish', 'Finish these', 'Missing a photo, hours or a description'], ['review', 'Review places', 'Keep details current, the most used first'],
               ['addplace', 'Add from Google Maps link', 'A tipped place, straight from Google Maps'], ['queue', 'Upload queue', 'Places still uploading from this phone']]],
-  ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'],
+  ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'], ['orgs', 'Organisers and partners', 'Every organiser, their plan and live events'], ['feedback', 'Feedback', 'What people sent from the app'],
                              ['creators', 'Creators', 'The purple Creator tag']]],
   ['Money and tickets', [['inbox', 'Inbox', 'Everything that happened, newest first'], ['orders', 'Orders', 'Packages to deliver, late first'], ['payments', 'Payments', 'Tickets waiting for payment'], ['door', 'Door', 'Scan tickets at the event']]],
   ['Country screens', [['country', 'Welcome to (country)', 'Hero photo, foods to try, essential apps']]],
 ];
-const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count' };
+const SIDE_GROUPS = [
+  ['Reports', [['review', 'Places'], ['events', 'Events'], ['orgs', 'Organisers and partners'], ['orders', 'Money and tickets'], ['feedback', 'Feedback']]],
+  ['Tools', [['capture', 'Add a place'], ['addplace', 'Google Maps link'], ['queue', 'Upload queue'], ['door', 'Door']]],
+];
+const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count', wait: 'wait-count' };
 /** W-288: the feature row is a toggle (the purple switch shows aria-pressed), no star glyph. */
 function featuredHTML() {
   return '<span>Feature on its Welcome to screen<small>Fills the Top Places block. Added after the place uploads.</small></span><i class="tog" aria-hidden="true"></i>';
@@ -5834,7 +5987,8 @@ function buildFinishScope() {
   if (!sel || sel.dataset.built) return;
   const fix = (cap.lat != null) ? { lat: cap.lat, lon: cap.lon } : liveFix;
 
-  const opts = ['<option value="near">Near me</option>'];
+  // W-314 W-Q8-2 / OD-web-Q8-2: with location off, 'near me' would list the world; say so and start in KL.
+  const opts = ['<option value="near">' + (fix && fix.lat != null ? 'Near me' : 'Near me (location is off)') + '</option>'];
 
   const seen = new Set();
   cities.forEach((c) => { if (c.country_code) seen.add(c.country_code); });
@@ -5847,9 +6001,20 @@ function buildFinishScope() {
     opts.push('<option value="city:' + c.id + '">City, ' + escapeHtml(c.name) + '</option>');
   });
 
+  const kl = cities.find((c) => /kuala lumpur/i.test(c.name || ''));
+  if (!(fix && fix.lat != null) && kl && !near.some((c) => c.id === kl.id)) opts.splice(1, 0, '<option value="city:' + kl.id + '">City, ' + escapeHtml(kl.name) + '</option>');
   sel.innerHTML = opts.join('');
+  if (!(fix && fix.lat != null) && kl) sel.value = 'city:' + kl.id;
   sel.dataset.built = '1';
   sel.onchange = () => loadFinishList(false);
+}
+/** Where the finish list is, in words: 'near you' only with a real location, else the city or country. */
+function finishWhere() {
+  const v = finishScopeValue();
+  if (v === 'near') return (cap.lat != null || (liveFix && liveFix.lat != null)) ? 'near you' : 'everywhere (location is off)';
+  if (v.startsWith('city:')) { const c = cities.find((x) => String(x.id) === v.slice(5)); return 'in ' + (c ? c.name : 'that city'); }
+  if (v.startsWith('country:')) return 'in ' + v.slice(8);
+  return 'near you';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8599,12 +8764,16 @@ async function loadProfile() {
   $('menu-payments').hidden = !profile.is_admin;
   $('menu-orders').hidden = !profile.is_admin;
   $('menu-inbox').hidden = !profile.is_admin;
+  $('menu-wait').hidden = !profile.is_admin;
+  $('menu-orgs').hidden = !profile.is_admin;
+  $('menu-feedback').hidden = !profile.is_admin;
   $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
   if (profile.is_admin) loadTickets(null).catch(() => {});
   if (profile.is_admin) loadOrders(false).catch(() => {});   // W-284: the due-today badge
   if (profile.is_admin) loadInbox(false).catch(() => {});    // W-308 G: the unread badge
+  if (profile.is_admin) loadWait(false).catch(() => {});     // W-315: the Needs you badge
   if (!profile.username) {
     // `landmark_media.username` is NOT NULL, so a photo cannot be attached
     // without one. Say so here rather than failing at upload time.
@@ -8863,6 +9032,420 @@ function ibRow(it, now) {
 }
 function ibWaiting(it) { return !it.read_at && !!(IB_KIND[it.kind] || [])[2]; }
 /* ORDERS-LOGIC-END */
+
+/* W315-LOGIC-START */
+/* ── W-315 (Brian 22:18): Waiting on you ─────────────────────────────────────────────────────────────
+   Two parts. NEEDS YOU (the badge counts only these): listings that are ready (Approve / Turn down with a
+   reason), claims, and the server reads still to connect (reported posts and people, organiser edits).
+   AI CAN FIX: listings missing a photo, price, credit or pin, or sharing a photo with another listing;
+   reported places; the older place flags; feedback to sort. Send to AI stays disabled until panel-ai is
+   deployed (STATUS 25 Nov 23:5x); nothing here calls a model. A decision waits 6 s with Undo before it is
+   written (approving sends the submitter "Your event is live", which can't be taken back). */
+let wtItems = [], wtSel = null, wtPending = null, wtBusy = false, wtFilter = 'all';
+// The chips (6-one-queue.png): every row belongs to one group.
+const WT_GROUPS = [['all', 'All'], ['listings', 'Listings'], ['edits', 'Edits'], ['claims', 'Claims'], ['reported', 'Reported'], ['orders', 'Orders'], ['feedback', 'Feedback']];
+const wtGroup = (it) => (it.kind === 'ready' || it.kind === 'fix' ? 'listings' : it.kind === 'claim' ? 'claims' : it.kind === 'place' || it.kind === 'flag' ? 'reported' : it.kind === 'order' ? 'orders' : it.kind === 'feedback' ? 'feedback' : 'other');
+const WT_OUR_MOVE = ['paid', 'details_in', 'changes', 'approved'];
+const WT_DAY = 86400000;
+const WT_UNDO_MS = 6000;
+function wtAge(at, now) {
+  const ms = now - Date.parse(at || 0);
+  if (!(ms >= 0)) return '';
+  if (ms < 3600000) return Math.max(1, Math.round(ms / 60000)) + ' min';
+  if (ms < WT_DAY) return Math.round(ms / 3600000) + ' h';
+  return plural(Math.floor(ms / WT_DAY), 'day');
+}
+/** W315-6: an event's own time zone: the nearest Suna city to its pin (events carry no zone); KL without a pin. */
+function wtTz(e) {
+  const cs = typeof EV_CITIES !== 'undefined' ? EV_CITIES : [];
+  if (!e || e.latitude == null || e.longitude == null || !cs.length) return 'Asia/Kuala_Lumpur';
+  let best = null, bd = Infinity;
+  for (const c of cs) { const d = (c.lat - e.latitude) ** 2 + (c.lng - e.longitude) ** 2; if (d < bd) { bd = d; best = c; } }
+  return best.tz;
+}
+/** The local 'YYYY-MM-DD' and 'HH:MM' of an instant in a zone. */
+function wtLocal(iso, tz) {
+  const d = new Date(iso); if (isNaN(d)) return { day: '', hm: '' };
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { day: p.year + '-' + p.month + '-' + p.day, hm: p.hour + ':' + p.minute };
+}
+/** The instant of a local date and time in a zone (two passes for daylight saving). */
+function wtIso(day, hm, tz) {
+  let t = Date.parse(day + 'T' + hm + ':00Z'); if (isNaN(t)) return null;
+  for (let k = 0; k < 2; k++) { const l = wtLocal(new Date(t).toISOString(), tz); t -= Date.parse(l.day + 'T' + l.hm + ':00Z') - Date.parse(day + 'T' + hm + ':00Z'); }
+  return new Date(t).toISOString();
+}
+function wtWhen(e) {
+  try {
+    const tz = wtTz(e);
+    const dayOf = (d) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz });
+    const clock = (d) => d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz }).replace(':00', '').replace(/\s*([ap])m$/i, ' $1m').toLowerCase();   // W315-9: '6 pm'
+    const a = new Date(e.start_time); if (isNaN(a)) return '';
+    const b = e.end_time ? new Date(e.end_time) : null;
+    const end = !b || isNaN(b) || b <= a ? '' : ' to ' + (dayOf(b) === dayOf(a) ? '' : dayOf(b) + ', ') + clock(b);   // W315-6: '6 pm to 10 pm'
+    return dayOf(a) + ', ' + clock(a) + end;
+  } catch (err) { return ''; }
+}
+/** W315-9: codes read as words ('wrong_hours' → 'Wrong hours'); a date as '7 Dec'. */
+const wtWord = (x) => String(x || '').replace(/_/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
+function wtDay(iso) { try { const d = new Date(String(iso).length === 10 ? iso + 'T12:00:00+08:00' : iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kuala_Lumpur' }); } catch (err) { return String(iso || ''); } }
+/** What a pending listing lacks, in the design's words. */
+function wtMissing(e, dupOf) {
+  const m = [];
+  if (!e.image_url) m.push(['photo', 'No photo']);
+  if (!e.price_type) m.push(['price', 'No price']);
+  if (e.image_url && !e.image_credit) m.push(['credit', 'No photo credit']);
+  if (e.latitude == null || e.longitude == null) m.push(['pin', 'No pin']);
+  if (dupOf) m.push(['dup', 'Same photo as ' + dupOf]);
+  return m;
+}
+const WT_PLAN = {
+  photo: ['Photo', "Find one on the organiser's own page or Instagram, with the credit"],
+  price: ['Price', 'Find it on their ticket page, or mark it Free'],
+  credit: ['Credit', 'Find who took the photo, from where it was posted'],
+  pin: ['Pin', 'Find the venue, then its map pin'],
+  dup: ['Photo', 'Find a different photo for this listing, with the credit'],
+  place: ['Place', "Check the hours, photo or closing on the place's own site"],
+  feedback: ['Sort', 'Read it and say which part of Suna it is about'],
+};
+async function loadWait(render) {
+  if (wtBusy) return; wtBusy = true;
+  const note = $('wt-note');
+  try {
+    const nowIso = new Date().toISOString();
+    const [ev, live, rp, fl, fb] = await Promise.all([
+      db.from('world_events').select('id,name,start_time,end_time,venue,category,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
+        .eq('status', 'pending').gte('end_time', nowIso).order('created_at', { ascending: true }).limit(200),
+      db.from('world_events').select('id,name,image_url,start_time,venue,status').in('status', ['pending', 'approved']).gte('end_time', nowIso).limit(1500),
+      db.from('reports').select('id,created_at,landmark_id,issue_type,landmark_name,status')
+        .or('status.is.null,status.not.in.(ignored,resolved_deleted,resolved_updated)').order('created_at', { ascending: true }).limit(100),
+      db.from('flagged_places').select('id,place_id,flag_reasons,suspected_problem,status,created_at')
+        .in('status', ['pending', 'needs_review']).order('created_at', { ascending: true }).limit(100),
+      db.from('feedback').select('id,created_at,kind,body,status').is('handled_at', null).order('created_at', { ascending: true }).limit(100),
+    ]);
+    for (const r of [ev, live, rp, fl, fb]) if (r.error) throw new Error(r.error.message);
+    try { await loadClaims(false); } catch (err) { /* claims: their own note */ }
+    try { await loadOrders(false); } catch (err) { /* orders: their own note */ }
+    const byPhoto = new Map();
+    for (const r of live.data || []) { if (!r.image_url) continue; const k = String(r.image_url).split('?')[0]; if (!byPhoto.has(k)) byPhoto.set(k, []); byPhoto.get(k).push(r); }
+    // DX-3: the same name (any case) as another upcoming listing on the same day or at the same venue.
+    const day = (t) => { try { return new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }); } catch (err) { return ''; } };
+    const norm = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const twinOf = (e) => (live.data || []).find((r) => r.id !== e.id && norm(r.name) === norm(e.name) && (day(r.start_time) === day(e.start_time) || (norm(r.venue) && norm(r.venue) === norm(e.venue)))) || null;
+    const items = [];
+    for (const e of ev.data || []) {
+      const twins = e.image_url ? (byPhoto.get(String(e.image_url).split('?')[0]) || []).filter((x) => x.id !== e.id) : [];
+      const miss = wtMissing(e, twins.length ? twins[0].name : null);
+      const dupUrl = twins.length ? e.image_url : null;
+      const same = twinOf(e);
+      const where = [wtWhen(e), e.venue].filter(Boolean).join(', ');
+      if (!miss.length) items.push({ key: 'ev:' + e.id, part: 'need', kind: 'ready', label: same ? 'Listing, possible duplicate' : 'Listing, ready', title: e.name, sub: same ? 'Possible duplicate of ' + same.name + (same.status === 'approved' ? ' (live)' : ' (in review)') : where, at: e.created_at, thumb: e.image_url, e, same });
+      else items.push({ key: 'ev:' + e.id, part: 'ai', kind: 'fix', label: 'Listing, missing info', title: e.name, sub: miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()), at: e.created_at, thumb: e.image_url, e, miss, dupUrl, same });
+    }
+    for (const c of (typeof clRows !== 'undefined' ? clRows : [])) {
+      items.push({ key: 'cl:' + c.id, part: 'need', kind: 'claim', label: 'Claim', title: (c.event && c.event.name) || 'Claim', sub: c.domain_match ? 'Email matches the website' : (c.role ? 'Says they are the ' + String(c.role) : 'Organiser claim'), at: c.created_at, c });
+    }
+    for (const o of (typeof orRows !== 'undefined' ? orRows : []).filter((x) => WT_OUR_MOVE.includes(x.step))) {
+      items.push({ key: 'or:' + o.session_id, part: 'need', kind: 'order', label: 'Order, waiting on us', title: o.business || 'Order', sub: (o.ready_by ? 'Ready by ' + wtDay(o.ready_by) : '') + (o.step ? (o.ready_by ? ', ' : '') + (o.ready_by ? String(o.step).replace(/_/g, ' ') : wtWord(o.step)) : ''), at: o.step_at || o.created_at, o });
+    }
+    for (const r of rp.data || []) items.push({ key: 'rp:' + r.id, part: 'ai', kind: 'place', label: 'Reported place', title: r.landmark_name || 'A place', sub: wtWord(r.issue_type || 'Something is wrong'), at: r.created_at, r });
+    for (const f of fl.data || []) items.push({ key: 'fl:' + f.id, part: 'ai', kind: 'flag', label: 'Place check', title: f.suspected_problem || (f.flag_reasons || []).join(', ') || 'Place to check', sub: wtWord((f.flag_reasons || []).join(', ')), at: f.created_at, f });
+    for (const f of fb.data || []) items.push({ key: 'fb:' + f.id, part: 'ai', kind: 'feedback', label: 'Feedback to sort', title: String(f.body || '').slice(0, 80) || 'Feedback', sub: wtWord(f.kind), at: f.created_at, fb: f });
+    items.sort((a, b) => Date.parse(a.at || 0) - Date.parse(b.at || 0));
+    wtItems = items;
+    note.hidden = true;
+  } catch (err) {
+    note.hidden = false; listFail(note, 'the queue', () => loadWait(true));
+  } finally { wtBusy = false; }
+  const n = wtItems.filter((x) => x.part === 'need').length;
+  $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0);
+  if (render) renderWait();
+  renderSide();
+}
+function wtRowHTML(it, now) {
+  const red = it.part === 'need' && now - Date.parse(it.at || 0) > WT_DAY;
+  const th = it.thumb ? '<img src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy">' : (it.kind === 'fix' || it.kind === 'ready' ? 'No<br>photo' : escapeHtml(String(it.title || '?').trim().charAt(0).toUpperCase()));
+  const quick = it.kind === 'ready' ? '<span class="wt-btns"><button type="button" class="wt-btn" data-wt-do="down" data-wt="' + escapeHtml(it.key) + '">Turn down</button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="' + escapeHtml(it.key) + '"' + (it.e.latitude == null ? ' disabled title="No pin yet"' : '') + '>Approve</button></span>' : '';
+  const ai = '';   // W315-7: no Send to AI in the rows while it's off; the pane's footer has it and says why
+  return '<div class="wt-row' + (wtSel === it.key ? ' on' : '') + '" role="button" tabindex="0" data-wt="' + escapeHtml(it.key) + '"><span class="wt-th">' + th + '</span>'
+    + '<span class="wt-tx"><small' + (it.kind === 'place' || it.kind === 'flag' ? ' class="red"' : '') + '>' + escapeHtml(it.label) + '</small><b>' + escapeHtml(it.title) + '</b><span>' + escapeHtml(it.sub || '') + '</span></span>'
+    + '<span class="wt-end"><span class="wt-age' + (red ? ' red' : '') + '">' + escapeHtml(wtAge(it.at, now)) + '</span>' + quick + ai + '</span></div>';
+}
+function renderWait() {
+  const now = Date.now();
+  const counts = {}; for (const [k] of WT_GROUPS) counts[k] = k === 'all' ? wtItems.length : wtItems.filter((x) => wtGroup(x) === k).length;
+  $('wt-chips').innerHTML = WT_GROUPS.map(([k, l]) => '<button type="button" data-wtf="' + k + '" aria-pressed="' + (wtFilter === k) + '">' + l + '<em>' + counts[k] + '</em></button>').join('');
+  const shown = wtItems.filter((x) => wtFilter === 'all' || wtGroup(x) === wtFilter);
+  const need = shown.filter((x) => x.part === 'need'), ai = shown.filter((x) => x.part === 'ai');
+  $('wt-n-need').textContent = String(need.length); $('wt-n-ai').textContent = String(ai.length);
+  // Reported posts and people, and organiser edits, need a server read (STATUS 25 Nov): shown, never counted.
+  // W-314 OD-web-W315-4: no build note posing as a task; one grey line until the server read lands.
+  const gap = '<p class="sub" style="margin:0;padding:10px 14px">Reported posts and organiser edits show here soon.</p>';
+  $('wt-need').innerHTML = (need.length ? need.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing needs you</b><span>New listings and claims land here.</span></span></div>') + (['all', 'edits', 'reported'].includes(wtFilter) ? gap : '');
+  $('wt-ai').innerHTML = ai.length ? ai.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing to fix</b></span></div>';
+  if (wtSel && !wtItems.some((x) => x.key === wtSel)) wtSel = null;
+  if (wtSel && !shown.some((x) => x.key === wtSel)) wtSel = null;
+  if (!wtSel && DK.matches) { const first = need[0] || ai[0]; if (first) wtSel = first.key; }
+  wtDetail();
+}
+function wtDetail() {
+  const box = $('wt-detail'), it = wtItems.find((x) => x.key === wtSel);
+  $('wt-cols').classList.toggle('open', Boolean(it) && !DK.matches);
+  for (const r of document.querySelectorAll('#pane-wait .wt-row[data-wt]')) r.classList.toggle('on', r.dataset.wt === wtSel);
+  if (!it) { box.hidden = true; box.replaceChildren(); return; }
+  const list = wtItems.filter((x) => x.part === it.part && (wtFilter === 'all' || wtGroup(x) === wtFilter)), i = list.indexOf(it);
+  const e = it.e;
+  const pic = it.thumb ? '<img src="' + escapeHtml(it.thumb) + '" alt="">' : 'No photo yet';
+  const miss = it.miss ? '<p class="wt-miss">' + it.miss.map((m) => '<span>' + escapeHtml(m[1]) + '</span>').join('') + '</p>' : '';
+  const facts = e ? [wtWhen(e), e.venue, e.latitude != null ? 'Pin set' : 'No pin', e.price_type ? (e.price_type === 'free' ? 'Free' : 'Paid' + (e.price_amount ? ' from ' + e.price_amount : '')) : '', e.organiser && e.organiser.name ? 'By ' + e.organiser.name : ''].filter(Boolean).join(', ')
+    : it.f ? 'Flagged ' + wtAge(it.at, Date.now()) + ' ago' : it.fb ? String(it.fb.body || '') : it.r ? 'Reported ' + wtAge(it.at, Date.now()) + ' ago' : it.sub;
+  const planKeys = it.miss ? it.miss.map((m) => m[0]) : it.kind === 'place' || it.kind === 'flag' ? ['place'] : it.kind === 'feedback' ? ['feedback'] : [];
+  const plan = planKeys.length ? '<p class="sub" style="margin:18px 0 6px">What AI will do</p><dl class="wt-plan">' + planKeys.map((k) => '<div><dt>' + escapeHtml(WT_PLAN[k][0]) + '</dt><dd>' + escapeHtml(WT_PLAN[k][1]) + '</dd></div>').join('')
+    + '<div><dt>Then</dt><dd>It comes back to Needs you, ready to approve</dd></div></dl><p class="sub" style="margin-top:8px">If it can\'t find it, it tells you why and this stays here.</p>' : '';
+  let actions = '';
+  if (it.kind === 'ready') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="down" data-wt="' + escapeHtml(it.key) + '">Turn down</button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="' + escapeHtml(it.key) + '"' + (e.latitude == null ? ' disabled title="No pin yet"' : '') + '>Approve</button>';
+  else if (it.kind === 'claim') actions = '<p>Claims are decided in Claims, with the proof.</p><button type="button" class="wt-btn w" data-wt-go="claims">Open in Claims</button>';
+  else if (it.kind === 'order') actions = '<p>Its checklist and the organiser\'s messages are in Orders.</p><button type="button" class="wt-btn w" data-wt-go="orders">Open in Orders</button>';
+  else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button><p class="wt-soon">Send to AI turns on soon. Fix it yourself for now.</p>';
+  else actions = '<p>Nothing goes live without your Approve.</p>' + (e && planKeys.length ? '<button type="button" class="wt-btn" data-wt-fixme>Fix it myself</button>' : '<button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button>') + '<button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button><p class="wt-soon">Send to AI turns on soon. Fix it yourself for now.</p>';
+  box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
+    + '<div class="wt-dtop">' + (e ? '<label class="wt-pic wt-drop" title="Drop a photo here, or tap to choose one">' + (it.thumb ? pic : 'No photo yet<br><small>Drop one here or tap to add</small>') + '<input type="file" accept="image/*" id="wt-photo" hidden></label>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
+    + (it.same ? '<p class="wt-dup">Possible duplicate of <b>' + escapeHtml(it.same.name) + '</b>' + (it.same.status === 'approved' ? ' (live)' : ' (in review)') + '. <a href="https://app.unaryx.com/e/' + escapeHtml(it.same.id) + '" target="_blank" rel="noopener">Open that one ↗</a> <a href="https://app.unaryx.com/e/' + escapeHtml(it.e.id) + '" target="_blank" rel="noopener">Open this one ↗</a></p>' : '') + (e && plan ? plan + '<details class="wt-fixme" id="wt-fixme"><summary>Fix it myself</summary>' + wtEditHTML(it) + '</details>' : (e ? wtEditHTML(it) : '') + plan) + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
+    + '<div class="wt-foot">' + actions + '</div>';
+  box.hidden = false;
+}
+/** W-315 (6-one-queue.png, desktop listing open): fix a listing in place. Each field saves as it changes,
+ *  only while the listing is still pending; a listing that becomes complete moves up to Needs you. */
+function wtEditHTML(it) {
+  const e = it.e, v = (x) => escapeHtml(x == null ? '' : String(x));
+  const pin = e.latitude != null && e.longitude != null ? Number(e.latitude).toFixed(5) + ', ' + Number(e.longitude).toFixed(5) : '';
+  const tz = wtTz(e), a = e.start_time ? wtLocal(e.start_time, tz) : { day: '', hm: '' }, b = e.end_time ? wtLocal(e.end_time, tz) : { hm: '' };
+  // W315-6: When, as frame 6 (date, start to end), in the event's own city time.
+  const when = '<label class="wt-when"><span>When</span><span class="wt-wrow"><input type="date" id="wt-day" value="' + v(a.day) + '" aria-label="Date"><input type="time" id="wt-t1" value="' + v(a.hm) + '" aria-label="Starts"><span>to</span><input type="time" id="wt-t2" value="' + v(b.hm) + '" aria-label="Ends"></span></label>';
+  // W315-5: a map with the pin and the paste-a-link field; raw coordinates only behind 'Enter coordinates'.
+  const map = pin ? '<img class="wt-map" alt="The pin on a map" src="/api/map?lat=' + Number(e.latitude).toFixed(5) + '&lng=' + Number(e.longitude).toFixed(5) + '&w=560&h=180" onerror="this.hidden=true">' : '';
+  const pinF = '<div class="wt-pinbox"><span class="wt-pinl">Pin</span>' + map + '<p class="wt-pinst">' + (pin ? 'Pin set.' : 'No pin yet.') + '</p>'
+    + '<input id="wt-pin" value="" placeholder="Paste a Google Maps link" aria-label="Paste a Google Maps link">'
+    + '<details class="wt-xy"><summary>Enter coordinates</summary><input id="wt-pinxy" value="' + v(pin) + '" placeholder="lat, lng" aria-label="Coordinates"></details></div>';
+  return '<div class="wt-edit">' + when
+    + '<label><span>Price</span><span class="wt-price"><select id="wt-pt"><option value=""' + (!e.price_type ? ' selected' : '') + '>Not set</option><option value="free"' + (e.price_type === 'free' ? ' selected' : '') + '>Free</option><option value="paid"' + (e.price_type === 'paid' ? ' selected' : '') + '>Paid</option></select>'
+    + '<input id="wt-pa" inputmode="decimal" placeholder="From (amount)" value="' + v(e.price_amount) + '"' + (e.price_type === 'paid' ? '' : ' hidden') + '></span></label>'
+    + '<label><span>Photo credit</span><input id="wt-cr" value="' + v(e.image_credit) + '" placeholder="Who took it"></label>'
+    + '<label><span>Kind</span><input id="wt-cat" value="' + v(e.category) + '" placeholder="Festival, Market, Music…"></label>'
+    + '<label><span>Venue</span><input id="wt-ven" value="' + v(e.venue) + '" placeholder="Venue and street"></label>'
+    + pinF
+    + '<p class="wt-saved" id="wt-saved" role="status"></p></div>';
+}
+/** lat, lng from '3.15, 101.71' or a Google Maps link (@lat,lng or ?q=lat,lng); null if neither. */
+function wtPinFrom(t) {
+  const m = String(t || '').match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { latitude: lat, longitude: lng } : null;
+}
+async function wtSave(it, patch) {
+  const note = $('wt-saved'); if (note) note.textContent = 'Saving…';
+  const { data, error } = await db.from('world_events').update(patch).eq('id', it.e.id).eq('status', 'pending').select('id');
+  if (error || !data || !data.length) { if (note) note.textContent = error ? 'Not saved: ' + error.message : 'Not saved: it was decided elsewhere.'; return false; }
+  Object.assign(it.e, patch);
+  wtRecheck(it);
+  if (note) note.textContent = 'Saved';
+  return true;
+}
+/** After an edit: the missing list again; complete -> Needs you (ready), else stays in AI can fix. */
+function wtRecheck(it) {
+  const miss = wtMissing(it.e, null).concat((it.miss || []).filter((m) => m[0] === 'dup' && it.e.image_url === it.dupUrl));
+  const was = it.part;
+  if (!miss.length) { it.part = 'need'; it.kind = 'ready'; it.label = 'Listing, ready'; it.miss = null; it.sub = [wtWhen(it.e), it.e.venue].filter(Boolean).join(', '); }
+  else { it.part = 'ai'; it.kind = 'fix'; it.label = 'Listing, missing info'; it.miss = miss; it.sub = miss.map((m) => m[1]).join(', ').replace(/^./, (c) => c.toUpperCase()); }
+  it.thumb = it.e.image_url || it.thumb;
+  if (was !== it.part) renderWait(); else { const r = document.querySelector('#pane-wait .wt-row[data-wt="' + CSS.escape(it.key) + '"]'); if (r) r.outerHTML = wtRowHTML(it, Date.now()); }
+  const n = wtItems.filter((x) => x.part === 'need').length; $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0);
+}
+let wtTyping = null;
+/** W315-6: the When field's patch: start and end in the event's zone; an end before the start is the next day. */
+function wtWhenPatch(it) {
+  const day = $('wt-day').value, t1 = $('wt-t1').value, t2 = $('wt-t2').value, tz = wtTz(it.e);
+  if (!day || !t1) { $('wt-saved').textContent = 'Pick a date and a start time.'; return null; }
+  const start = wtIso(day, t1, tz); if (!start) return null;
+  let end = t2 ? wtIso(day, t2, tz) : null;
+  if (end && Date.parse(end) <= Date.parse(start)) end = new Date(Date.parse(end) + 86400000).toISOString();
+  return end ? { start_time: start, end_time: end } : { start_time: start };
+}
+function wtField(ev) {
+  const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e) return;
+  const id = ev.target.id;
+  if (id === 'wt-pt') { $('wt-pa').hidden = ev.target.value !== 'paid'; wtSave(it, { price_type: ev.target.value || null, price_amount: ev.target.value === 'paid' ? (Number($('wt-pa').value) || null) : null }); return; }
+  const map = { 'wt-pa': () => ({ price_amount: Number(ev.target.value) || null }), 'wt-cr': () => ({ image_credit: ev.target.value.trim() || null }), 'wt-cat': () => ({ category: ev.target.value.trim() || null }), 'wt-ven': () => ({ venue: ev.target.value.trim() || null }),
+    'wt-day': () => wtWhenPatch(it), 'wt-t1': () => wtWhenPatch(it), 'wt-t2': () => wtWhenPatch(it),
+    'wt-pinxy': () => { const p = wtPinFrom(ev.target.value); if (!p) { $('wt-saved').textContent = ev.target.value.trim() ? "That isn't a pin: lat, lng" : ''; return null; } return p; },
+    'wt-pin': () => { const p = wtPinFrom(ev.target.value); if (!p) { $('wt-saved').textContent = ev.target.value.trim() ? "That isn't a pin: paste a Google Maps link or lat, lng" : ''; return null; } return p; } };
+  if (!map[id]) return;
+  clearTimeout(wtTyping);
+  wtTyping = setTimeout(() => { const patch = map[id](); if (patch) wtSave(it, patch); }, ev.type === 'change' ? 0 : 700);
+}
+async function wtPhoto(file) {
+  const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e || !file) return;
+  if (!/^image\//.test(file.type || '') && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '')) { $('wt-saved').textContent = 'That file is not a photo.'; return; }
+  try {
+    $('wt-saved').textContent = 'Preparing…';
+    const { blob } = await evResize(file);
+    await queueCountryWork({ kind: 'event_photo', eventID: it.e.id, credit: (($('wt-cr') || {}).value || '').trim() || null, bytes: await blob.arrayBuffer() }, it.e.name || 'Event', crypto.randomUUID());
+    const url = URL.createObjectURL(blob);
+    const pic = document.querySelector('#wt-detail .wt-drop'); if (pic) { pic.replaceChildren(); const im = document.createElement('img'); im.src = url; im.alt = ''; pic.appendChild(im); }
+    $('wt-saved').textContent = 'Photo uploading; the listing keeps it when the upload lands.';
+  } catch (err) { $('wt-saved').textContent = (err && err.message) || 'Could not read that photo.'; }
+}
+
+/** Approve / Turn down / Mark sorted: off the list now, written after the Undo window. */
+function wtDecide(it, what, why) {
+  wtFlush();
+  const idx = wtItems.indexOf(it), part = it.part;
+  wtItems.splice(idx, 1);
+  const next = wtItems.filter((x) => x.part === part)[Math.min(idx, wtItems.filter((x) => x.part === part).length - 1)] || null;
+  wtSel = next ? next.key : null;
+  renderWait();
+  const words = what === 'approve' ? 'Approved' : what === 'sorted' ? 'Marked sorted' : 'Turned down';
+  const t = document.createElement('div'); t.className = 'wt-toast'; t.setAttribute('role', 'status');
+  t.append(document.createTextNode(words + ': ' + String(it.title).slice(0, 40)));
+  const u = document.createElement('button'); u.type = 'button'; u.textContent = 'Undo'; t.appendChild(u);
+  document.body.appendChild(t);
+  const p = { it, what, why, idx, t, timer: setTimeout(() => wtCommit(p), WT_UNDO_MS) };
+  u.onclick = () => { clearTimeout(p.timer); t.remove(); wtPending = null; wtItems.splice(Math.min(p.idx, wtItems.length), 0, it); wtSel = it.key; renderWait(); };
+  wtPending = p;
+}
+async function wtCommit(p) {
+  if (!p || p.done) return; p.done = true; clearTimeout(p.timer); p.t.remove(); if (wtPending === p) wtPending = null;
+  try {
+    let r;
+    if (p.what === 'approve') r = await db.from('world_events').update({ status: 'approved' }).eq('id', p.it.e.id).eq('status', 'pending').select('id');
+    else if (p.what === 'down') r = await db.from('world_events').update({ status: 'rejected', review_note: p.why }).eq('id', p.it.e.id).eq('status', 'pending').select('id');
+    else if (p.what === 'sorted') r = await db.from('feedback').update({ status: 'sorted', handled_at: new Date().toISOString(), handled_by: (profile && profile.username) || 'panel' }).eq('id', p.it.fb.id).select('id');
+    if (r && r.error) throw new Error(r.error.message);
+    if (r && (!r.data || !r.data.length)) throw new Error('nothing changed (already decided?)');
+  } catch (err) {
+    alertOnce('Couldn\'t save "' + p.it.title + '": ' + (err && err.message ? err.message : 'try again'));
+    loadWait(true);
+  }
+  const n = wtItems.filter((x) => x.part === 'need').length;
+  $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0); renderSide();
+}
+function wtFlush() { if (wtPending) wtCommit(wtPending); }
+/* W315-LOGIC-END */
+function alertOnce(msg) { const n = $('wt-note'); n.hidden = false; n.textContent = msg; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') wtFlush(); });
+window.addEventListener('pagehide', wtFlush);
+$('pane-wait').addEventListener('click', (ev) => {
+  const f = ev.target.closest('[data-wtf]'); if (f) { wtFilter = f.dataset.wtf; wtSel = null; renderWait(); return; }
+  const fx = ev.target.closest('[data-wt-fixme]'); if (fx) { const d = $('wt-fixme'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); const f = d.querySelector('input,textarea,select'); if (f) f.focus({ preventScroll: true }); } return; }   // W-314 OD-web-W315-3: opens the fields in place
+  const go = ev.target.closest('[data-wt-go]'); if (go) { switchTab(go.dataset.wtGo); return; }
+  if (ev.target.closest('[data-wt-back]')) { wtSel = null; wtDetail(); return; }
+  if (ev.target.closest('[data-wt-cancel]')) { $('wt-why-box').hidden = true; return; }
+  const d = ev.target.closest('[data-wt-do]');
+  if (d) {
+    ev.stopPropagation();
+    const it = wtItems.find((x) => x.key === d.dataset.wt); if (!it || d.disabled) return;
+    if (d.dataset.wtDo === 'approve') { if (it.e.latitude == null) return; wtDecide(it, 'approve'); return; }
+    if (d.dataset.wtDo === 'sorted') { wtDecide(it, 'sorted'); return; }
+    if (d.dataset.wtDo === 'down') { wtSel = it.key; wtDetail(); $('wt-why-box').hidden = false; $('wt-why').focus(); return; }
+    if (d.dataset.wtDo === 'down-go') { const why = $('wt-why').value.trim(); if (!why) { $('wt-why').focus(); return; } wtDecide(it, 'down', why); return; }
+  }
+  const row = ev.target.closest('.wt-row[data-wt]'); if (row) { wtSel = row.dataset.wt; wtDetail(); if (!DK.matches) window.scrollTo(0, 0); }
+});
+$('pane-wait').addEventListener('input', wtField);
+$('pane-wait').addEventListener('change', (ev) => { if (ev.target.id === 'wt-photo') wtPhoto(ev.target.files && ev.target.files[0]); else wtField(ev); });
+$('pane-wait').addEventListener('dragover', (ev) => { if (ev.target.closest('.wt-drop')) ev.preventDefault(); });
+$('pane-wait').addEventListener('drop', (ev) => { const d = ev.target.closest('.wt-drop'); if (!d) return; ev.preventDefault(); wtPhoto(ev.dataTransfer.files && ev.dataTransfer.files[0]); });
+$('pane-wait').addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.wt-row[data-wt]')) { ev.preventDefault(); ev.target.click(); } });
+/* ── W-315 (3): report views. Organisers and partners (tiles + table; a row opens their page) and Feedback. ── */
+let ogRows = [], ogLive = new Map(), ogFilter = 'all';
+const ogPlan = (o) => (o.plan === 'partner' && o.plan_until && Date.parse(o.plan_until) <= Date.parse('2027-01-31T23:59:59+08:00') ? 'founding' : o.plan || 'listed');
+async function loadOrgs() {
+  const note = $('og-note');
+  try {
+    const [o, ev] = await Promise.all([
+      db.from('organisers').select('id,slug,name,city,plan,plan_until,is_listed,created_at').order('created_at', { ascending: false }).limit(500),
+      db.from('world_events').select('organiser_id').eq('status', 'approved').gte('end_time', new Date().toISOString()).not('organiser_id', 'is', null).limit(2000),
+    ]);
+    if (o.error) throw new Error(o.error.message); if (ev.error) throw new Error(ev.error.message);
+    ogRows = o.data || []; ogLive = new Map();
+    for (const r of ev.data || []) ogLive.set(r.organiser_id, (ogLive.get(r.organiser_id) || 0) + 1);
+    note.hidden = true; renderOrgs();
+  } catch (err) { note.hidden = false; listFail(note, 'organisers', () => loadOrgs()); }
+}
+function renderOrgs() {
+  const now = Date.now(), monthEnd = new Date(); monthEnd.setMonth(monthEnd.getMonth() + 1, 1); monthEnd.setHours(0, 0, 0, 0);
+  const partners = ogRows.filter((o) => o.plan === 'partner');
+  const live = [...ogLive.values()].reduce((a, b) => a + b, 0);
+  const renewing = partners.filter((o) => o.plan_until && Date.parse(o.plan_until) >= now && Date.parse(o.plan_until) < monthEnd.getTime()).length;
+  $('og-tiles').innerHTML = [[ogRows.length, 'Organisers'], [partners.length, 'Partners'], [live, 'Events live'], [renewing, 'Renewing this month']]
+    .map(([n, l]) => '<div class="rp-tile"><b>' + n + '</b><span>' + l + '</span></div>').join('');
+  const counts = { all: ogRows.length, listed: ogRows.filter((o) => ogPlan(o) === 'listed').length, partner: ogRows.filter((o) => ogPlan(o) === 'partner').length, founding: ogRows.filter((o) => ogPlan(o) === 'founding').length };
+  $('og-chips').innerHTML = [['all', 'All'], ['listed', 'Listed'], ['partner', 'Partner'], ['founding', 'Founding']]
+    .map(([k, l]) => '<button type="button" data-og="' + k + '" aria-pressed="' + (ogFilter === k) + '">' + l + '<em>' + counts[k] + '</em></button>').join('');
+  const q = $('og-q').value.trim().toLowerCase();
+  const rows = ogRows.filter((o) => (ogFilter === 'all' || ogPlan(o) === ogFilter) && (!q || String(o.name).toLowerCase().includes(q)));
+  const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const planPill = (o) => o.is_listed === false ? '<span class="rp-pill">Not listed</span>' : '<span class="rp-pill' + (ogPlan(o) !== 'listed' ? ' p' : '') + '">' + escapeHtml(ogPlan(o).replace(/^./, (c) => c.toUpperCase())) + '</span>';
+  $('og-table').innerHTML = rows.length ? '<table><thead><tr><th>Organiser</th><th class="dk">City</th><th>Plan</th><th>Live</th><th class="dk">Renews</th><th class="dk">Joined</th></tr></thead><tbody>'
+    + rows.map((o) => '<tr data-og-id="' + escapeHtml(o.id) + '"' + (ogSel === o.id ? ' class="on"' : '') + '><td>' + escapeHtml(o.name) + '</td><td class="dk">' + escapeHtml(o.city || '') + '</td><td>' + planPill(o) + '</td><td>' + (ogLive.get(o.id) || '')
+      + '</td><td class="dk">' + (o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</td><td class="dk">' + escapeHtml(day(o.created_at)) + '</td></tr>').join('') + '</tbody></table>'
+    : '<p class="sub" style="padding:16px;margin:0">No organisers match.</p>';
+}
+$('og-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-og]'); if (b) { ogFilter = b.dataset.og; renderOrgs(); } });
+$('og-q').addEventListener('input', () => renderOrgs());
+$('og-table').addEventListener('click', (e) => { const r = e.target.closest('tr[data-og-id]'); if (r) { ogSel = r.dataset.ogId; renderOrgs(); ogDetail(); if (!DK.matches) window.scrollTo(0, 0); } });
+/* W-315 (4-partners-organisers.png): one organiser beside the table (phone: full screen). What the Panel can read
+   now: plan, renewal, their events with status, the public page. Billing (setup fee, Open in Stripe), team links,
+   the welcome pack, Resend their link and Cancel plan need the server read (organiser_* / partner_* tables are
+   service-role only): shown, marked, disabled. */
+let ogSel = null;
+const OG_EV = { approved: 'Live', pending: 'In review', rejected: 'Not listed', cancelled: 'Cancelled' };
+async function ogDetail() {
+  const box = $('og-detail'), o = ogRows.find((x) => x.id === ogSel);
+  $('og-cols').classList.toggle('open', Boolean(o) && !DK.matches);
+  if (!o) { box.hidden = true; return; }
+  const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const row = (k, v, dim) => '<div><dt>' + k + '</dt><dd' + (dim ? ' class="dim"' : '') + '>' + v + '</dd></div>';
+
+  box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-og-back>‹ Partners and organisers</button></div>'
+    + '<h2 class="og-h">' + escapeHtml(o.name) + '</h2><p class="sub" style="margin:0 0 14px">' + escapeHtml([ogPlan(o).replace(/^./, (c) => c.toUpperCase()), o.city].filter(Boolean).join(', ')) + '</p>'
+    + '<h4 class="og-sec">Plan and billing</h4><dl class="wt-plan">' + row('Plan', escapeHtml(o.is_listed === false ? 'Not listed' : ogPlan(o).replace(/^./, (c) => c.toUpperCase())))
+    + row('Renews', o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</dl>'
+    + '<h4 class="og-sec">Events</h4><div class="wt-plan" id="og-events"><p style="padding:12px 14px;margin:0" class="sub">Loading…</p></div>'
+    + '<p class="sub" style="margin:14px 0 0">Billing, team links and the welcome pack show here soon.</p>'   /* W-314 OD-web-W315-4 */
+    + '<div class="wt-foot"><a class="wt-btn" href="https://unaryx.com/events/by/' + escapeHtml(o.slug) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Public page ↗</a>'
+    + '<button type="button" class="wt-btn" disabled title="Coming soon">Resend their link</button>' + (o.plan === 'partner' || o.plan === 'founding' ? '<button type="button" class="wt-btn og-cancel" disabled title="Coming soon">Cancel plan</button>' : '') + '</div>';
+  box.hidden = false;
+  const { data, error } = await db.from('world_events').select('id,name,start_time,end_time,status').eq('organiser_id', o.id).order('start_time', { ascending: false }).limit(50);
+  const ev = $('og-events'); if (!ev || ogSel !== o.id) return;
+  if (error) { ev.innerHTML = '<p style="padding:12px 14px;margin:0" class="sub">Couldn\'t load their events.</p>'; return; }
+  const now = Date.now();
+  ev.innerHTML = (data || []).length ? data.map((e) => { const st = Date.parse(e.end_time) < now && e.status === 'approved' ? 'Ended' : (OG_EV[e.status] || e.status);
+    return '<div class="og-ev"><span><b>' + escapeHtml(e.name) + '</b><small>' + escapeHtml(day(e.start_time)) + '</small></span><span class="og-st ' + (st === 'Live' ? 'live' : st === 'In review' ? 'rev' : '') + '">' + escapeHtml(st) + '</span></div>'; }).join('')
+    : '<p style="padding:12px 14px;margin:0" class="sub">No events yet.</p>';
+}
+$('og-detail').addEventListener('click', (e) => { if (e.target.closest('[data-og-back]')) { ogSel = null; renderOrgs(); ogDetail(); } });
+
+let fbkRows = [], fbkFilter = 'open';
+async function loadFeedback() {
+  const note = $('fbk-note');
+  try {
+    const { data, error } = await db.from('feedback').select('id,created_at,kind,body,status,handled_at,app_version').order('created_at', { ascending: false }).limit(300);
+    if (error) throw new Error(error.message);
+    fbkRows = data || []; note.hidden = true; renderFeedback();
+  } catch (err) { note.hidden = false; listFail(note, 'feedback', () => loadFeedback()); }
+}
+function renderFeedback() {
+  const open = fbkRows.filter((f) => !f.handled_at);
+  $('fbk-chips').innerHTML = [['open', 'To sort', open.length], ['all', 'All', fbkRows.length]]
+    .map(([k, l, n]) => '<button type="button" data-fbk="' + k + '" aria-pressed="' + (fbkFilter === k) + '">' + l + '<em>' + n + '</em></button>').join('');
+  const rows = fbkFilter === 'open' ? open : fbkRows;
+  $('fbk-table').innerHTML = rows.length ? '<table><thead><tr><th>Sent</th><th>Kind</th><th>What they said</th><th class="dk">Version</th></tr></thead><tbody>'
+    + rows.map((f) => '<tr><td>' + escapeHtml(new Date(f.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + '</td><td>' + escapeHtml(f.kind || '') + '</td><td>' + escapeHtml(f.body || '') + '</td><td class="dk">' + escapeHtml(f.app_version || '') + '</td></tr>').join('') + '</tbody></table>'
+    : '<p class="sub" style="padding:16px;margin:0">' + (fbkFilter === 'open' ? 'Nothing to sort.' : 'No feedback yet.') + '</p>';
+}
+$('fbk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-fbk]'); if (b) { fbkFilter = b.dataset.fbk; renderFeedback(); } });
 let orRows = [];
 async function orCall(body) {
   const token = await amToken();
@@ -9732,10 +10315,10 @@ async function renderSide() {
   let queued = 0;
   try { queued = (await idbAll('queue')).length; } catch (e) { /* no store yet */ }
   side.replaceChildren();
-  side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || ''));
+  side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || (profile && profile.is_admin ? 'All cities' : ''))   /* W315-14: the queue is every city's unless you're out in one */);
   const add = dkEl('button', 'primary add', 'Add a place'); add.type = 'button';
   add.onclick = () => { if (runActive()) leaveRun(); switchTab('capture'); };
-  side.appendChild(add);
+  if (!(profile && profile.is_admin)) side.appendChild(add);   // W-315: an admin has Add a place under Tools
   const nav = (t, name, n) => {
     const b = dkEl('button', 'dk-nav' + (t === dkTab || (t === 'finish' && dkTab === 'capture' && runActive()) ? ' on' : ''), name);
     b.type = 'button'; b.dataset.go = t;
@@ -9743,9 +10326,12 @@ async function renderSide() {
     b.onclick = () => switchTab(t);
     return b;
   };
-  side.appendChild(nav('home', 'Home', 0));
-  for (const [title, rows] of HOME_GROUPS) {
-    const shown = rows.filter(([t]) => { const m = $('menu-' + t); return m && !m.hidden; });
+  // W-315 (3) (panel-gaps 6-one-queue.png): an admin's sidebar is Waiting on you, then REPORTS and TOOLS.
+  const groups = profile && profile.is_admin ? SIDE_GROUPS : HOME_GROUPS;
+  if (profile && profile.is_admin) side.appendChild(nav('wait', 'Waiting on you', Number($('wait-count').textContent) || 0));
+  else side.appendChild(nav('home', 'Home', 0));
+  for (const [title, rows] of groups) {
+    const shown = rows.filter(([t]) => { if (t === 'capture') return true; const m = $('menu-' + t); return m && !m.hidden; });
     if (!shown.length) continue;
     side.appendChild(dkEl('h4', '', title));
     for (const [t, name] of shown) {
@@ -9812,7 +10398,7 @@ async function renderDkHome() {
     two.append(pay, ord); box.appendChild(two);
   }
   const fin = dkEl('div', 'card dk-fin');
-  const ft = dkEl('div'); ft.append(dkEl('b', '', (finishRows.length ? finishRows.length + (finishServerPaged ? '+' : '') + ' places' : 'Places') + ' to finish near you'), dkEl('small', '', 'Missing a photo, hours or a description'));
+  const ft = dkEl('div'); ft.append(dkEl('b', '', (finishRows.length ? finishRows.length + (finishServerPaged ? '+' : '') + ' places' : 'Places') + ' to finish ' + finishWhere()), dkEl('small', '', 'Missing a photo, hours or a description'));
   const fb = dkEl('button', 'ghost', 'Open Finish these'); fb.type = 'button'; fb.onclick = () => switchTab('finish');
   fin.append(ft, fb); box.appendChild(fin);
   if (admin && dkVerified == null) {
@@ -9935,6 +10521,7 @@ function dkMissing(split) {
   if (finishMissing === 'hours') { const det = $('hours-grid').closest('details'); if (det) { det.open = true; det.closest('.fg').classList.add('dk-first'); } }
 }
 function dkAfter(which) {
+  if (DK.matches && which === 'home' && profile && profile.is_admin) { switchTab('wait'); return; }   // W-315: Home is Waiting on you
   dkTab = which;
   const split = DK.matches && which === 'capture' && runActive();
   document.body.classList.toggle('dk-split', split);
@@ -9957,6 +10544,19 @@ function dkAfter(which) {
   DK.addEventListener('change', () => { if (!$('app').hidden) dkAfter(dkTab); });
 }
 
+
+/* Never a counter at zero, anywhere in the Panel (Brian 26 Nov 12:20): chip counts, section counts, badges and
+   the nav's *-count are hidden at 0; a report tile whose number is 0 goes. One pass a frame after any change. */
+(function () {
+  let queued = false;
+  const sweep = () => {
+    queued = false;
+    document.querySelectorAll('.rp-chips em, .wt-h .n, .badge, [id$="-count"]').forEach((el) => { el.hidden = el.textContent.trim() === '0'; });
+    document.querySelectorAll('.rp-tile').forEach((t) => { const b = t.querySelector('b'); t.hidden = Boolean(b) && b.textContent.trim() === '0'; });
+  };
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(sweep); } }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  sweep();
+})();
 </script>
 </body>
 </html>
