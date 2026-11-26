@@ -51,8 +51,9 @@ t('(3) Organisers and partners: four tiles, All / Listed / Partner / Founding wi
   assert.match(html, /<th>Organiser<\/th><th class="dk">City<\/th><th>Plan<\/th><th>Live<\/th><th class="dk">Renews<\/th><th class="dk">Joined<\/th>/);
   assert.match(html, /<tr data-og-id="' \+ escapeHtml\(o\.id\)/);
   // 4-partners-organisers.png: the organiser opens beside the table; what needs the server says so, and its buttons are off.
-  assert.match(html, /'<h4 class="og-sec">Plan and billing<\/h4>[\s\S]*'<h4 class="og-sec">Events<\/h4>[\s\S]*'<h4 class="og-sec">Team links<\/h4>[\s\S]*'<h4 class="og-sec">Welcome pack<\/h4>/);
-  assert.match(html, /<button type="button" class="wt-btn" disabled title="Needs the server read">Resend their link<\/button><button type="button" class="wt-btn og-cancel" disabled title="Needs the server read">Cancel plan<\/button>/);
+  assert.match(html, /'<h4 class="og-sec">Plan and billing<\/h4>[\s\S]*'<h4 class="og-sec">Events<\/h4>[\s\S]*Billing, team links and the welcome pack show here soon\./);   // OD-web-W315-4
+  assert.doesNotMatch(html, /Needs the server read'|Connect the server read/, 'no build notes in the Panel');
+  assert.match(html, /disabled title="Coming soon">Resend their link<\/button>' \+ \(o\.plan === 'partner' \|\| o\.plan === 'founding' \? '<button type="button" class="wt-btn og-cancel" disabled title="Coming soon">Cancel plan/);   // OD-web-W315-13
   assert.match(html, /const OG_EV = \{ approved: 'Live', pending: 'In review', rejected: 'Not listed', cancelled: 'Cancelled' \};/);
 });
 t('(3) Feedback: To sort / All, newest first', () => {

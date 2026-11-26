@@ -546,7 +546,12 @@
   .wt-plan { margin: 16px 0 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
   .wt-plan div { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 15px; } .wt-plan div:first-child { border-top: 0; }
   .wt-plan dt { color: var(--muted); } .wt-plan dd { margin: 0; }
-  .wt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .wt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding: 14px 0 12px; border-top: 1px solid var(--line);
+    position: sticky; bottom: 0; z-index: 3; background: var(--bg, #0F1110); }   /* W-314 OD-web-W315-3: the actions always on screen */
+  .wt-fixme { margin: 14px 0 0; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; }
+  .wt-fixme > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; list-style: none; }
+  .wt-fixme > summary::-webkit-details-marker { display: none; }
+  .wt-fixme > summary::after { content: ' +'; margin-left: 4px; } .wt-fixme[open] > summary::after { content: ' –'; }
   .wt-foot p { flex: 1 1 200px; margin: 0; color: var(--muted); font-size: 13.5px; }
   .wt-nofm { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
   .wt-edit { display: grid; gap: 10px; margin: 16px 0 0; }
@@ -9139,7 +9144,8 @@ function renderWait() {
   const need = shown.filter((x) => x.part === 'need'), ai = shown.filter((x) => x.part === 'ai');
   $('wt-n-need').textContent = String(need.length); $('wt-n-ai').textContent = String(ai.length);
   // Reported posts and people, and organiser edits, need a server read (STATUS 25 Nov): shown, never counted.
-  const gap = '<div class="wt-row" aria-disabled="true" style="cursor:default"><span class="wt-th">…</span><span class="wt-tx"><small>Reported posts and people, organiser edits</small><b>Connect the server read</b><span>Coming with panel-ai (iOS)</span></span></div>';
+  // W-314 OD-web-W315-4: no build note posing as a task; one grey line until the server read lands.
+  const gap = '<p class="sub" style="margin:0;padding:10px 14px">Reported posts and organiser edits show here soon.</p>';
   $('wt-need').innerHTML = (need.length ? need.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing needs you</b><span>New listings and claims land here.</span></span></div>') + (['all', 'edits', 'reported'].includes(wtFilter) ? gap : '');
   $('wt-ai').innerHTML = ai.length ? ai.map((x) => wtRowHTML(x, now)).join('') : '<div class="wt-row" style="cursor:default"><span class="wt-tx"><b>Nothing to fix</b></span></div>';
   if (wtSel && !wtItems.some((x) => x.key === wtSel)) wtSel = null;
@@ -9166,10 +9172,10 @@ function wtDetail() {
   else if (it.kind === 'claim') actions = '<p>Claims are decided in Claims, with the proof.</p><button type="button" class="wt-btn w" data-wt-go="claims">Open in Claims</button>';
   else if (it.kind === 'order') actions = '<p>Its checklist and the organiser\'s messages are in Orders.</p><button type="button" class="wt-btn w" data-wt-go="orders">Open in Orders</button>';
   else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
-  else actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
+  else actions = '<p>Nothing goes live without your Approve.</p>' + (e && planKeys.length ? '<button type="button" class="wt-btn" data-wt-fixme>Fix it myself</button>' : '<button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button>') + '<button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
     + '<div class="wt-dtop">' + (e ? '<label class="wt-pic wt-drop" title="Drop a photo here, or tap to choose one">' + (it.thumb ? pic : 'No photo yet<br><small>Drop one here or tap to add</small>') + '<input type="file" accept="image/*" id="wt-photo" hidden></label>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
-    + (it.same ? '<p class="wt-dup">Possible duplicate of <b>' + escapeHtml(it.same.name) + '</b>' + (it.same.status === 'approved' ? ' (live)' : ' (in review)') + '. <a href="https://app.unaryx.com/e/' + escapeHtml(it.same.id) + '" target="_blank" rel="noopener">Open that one ↗</a> <a href="https://app.unaryx.com/e/' + escapeHtml(it.e.id) + '" target="_blank" rel="noopener">Open this one ↗</a></p>' : '') + (e ? wtEditHTML(it) : '') + plan + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
+    + (it.same ? '<p class="wt-dup">Possible duplicate of <b>' + escapeHtml(it.same.name) + '</b>' + (it.same.status === 'approved' ? ' (live)' : ' (in review)') + '. <a href="https://app.unaryx.com/e/' + escapeHtml(it.same.id) + '" target="_blank" rel="noopener">Open that one ↗</a> <a href="https://app.unaryx.com/e/' + escapeHtml(it.e.id) + '" target="_blank" rel="noopener">Open this one ↗</a></p>' : '') + (e && plan ? plan + '<details class="wt-fixme" id="wt-fixme"><summary>Fix it myself</summary>' + wtEditHTML(it) + '</details>' : (e ? wtEditHTML(it) : '') + plan) + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
     + '<div class="wt-foot">' + actions + '</div>';
   box.hidden = false;
 }
@@ -9277,6 +9283,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', wtFlush);
 $('pane-wait').addEventListener('click', (ev) => {
   const f = ev.target.closest('[data-wtf]'); if (f) { wtFilter = f.dataset.wtf; wtSel = null; renderWait(); return; }
+  const fx = ev.target.closest('[data-wt-fixme]'); if (fx) { const d = $('wt-fixme'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); const f = d.querySelector('input,textarea,select'); if (f) f.focus({ preventScroll: true }); } return; }   // W-314 OD-web-W315-3: opens the fields in place
   const go = ev.target.closest('[data-wt-go]'); if (go) { switchTab(go.dataset.wtGo); return; }
   if (ev.target.closest('[data-wt-back]')) { wtSel = null; wtDetail(); return; }
   if (ev.target.closest('[data-wt-cancel]')) { $('wt-why-box').hidden = true; return; }
@@ -9346,16 +9353,15 @@ async function ogDetail() {
   if (!o) { box.hidden = true; return; }
   const day = (iso) => { try { return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
   const row = (k, v, dim) => '<div><dt>' + k + '</dt><dd' + (dim ? ' class="dim"' : '') + '>' + v + '</dd></div>';
-  const server = 'Needs the server read';
+
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-og-back>‹ Partners and organisers</button></div>'
     + '<h2 class="og-h">' + escapeHtml(o.name) + '</h2><p class="sub" style="margin:0 0 14px">' + escapeHtml([ogPlan(o).replace(/^./, (c) => c.toUpperCase()), o.city].filter(Boolean).join(', ')) + '</p>'
     + '<h4 class="og-sec">Plan and billing</h4><dl class="wt-plan">' + row('Plan', escapeHtml(o.is_listed === false ? 'Not listed' : ogPlan(o).replace(/^./, (c) => c.toUpperCase())))
-    + row('Renews', o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + row('Setup fee', server, true) + row('Stripe', server, true) + '</dl>'
+    + row('Renews', o.plan === 'partner' && o.plan_until ? escapeHtml(day(o.plan_until)) : 'None') + '</dl>'
     + '<h4 class="og-sec">Events</h4><div class="wt-plan" id="og-events"><p style="padding:12px 14px;margin:0" class="sub">Loading…</p></div>'
-    + '<h4 class="og-sec">Team links</h4><dl class="wt-plan">' + row('Links', server, true) + '</dl>'
-    + '<h4 class="og-sec">Welcome pack</h4><dl class="wt-plan">' + row('Post to', server, true) + '</dl>'
+    + '<p class="sub" style="margin:14px 0 0">Billing, team links and the welcome pack show here soon.</p>'   /* W-314 OD-web-W315-4 */
     + '<div class="wt-foot"><a class="wt-btn" href="https://unaryx.com/events/by/' + escapeHtml(o.slug) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Public page ↗</a>'
-    + '<button type="button" class="wt-btn" disabled title="Needs the server read">Resend their link</button><button type="button" class="wt-btn og-cancel" disabled title="Needs the server read">Cancel plan</button></div>';
+    + '<button type="button" class="wt-btn" disabled title="Coming soon">Resend their link</button>' + (o.plan === 'partner' || o.plan === 'founding' ? '<button type="button" class="wt-btn og-cancel" disabled title="Coming soon">Cancel plan</button>' : '') + '</div>';
   box.hidden = false;
   const { data, error } = await db.from('world_events').select('id,name,start_time,end_time,status').eq('organiser_id', o.id).order('start_time', { ascending: false }).limit(50);
   const ev = $('og-events'); if (!ev || ogSel !== o.id) return;
