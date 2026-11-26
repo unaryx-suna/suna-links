@@ -494,7 +494,10 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
       justify-content: space-between; padding: 16px; background: linear-gradient(#5c4d3d, var(--bg)); overflow: hidden; }
     .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(17,17,17,0) 30%, var(--bg)); }
-    .hero-e::after { background: linear-gradient(rgba(17,17,17,.1) 0%, rgba(17,17,17,.25) 18%, rgba(17,17,17,.82) 42%, rgba(17,17,17,.94) 64%, var(--bg)); }
+    /* W-314 OD-web-Q3-19, -Q3-20: black 40% over the top 120 px (the Suna pill reads on any cover), then 0 to 85%
+       from the middle down, so only our date, title and venue read there, not the poster's own words. */
+    .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 30%, rgba(0,0,0,.85) 52%, rgba(0,0,0,.95) 70%, var(--bg)); }
+    .hero-e .hero-top .mark { background: rgba(20,15,46,.6); }   /* OD-web-Q3-19: the pill reads on a light cover */
     .hero-e h1, .hero-e .hero-sub { text-shadow: 0 1px 12px rgba(0,0,0,.55); }
     .hero > * { position: relative; z-index: 1; }
     .hero > img { z-index: 0; }

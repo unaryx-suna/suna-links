@@ -253,7 +253,7 @@ await t('/e/ (W-197 (5), Ops OPS-135): the hero has its own darker scrim under t
   state.events = [];
   const r = await render(event, `/e/${U(4)}`);
   assert.match(r.body, /<header class="hero hero-e">/);
-  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(17,17,17,\.1\) 0%, rgba\(17,17,17,\.25\) 18%, rgba\(17,17,17,\.82\) 42%/);
+  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(0,0,0,\.4\) 0, rgba\(0,0,0,0\) 120px, rgba\(0,0,0,0\) 30%, rgba\(0,0,0,\.85\) 52%/);
   assert.match(r.body, /\.hero::after \{ content: ""; position: absolute; inset: 0; background: linear-gradient\(rgba\(17,17,17,0\) 30%, var\(--bg\)\); \}/, 'the shared scrim unchanged');
 });
 
