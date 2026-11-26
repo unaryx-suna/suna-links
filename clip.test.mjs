@@ -449,6 +449,11 @@ await t('W-53 /c/ Worth a walk: own photo, else the stock image, never Google; n
   assert.match((await render(venue, '/c/worq-ttdi')).body, /<a class="row row-place" href="\/place\/aaaaaaaa[^"]*"><span class="ph"/);
   state.places = [];
 });
+await t('W-314 re-run: hours that already carry the date are not dated twice', async () => {
+  const { whenText } = await import('./api/_clip.js');
+  assert.equal(whenText({ start_time: '2026-11-28T06:00:00+00:00', end_time: '2026-11-28T12:00:00+00:00', recurrence_type: 'once', hours_text: 'Sat 28 Nov, 2pm to 8pm' }, 'Asia/Kuala_Lumpur'), 'Sat 28 Nov, 2pm to 8pm');
+});
+
 await t('W-51 hours_text is read, and beats the description and the daily times on /e/', async () => {
   calls.length = 0;
   state.eventRow = ev(U(9), 0, { ...RR, hours_text: 'Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon' });

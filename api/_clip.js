@@ -237,7 +237,10 @@ export function whenText(event, timeZone, now = new Date()) {
   if (!hours) return whenLine(event, timeZone, now);
   const base = whenLine({ ...event, daily_start_time: null, daily_end_time: null }, timeZone, now);
   // A one-day event's line already carries its times; only a run gets the hours.
-  return / – |until|weekly|, /.test(base) || event.recurrence_type ? `${base.split(', ')[0]}, ${hours}` : base;
+  if (!(/ – |until|weekly|, /.test(base) || event.recurrence_type)) return base;
+  const day = base.split(', ')[0];
+  // W-314 re-run: hours the organiser wrote with the date in them ('Sat 28 Nov, 2pm to 8pm') aren't dated twice.
+  return String(hours).toLowerCase().startsWith(day.toLowerCase()) ? hours : `${day}, ${hours}`;
 }
 
 /** The facts card's When (Ops's W2): a run that has started reads "Until Sun 1 Nov"; its hours go under Hours. */
