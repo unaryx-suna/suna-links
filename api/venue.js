@@ -15,7 +15,7 @@
 
 import {
   VENUES_URL, rest, escapeHtml, distanceKm, cityFor, zoneFor, endOfLocalDay, ourImage,
-  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer,
+  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer, MARK,
 } from './_clip.js';
 import { saveInSuna } from './_maps.js';
 import { isLodging, hasRealContent, LIST_DESCRIPTION_LENGTH } from './sitemap.js';
@@ -23,7 +23,7 @@ import { stockFor } from './_stock.js';
 import { sized } from './_preview.js';
 
 const ORIGIN = 'https://app.unaryx.com';
-export const STEPS_KM = [0.8, 3];
+export const STEPS_KM = [0.8, 2];   // W-314 OD-web-Q3-15: 2 km, not 3 (a 1.9 km card read as 'a short walk')
 const MAX_TONIGHT = 4;
 const MAX_WEEK = 4;
 const MAX_PLACES = 2;
@@ -54,10 +54,10 @@ async function eventsNear(venue, now) {
  * (I-95 (a)): within 800 m, else 3 km, else the venue's city. A card must
  * always land on something. { label, events } or null.
  */
-export function pickStep(rows, city) {
+export function pickStep(rows, city, venueName = '') {
   for (const km of STEPS_KM) {
     const hit = rows.filter((e) => e.km <= km);
-    if (hit.length) return { label: km < 1 ? 'Within a 10-minute walk' : `Within ${km} km`, events: hit };
+    if (hit.length) return { label: km < 1 ? 'Within a 10-minute walk' : `Within ${km} km${venueName ? ` of ${venueName}` : ''}`, events: hit };
   }
   if (city) {
     const hit = rows.filter((e) => { const c = cityFor(e.latitude, e.longitude); return c && c.slug === city.slug; });
@@ -111,7 +111,7 @@ function placeThumb(p, taken) {
 
 export function placeRow(p, taken = new Set()) {
   const mins = Math.max(1, Math.round(p.km / WALK_KM_PER_MIN));
-  const meta = [p.category, `${mins} min walk`].filter(Boolean).join(' · ');
+  const meta = [p.category, `${mins} min walk`].filter(Boolean).join(', ');   // W-314 OD-web-Q3-16: commas
   return `<li><a class="row row-place" href="/place/${escapeHtml(p.id)}">`
     + placeThumb(p, taken)
     + `<span class="row-text"><span class="row-name">${escapeHtml(p.name)}</span><span class="row-meta">${escapeHtml(meta)}</span></span>`
@@ -122,7 +122,6 @@ export function venueBody(venue, found, now, places = []) {
   const name = venue ? venue.name : null;
   // W-246: a /c/ code is a printed card, so Apple's link says ct=print (the page's data-ct keeps the venue's own ct).
   const store = venue && venue.ct ? storeURL('print', 'web-c') : storeURL(null, 'web-c');
-  const mark = '<a href="https://unaryx.com/events"><span class="mark-dot" aria-hidden="true"></span>Suna</a>';
   let content;
   if (!venue) {
     content = `<h1 class="venue-h1">What's on near you</h1>
@@ -145,7 +144,7 @@ export function venueBody(venue, found, now, places = []) {
     ? saveInSuna(`suna://venue?slug=${encodeURIComponent(venue.slug)}`, store, 'btn', 'See it all in Suna')
     : `<a class="btn" href="${escapeHtml(store)}">Get Suna</a>`;
   return `<main>
-  <div class="clipbar">${mark}${name ? `<span>· Card from ${escapeHtml(name)}</span>` : ''}</div>
+  <div class="clipbar clipbar-c">${MARK}${name ? `<span class="clip-from">Card from ${escapeHtml(name)}</span>` : ''}</div>   ${''/* OD-web-Q3-23: the mark and wordmark as on /e/ and /q/, 'Card from' on its own line, no dot */}
   ${content}
   ${footer()}
 </main>
@@ -167,7 +166,7 @@ export default async function handler(req, res) {
   if (venue) {
     try {
       const near = await eventsNear(venue, now);
-      found = { ...near, step: pickStep(near.rows, near.city) };
+      found = { ...near, step: pickStep(near.rows, near.city, venue.name) };
     } catch {
       found = { city: cityFor(venue.lat, venue.lng), step: null };
     }
@@ -179,5 +178,7 @@ export default async function handler(req, res) {
     : 'Events tonight and places worth the detour, within a short walk. On Suna.';
   const canonical = `${ORIGIN}/c/${venue ? encodeURIComponent(venue.slug) : ''}`;
   // Five minutes at the edge: "on now" goes stale faster than an itinerary.
-  send(res, page({ title, description, canonical, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
+  // W-314 W-Q3-6: the venue's own preview card, drawn on unaryx.com from the same partner venue list.
+  const image = venue ? `https://unaryx.com/api/og/venue/${encodeURIComponent(venue.slug)}.jpg` : null;
+  send(res, page({ title, description, canonical, image, body: venueBody(venue, found, now, places), bodyClass: 'has-bar', android: { from: 'venue' }, ct: venue && venue.ct }), 300);
 }

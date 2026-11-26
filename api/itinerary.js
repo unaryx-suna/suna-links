@@ -18,8 +18,9 @@ import { segmentAfter, tailOf, decodeSegment, hasLongDash, withHyphens } from '.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { recordOpen, clientIP, scheduleBackground } from './_open-log.js';
-import { loadItinerary, coverFor, coverVariants, previewBody, isBySuna } from './_preview.js';
+import { loadItinerary, coverFor, coverVariants, coverPreload, previewBody, isBySuna } from './_preview.js';
 import { MAPS_HEAD, MAPS_CSS } from './_maps.js';
+import { rest } from './_clip.js';   // W-314 OD-web-Q3-3: the name lookup
 
 // W-183 (Brian via Ops OPS-106, 3 Nov: "the Suna bot is the wrong design"):
 // today's Suna, the smooth bronze egg with the visor and no limbs (Ops's v5
@@ -165,6 +166,38 @@ export function openVia(params) {
   return ct ? `ct:${ct}` : null;
 }
 
+const MAX_DESC = 155 - ' Copy this plan to Suna.'.length;   // 131
+/** The story when it fits whole and says enough; else 'Start at A, then B, in City: summary.' trimmed by parts. */
+export function planDescription(story, city, shown, summary) {
+  if (story && story.length >= 70 && story.length <= MAX_DESC) return story;
+  if (story && story.length > MAX_DESC) {
+    const cut = story.slice(0, MAX_DESC).match(/^.*[.!?](?=\s|$)/);
+    if (cut && cut[0].length >= 70) return cut[0];
+  }
+  const names = shown.map((x) => String(x.place_name || '').trim()).filter(Boolean).slice(0, 2);
+  const where = city ? ` in ${city}` : '';
+  const NOTE = ', with photos and notes for each stop';
+  const two = names.length === 2 ? `Start at ${names[0]}, then ${names[1]}${where}` : '';
+  const tries = [
+    two && summary ? `${two}${NOTE}. ${summary[0].toUpperCase()}${summary.slice(1)}.` : '',
+    two ? `${two}${NOTE}.` : '',
+    two && summary ? `${two}: ${summary}.` : '',
+    two ? `${two}.` : '',
+    names.length ? `Start at ${names[0]}${where}, with photos and notes for each stop.` : '',
+    city ? `A route through ${city}, with photos and notes for each stop.` : '',
+    "A route someone actually walked, with their own photos and notes.",
+  ].filter(Boolean);
+  return tries.find((t) => t.length <= MAX_DESC) || tries[tries.length - 1];
+}
+
+/** The stops a visitor can see, as a schema.org ItemList (names only; no private notes). */
+export function planLd(url, name, shown) {
+  const items = shown.map((x) => String(x.place_name || '').trim()).filter(Boolean);
+  if (!items.length) return null;
+  return { '@context': 'https://schema.org', '@type': 'ItemList', name: name || 'A plan on Suna', url,
+    itemListElement: items.map((n, i) => ({ '@type': 'ListItem', position: i + 1, name: n })) };
+}
+
 export default async function handler(req, res) {
   const slug = slugFrom(req.url || '');
   // Stamped before any awaiting happens, so the row records when the visitor
@@ -190,11 +223,13 @@ export default async function handler(req, res) {
   let title = 'An itinerary on Suna';
   let description = 'A route someone actually walked, with their own photos and notes.';
   let image = null;
+  let ld = null;   // W-314 OD-web-Q9-6: JSON-LD ItemList of the shown stops
   // The itinerary's own name, kept separate from the composed title so the
   // canonical prefix matches what the app generates rather than "Name — by @x".
   let rawName = '';
   // The server-rendered body, or null for the generic page.
   let body = null;
+  let preload = '';   // W-314 W-Q9-3: the cover preload
   // True when the body carries signed moment URLs, which expire in an hour.
   let signed = false;
   // W-179: no public itinerary behind this link (missing, private or a
@@ -221,19 +256,22 @@ export default async function handler(req, res) {
         // The creator's own opening line is the best description available;
         // fall back to something true rather than something promotional.
         const story = (it.intro_story || '').trim().replace(/\s+/g, ' ');
-        description = story
-          ? (story.length > 200 ? `${story.slice(0, 197)}…` : story)
-          : (it.resolved_city_name
-              ? `A route through ${it.resolved_city_name}, with their own photos and notes.`
-              : description);
+        // W-314 OD-web-Q9-C3: the preview ends with what to do: 'Copy this plan to Suna.' (the story is cut to fit 160).
+        const END = ' Copy this plan to Suna.';
+        // W-314 OD-web-Q9-6: 120-155 characters, from the first two stops when the story doesn't fit; no '…'.
+        description = planDescription(story, it.resolved_city_name, data.shown || [], data.summary) + END;
+        ld = planLd(canonicalItineraryURL(origin, slug, rawName), it.name, data.shown || []);
 
         // The itinerary's own cover when it resolves, else the first stop's
         // place photo: the same picture the page opens on.
         const cover = coverFor(data, await imageResolves(data.cover));
-        image = cover;
+        // W-314 OD-web-Q9-6: every plan has a preview image; Suna's 1200x630 card when it has no photo.
+        image = cover || 'https://unaryx.com/assets/og.png';
         // W-309 W3b BETTER 4: the desktop QR points at this plan's canonical address (its /i/ segment).
         data.slug = String(canonicalItineraryURL(origin, slug, rawName)).split('/i/')[1] || '';
-        body = previewBody(data, cover, await coverVariants(cover, imageResolves), mascot());
+        const variants = await coverVariants(cover, imageResolves);
+        preload = coverPreload(cover, variants);
+        body = previewBody(data, cover, variants, mascot());
         signed = data.signedMoments;
       }
     } catch {
@@ -241,7 +279,36 @@ export default async function handler(req, res) {
     }
   }
 
-  const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' ? '' : rawName);
+  // W-314 OD-web-Q3-3: a link with its code cut off ('/i/a-quieter-day-in-ipoh') finds the one public plan with
+  // that readable name and 301s to it; when none (or several) match, the 404 says the plan isn't on Suna.
+  const seg = segmentAfter(new URL(req.url || '/', origin).pathname, 'i') || '';
+  let nameOnly = false;
+  let nfPlans = '';
+  if (none && slug && !seg.includes('--') && /^[a-z0-9]+(?:-[a-z0-9]+){2,}$/.test(seg)) {
+    nameOnly = true;
+    try {
+      const rows = await rest(`public_itineraries?name=ilike.${encodeURIComponent(seg.replace(/-/g, '*') + '*')}&select=share_slug,name&limit=3`);
+      const hits = (Array.isArray(rows) ? rows : []).filter((r) => r.share_slug && readablePrefix(r.name) === seg);
+      if (hits.length === 1) {
+        // The visitor's query only: Vercel's rewrite adds `path` (the /i/:path* capture), which is ours.
+        const sp = new URL(req.url || '/', origin).searchParams; sp.delete('path');
+        const q = sp.toString() ? `?${sp}` : '';
+        res.status(301).setHeader('Location', canonicalItineraryURL(origin, hits[0].share_slug, hits[0].name) + q)
+          .setHeader('Cache-Control', 'public, max-age=300, s-maxage=600').end();
+        return;
+      }
+    } catch { /* fall through to the 404 */ }
+    title = "This plan isn't on Suna";
+    // W-314 OD-web-Q3-3: three plans people can open instead (the newest public ones).
+    try {
+      const recent = await rest('public_itineraries?select=share_slug,name,resolved_city_name,cover_media_path&share_slug=not.is.null&order=published_at.desc&limit=3');
+      nfPlans = recent.filter((r) => r.share_slug && r.name).map((r) =>
+        // W-314 OD-web-Q3-27: each with its cover and a chevron, as the /c/ rows, so they read as tappable.
+        `<li><a href="${escapeHtml(canonicalItineraryURL(origin, r.share_slug, r.name))}">${r.cover_media_path && coverURL(r.cover_media_path) ? `<img src="${escapeHtml(coverURL(r.cover_media_path))}" alt="" width="52" height="52" loading="lazy">` : '<i aria-hidden="true"></i>'}<span class="t"><b>${escapeHtml(r.name)}</b>${r.resolved_city_name ? `<span>${escapeHtml(r.resolved_city_name)}</span>` : ''}</span></a></li>`).join('');
+    } catch { nfPlans = ''; }
+    description = 'The link may be cut short. Open Suna to see plans people have walked.';
+  }
+  const canonical = canonicalItineraryURL(origin, slug, title === 'An itinerary on Suna' || nameOnly ? '' : rawName);
   // W-227: any other spelling of this address goes to the canonical one, so
   // one itinerary is one URL and a mangled link still lands on the real page.
   // Before the open is recorded: the request the redirect leads to records it.
@@ -281,15 +348,17 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     none ? '<meta name="robots" content="noindex">' : '',
+    ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` : '',
   ].filter(Boolean).join('\n  ');
 
   // Replace the static head block rather than appending: a duplicate og:title
   // is resolved differently by each scraper, so leaving both is a coin flip.
   const rendered = html
+    .replace('<h1 id="title">An itinerary on Suna</h1>', nameOnly ? '<h1 id="title">This plan isn\'t on Suna</h1>' + (nfPlans ? `<style>.nf-plans{list-style:none;margin:16px 0;padding:0;display:grid;gap:8px;text-align:left}.nf-plans a{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 16px 8px 8px;border-radius:14px;background:rgba(255,255,255,.08);color:#fff;text-decoration:none}.nf-plans a::after{content:'\\203A';margin-left:auto;font-size:22px;color:rgba(255,255,255,.65)}.nf-plans img,.nf-plans i{flex:none;width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.08)}.nf-plans .t{display:flex;flex-direction:column;min-width:0}.nf-plans b{font-size:16px}.nf-plans .t span{font-size:13px;color:rgba(255,255,255,.7)}</style><p class="nf-try">Try one of these:</p><ul class="nf-plans">${nfPlans}</ul>` : '') : '<h1 id="title">An itinerary on Suna</h1>')
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+(property|name)="(og:[^"]*|twitter:[^"]*|description)"[^>]*>\s*/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>\s*/gi, '')
-    .replace('</head>', `  ${tags}\n</head>`)
+    .replace('</head>', `  ${preload ? `${preload}\n  ` : ''}${tags}\n</head>`)
     // Before first paint, so the Apple Maps button (W-47) never flashes in or out.
     .replace('</head>', () => (/maps-apple/.test(body || '')
       ? `  ${MAPS_HEAD}\n  <style>${MAPS_CSS}</style>\n</head>` : '</head>'))
@@ -341,7 +410,9 @@ export default async function handler(req, res) {
   }
 
   res
-    .status(200)
+    // W-314 W-Q3-7: no public plan behind the link is a 404 with the same friendly page (the app still opens
+    // a private plan for its owner through the universal link; the status only tells crawlers there's no page).
+    .status(none ? 404 : 200)
     .setHeader('Content-Type', 'text/html; charset=utf-8')
     // Short enough that publishing a fix propagates, long enough that a viral
     // link is not re-resolved per scrape.

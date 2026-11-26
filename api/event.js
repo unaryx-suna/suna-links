@@ -25,6 +25,7 @@ import {
   eventsAround, footer, MARK,
 } from './_clip.js';
 import { directions, saveInSuna } from './_maps.js';
+import { placeTitle, fitDescription } from './place.js';
 
 const ORIGIN = 'https://app.unaryx.com';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -113,7 +114,7 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
   const venue = (e.venue && String(e.venue).trim()) || null;
   const where = withCity(venue, city && city.name);
   const price = priceShort(e);
-  const pricePill = e.price_type === 'free' ? 'Free' : e.price_type === 'paid' ? 'Paid' : null;
+  const pricePill = e.price_type === 'free' ? 'Free' : (price && price.startsWith('From ') ? price : null);   // W-314 OD-web-Q3-17: no bare PAID chip
   // W-172: this page's App Store link opens Apple's event custom product page.
   const store = `${storeURL(ct, 'web-e')}&ppid=${EVENT_PPID}`;
   const save = (cls) => saveInSuna(`suna://event?id=${encodeURIComponent(e.id)}`, store, cls);
@@ -122,7 +123,7 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
   const go = `https://unaryx.com/go/e-${escapeHtml(e.id)}`;
 
   // W-197 (5), Ops OPS-135: a darker scrim under the title, so poster text never shows through it.
-  const hero = `<header class="hero hero-e">
+  const hero = `<header class="hero hero-e${img ? '' : ' hero-fold'}">   ${''/* OD-web-Q3-21: no cover, no empty 200 pt: the hero folds */}
     ${img ? `<img src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
     <div class="hero-top">${MARK}</div>
     <div>
@@ -157,13 +158,17 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
     actions = `<a class="btn" href="${go}" target="_blank" rel="nofollow noopener">Get tickets ↗</a>`
       + dir('btn btn-outline half') + save('btn btn-outline half');
   } else {
-    actions = (e.price_type === 'free' ? '<p class="note">Free entry · no ticket needed</p>' : '')
+    actions = (e.price_type === 'free' ? '<p class="note">Free entry, no ticket needed</p>' : '')
       + save('btn') + '<p class="caption">Opens Suna, or the App Store if you don’t have it</p>'
       + dir('btn btn-outline');
   }
-  const hours = hoursFact(e, tz);
+  // W-314 OD-web-Q3-22: one time format ('2pm to 8pm'); a one-day event's Hours only repeats When, so it goes.
+  const oneFmt = (t) => String(t || '').replace(/:00(?=\s*(am|pm))/gi, '').replace(/\s*[–—]\s*/g, ' to ');
+  const oneDay = !e.recurrence_type || e.recurrence_type === 'once'
+    ? new Date(e.start_time).toLocaleDateString('en-GB', { timeZone: tz }) === new Date(Date.parse(e.end_time) - 1).toLocaleDateString('en-GB', { timeZone: tz }) : false;
+  const hours = oneDay ? '' : oneFmt(hoursFact(e, tz));
   const facts = [
-    ['When', whenFact(e, tz, now)],
+    ['When', oneFmt(whenFact(e, tz, now))],
     ['Hours', hours],
     ['Where', where],
     ['Price', price],
@@ -276,7 +281,7 @@ export default async function handler(req, res) {
     const city = cityFor(tomb.latitude, tomb.longitude);
     const venue = (tomb.venue && String(tomb.venue).trim()) || (city && city.name) || '';
     const html = page({
-      title: `${tomb.name}${venue ? ` · ${venue}` : ''} · ${tomb.cancelled ? 'Cancelled' : 'Ended'} · Suna`,
+      title: `${tomb.name}${venue ? `, ${venue}` : ''}, ${tomb.cancelled ? 'cancelled' : 'ended'} · Suna`,   // W-314 W-Q3-5: commas; only the closing ' · Suna'
       description: tomb.cancelled ? 'The organiser cancelled this. Here’s what else is on nearby.' : 'This has ended. Here’s what’s on nearby this week.',
       canonical: `${ORIGIN}/e/${tomb.id}`,
       body: eventBody(tomb, now, more),
@@ -329,10 +334,12 @@ export default async function handler(req, res) {
   // og:url. An ended event's page there redirects away, so it keeps its own.
   const canonical = (!eventState(e) && eventPageURL(e)) || own;
   const venue = (e.venue && String(e.venue).trim()) || (city && city.name) || '';
-  const description = [whenText(e, tz), venue].filter(Boolean).join(' · ');
+  // W-314 W-Q3-5: the preview reads 'Sun 29 Nov, 7:15pm to 10:30pm, SCG' (commas, 'to'; no middots or dashes).
+  const description = [String(whenText(e, tz) || '').replace(/ · /g, ', ').replace(/\s*[–—]\s*/g, ' to '), venue].filter(Boolean).join(', ');
   send(res, page({
-    title: `${e.name}${venue ? ` · ${venue}` : ''} · Suna`,
-    description,
+    // W-314 OD-web-Q9-10: 60 at most (the venue only when it fits); 70 to 160 for the description.
+    title: placeTitle(e.name, venue),
+    description: fitDescription(description, 'Save it in Suna and get a reminder before it starts.'),
     canonical,
     ogUrl: own,
     // W-112 (Dex 16:24): the event's own preview from unaryx.com, as its page there uses.

@@ -33,7 +33,7 @@ await t('W1 (Figma 3700:6631): SUNA, the headline, the 5-point card, the 24-hour
   assert.match(r.body, /<img class="ring" src="\/cp\/coin-ring\.svg"[^>]*><img class="face" src="\/cp\/coin-face\.png"[^>]*><span>5<\/span>/);
   assert.ok(r.body.includes('Get Suna and open this link again within 24 hours to keep the points. Most points each week wins a ticket to a Suna event, up to RM100.'));
   for (const step of ['1. Get Suna (free)', '2. Sign in', '3. Tap “Claim my 5 points” or scan the card again']) assert.ok(r.body.includes(`<li>${step}</li>`), step);
-  assert.match(r.body, /Rules: <a href="https:\/\/unaryx\.com\/checkpoints">unaryx\.com\/checkpoints<\/a> · 18\+/);
+  assert.match(r.body, /Rules: <a href="https:\/\/unaryx\.com\/checkpoints">unaryx\.com\/checkpoints<\/a>, 18\+/);
   assert.match(r.body, /<a class="store" href="https:\/\/apps\.apple\.com\/app\/id6759053765\?pt=128539200&amp;ct=print&amp;mt=8" rel="noopener" data-android="store"[^>]*>Download on the App Store<\/a>/);
   // W-242: Play with the campaign checkpoint and this card as the page to open after the install.
   const play = r.body.match(/<a class="play" href="([^"]+)"[^>]*data-android="store"[^>]*>Get it on Google Play<\/a>/);

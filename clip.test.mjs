@@ -77,16 +77,19 @@ await t('/c/: events within 800 m only, when there are any (Ops W6: Near <venue>
   const r = await render(venue, '/c/worq-ttdi');
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1 class="venue-h1">Near WORQ TTDI<\/h1>/);
+  // W-314 W-Q3-6: the venue's own preview card, large.
+  assert.match(r.body, /<meta property="og:image" content="https:\/\/unaryx\.com\/api\/og\/venue\/worq-ttdi\.jpg">/);
+  assert.match(r.body, /<meta name="twitter:card" content="summary_large_image">/);
   assert.match(r.body, /<p class="sub">Within a 10-minute walk<\/p>/);
-  assert.match(r.body, /· Card from WORQ TTDI/);
+  assert.match(r.body, /<span class="clip-from">Card from WORQ TTDI<\/span>/);
   assert.match(r.body, new RegExp(`<a class="row" href="/e/${U(1)}">`));
   assert.doesNotMatch(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
 });
-await t('/c/: widens to 3 km, then to the city', async () => {
-  state.events = [ev(U(2), 0.018), ev(U(3), 0.09)];
+await t('/c/: widens to 2 km (W-314 OD-web-Q3-15), then to the city', async () => {
+  state.events = [ev(U(2), 0.016), ev(U(3), 0.09)];   // ~1.8 km: inside the 2 km step
   let r = await render(venue, '/c/worq-ttdi');
-  assert.match(r.body, /Within 3 km/);
+  assert.match(r.body, /Within 2 km of WORQ TTDI/);
   assert.match(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
   state.events = [ev(U(3), 0.09)];
@@ -118,7 +121,7 @@ await t('/c/: On tonight and This week split at the venue\'s midnight; rows have
   assert(r.body.indexOf(U(1)) > tonight && r.body.indexOf(U(1)) < week);
   assert(r.body.indexOf(U(2)) > week);
   assert.doesNotMatch(r.body, /Get tickets|maps-google|maps-apple"|ev-maps/);
-  assert.match(r.body, /<span class="row-meta">From RM35 · Taman Tun Park · 500 m<\/span>/);
+  assert.match(r.body, /<span class="row-meta">From RM35, 500 m, Taman Tun Park<\/span>/);
   const s2 = splitTonight([{ start_time: iso(now - H), km: 1 }, { start_time: iso(later), km: 0.2 }], 'Asia/Kuala_Lumpur', new Date(now));
   assert.deepEqual([s2.tonight.length, s2.week.length], [1, 1]);
 });
@@ -135,7 +138,7 @@ await t('/c/: Worth a walk: the two nearest places within 800 m, never lodging o
   assert.match(r.body, /<a class="row row-place" href="\/place\/p1">/);
   assert.match(r.body, /<a class="row row-place" href="\/place\/p2">/);
   assert.doesNotMatch(r.body, /\/place\/(p3|hotel|filler|far)"/);
-  assert.match(r.body, /Cafe &amp; Workspace · 3 min walk/);
+  assert.match(r.body, /Cafe &amp; Workspace, 3 min walk/);
   assert.match(calls.find((c) => c.includes('/rest/v1/landmarks')), /is_hidden=eq\.false/);
   state.places = [];
   assert.doesNotMatch((await render(venue, '/c/worq-ttdi')).body, /Worth a walk/);
@@ -187,17 +190,19 @@ await t('eyebrow: on now until (closes today), on now, tonight, a later day, a r
   const { eyebrow } = await import('./api/_clip.js');
   const tz = 'Asia/Kuala_Lumpur';
   const n = new Date('2027-03-05T04:00:00Z'); // 12:00 in KL
-  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now · until 7:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T01:00:00Z', end_time: '2027-03-05T11:00:00Z' }, tz, n), 'On now, until 7:00pm');
   assert.equal(eyebrow({ start_time: '2027-03-01T01:00:00Z', end_time: '2027-04-05T11:00:00Z', recurrence_type: 'period' }, tz, n), 'On now');
-  assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight · 7:30pm');
-  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today · 2:00pm');
-  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar · 8:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' }, tz, n), 'Tonight, 7:30pm');
+  assert.equal(eyebrow({ start_time: '2027-03-05T06:00:00Z', end_time: '2027-03-05T08:00:00Z' }, tz, n), 'Today, 2:00pm');
+  assert.equal(eyebrow({ start_time: '2027-03-06T12:00:00Z', end_time: '2027-03-06T14:00:00Z' }, tz, n), 'Sat 6 Mar, 8:00pm');
   assert.equal(eyebrow({ start_time: '2027-03-06T02:00:00Z', end_time: '2027-03-20T10:00:00Z', recurrence_type: 'period' }, tz, n), 'From Sat 6 Mar');
 });
-await t('pickStep: 800 m beats 3 km beats the city; nothing → null', async () => {
+await t('pickStep: 800 m beats 2 km beats the city; nothing → null', async () => {
   const at = (km) => ({ km, latitude: VENUE.lat, longitude: VENUE.lng });
   assert.equal(pickStep([at(0.5), at(2)], null).events.length, 1);
-  assert.equal(pickStep([at(2.9)], null).label, 'Within 3 km');
+  assert.equal(pickStep([at(1.9)], null).label, 'Within 2 km');
+  assert.equal(pickStep([at(1.9)], null, 'WORQ TTDI').label, 'Within 2 km of WORQ TTDI');
+  assert.equal(pickStep([at(2.9)], null), null);   // beyond 2 km: the city, or nothing
   assert.equal(pickStep([at(10)], null), null);
 });
 
@@ -216,8 +221,8 @@ await t('/e/: a paid event (Ops W1): Get tickets, then Directions | Save in Suna
   assert.equal(r.status, 200);
   assert.match(r.body, /<h1>Event 4444<\/h1>/);
   assert.match(r.body, /<p class="hero-sub">Taman Tun Park<\/p>/);
-  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar · 7:30pm<\/span><span class="pill">Paid<\/span>/);
-  assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027 · 7:30pm–10:00pm<\/dd>/);
+  assert.match(r.body, /<span class="pill pill-now">Fri 5 Mar, 7:30pm<\/span><span class="pill">From RM35<\/span><\/div>/);   // W-314 OD-web-Q3-17: the lowest price, never a bare Paid
+  assert.match(r.body, /<dt>When<\/dt><dd>Fri 5 Mar 2027, 7:30pm to 10pm<\/dd>/);
   assert.match(r.body, /<dt>Where<\/dt><dd>Taman Tun Park, Kuala Lumpur<\/dd>/);
   assert.match(r.body, /<dt>Price<\/dt><dd>From RM35<\/dd>/);
   const actions = r.body.match(/<div class="actions">([\s\S]*?)<\/div><\/div><\/div><\/div>|<div class="actions">([\s\S]*?)<\/div>\n/)[0];
@@ -247,8 +252,8 @@ await t('/e/ (W-197 (5), Ops OPS-135): the hero has its own darker scrim under t
   state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   state.events = [];
   const r = await render(event, `/e/${U(4)}`);
-  assert.match(r.body, /<header class="hero hero-e">/);
-  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(17,17,17,\.1\) 0%, rgba\(17,17,17,\.25\) 18%, rgba\(17,17,17,\.82\) 42%/);
+  assert.match(r.body, /<header class="hero hero-e( hero-fold)?">/);
+  assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(0,0,0,\.4\) 0, rgba\(0,0,0,0\) 120px, rgba\(0,0,0,0\) 30%, rgba\(0,0,0,\.85\) 52%/);
   assert.match(r.body, /\.hero::after \{ content: ""; position: absolute; inset: 0; background: linear-gradient\(rgba\(17,17,17,0\) 30%, var\(--bg\)\); \}/, 'the shared scrim unchanged');
 });
 
@@ -311,7 +316,7 @@ await t('/e/: no price → no offers, Save in Suna; free → price 0, More from 
   ld = JSON.parse(r.body.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(ld.offers.price, 0);
   assert.match(r.body, new RegExp(`<a class="link" href="https://unaryx\\.com/go/e-${U(6)}" target="_blank" rel="nofollow noopener">More from the organiser ↗</a>`));
-  assert.match(r.body, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"/);
+  assert.match(r.body, /<p class="note">Free entry, no ticket needed<\/p><a class="btn save-suna"/);
   assert.doesNotMatch(r.body, /Get tickets|commission/);
 });
 await t('/e/: unknown and junk → 404 + noindex (W-179); database failure → 200 + noindex; all link to /events', async () => {
@@ -397,11 +402,11 @@ await t('W-48 the description\'s days and hours beat "daily" (now under Hours, O
   state.eventRow = ev(U(9), 0, RR);
   const r = await render(event, `/e/${U(9)}`);
   assert.match(r.body, /<dt>When<\/dt><dd>Until Mon 1 Nov 2027<\/dd>/);
-  assert.match(r.body, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm, Sun 11am–5pm<\/dd>/);
+  assert.match(r.body, /<dt>Hours<\/dt><dd>Tue to Sat 11am to 7pm, Sun 11am to 5pm<\/dd>/);
   assert.doesNotMatch(r.body, /daily/);
   // No hours in the description: the stored daily times, as before.
   state.eventRow = ev(U(9), 0, { ...RR, description: 'A survey of his work.' });
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00–19:00 daily<\/dd>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00 to 19:00 daily<\/dd>/);
   // I-100's hours_text, when Ops has written it, beats both.
   assert.equal(m.hoursFact({ ...RR, hours_text: 'Tue–Sat 11 AM – 7 PM\nSun 11 AM – 5 PM · closed Mon' }, 'Asia/Kuala_Lumpur'), 'Tue–Sat 11 AM – 7 PM\nSun 11 AM – 5 PM · closed Mon');
   // A one-day event's times are in When; no Hours row.
@@ -444,30 +449,35 @@ await t('W-53 /c/ Worth a walk: own photo, else the stock image, never Google; n
   assert.match((await render(venue, '/c/worq-ttdi')).body, /<a class="row row-place" href="\/place\/aaaaaaaa[^"]*"><span class="ph"/);
   state.places = [];
 });
+await t('W-314 re-run: hours that already carry the date are not dated twice', async () => {
+  const { whenText } = await import('./api/_clip.js');
+  assert.equal(whenText({ start_time: '2026-11-28T06:00:00+00:00', end_time: '2026-11-28T12:00:00+00:00', recurrence_type: 'once', hours_text: 'Sat 28 Nov, 2pm to 8pm' }, 'Asia/Kuala_Lumpur'), 'Sat 28 Nov, 2pm to 8pm');
+});
+
 await t('W-51 hours_text is read, and beats the description and the daily times on /e/', async () => {
   calls.length = 0;
   state.eventRow = ev(U(9), 0, { ...RR, hours_text: 'Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon' });
   const b = (await render(event, `/e/${U(9)}`)).body;
   assert(calls.some((u) => u.includes('/rest/v1/world_events') && u.includes('id=eq.') && /select=[^&]*hours_text/.test(u)), 'EVENT_SELECT reads hours_text');
-  assert.match(b, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm\nSun 11am–5pm · closed Mon<\/dd>/);
+  assert.match(b, /<dt>Hours<\/dt><dd>Tue to Sat 11am to 7pm\nSun 11am to 5pm · closed Mon<\/dd>/);
   // The meta description is one line: its lines fold with commas.
-  assert.match(b, /<meta name="description" content="[^"]*· Tue–Sat 11am–7pm, Sun 11am–5pm · closed Mon/);
+  assert.match(b, /<meta name="description" content="[^"]*, Tue to Sat 11am to 7pm, Sun 11am to 5pm, closed Mon/);   // W-314 W-Q3-5: commas and 'to'
   assert.doesNotMatch(b, /11:00–19:00/);
   // Blank hours_text is no hours_text: the description's hours, as before.
   state.eventRow = ev(U(9), 0, { ...RR, hours_text: '  ' });
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>Tue–Sat 11am–7pm, Sun 11am–5pm<\/dd>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>Tue to Sat 11am to 7pm, Sun 11am to 5pm<\/dd>/);
   state.eventRow = ev(U(9), 0, { ...RR, description: 'A survey of his work.', hours_text: null });
-  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00–19:00 daily<\/dd>/);
+  assert.match((await render(event, `/e/${U(9)}`)).body, /<dt>Hours<\/dt><dd>11:00 to 19:00 daily<\/dd>/);
 });
 await t('W-48 the description sits under About, after the facts', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
   assert(b.indexOf('<dl class="facts">') < b.indexOf('<h2>About</h2>') && b.indexOf('<h2>About</h2>') < b.indexOf('<p class="desc">'));
 });
-await t('W-48 free with no link: "Free entry · no ticket needed" above Save in Suna, no organiser link', async () => {
+await t('W-48 free with no link: "Free entry, no ticket needed" above Save in Suna, no organiser link', async () => {
   state.eventRow = ev(U(9), 0, RR);
   const b = (await render(event, `/e/${U(9)}`)).body;
-  assert.match(b, /<p class="note">Free entry · no ticket needed<\/p><a class="btn save-suna"[^>]*>Save in Suna<\/a><p class="caption">Opens Suna, or the App Store if you don’t have it<\/p>/);
+  assert.match(b, /<p class="note">Free entry, no ticket needed<\/p><a class="btn save-suna"[^>]*>Save in Suna<\/a><p class="caption">Opens Suna, or the App Store if you don’t have it<\/p>/);
   assert.match(b, /<dt>Price<\/dt><dd>Free<\/dd>/);
   assert.doesNotMatch(b, /unaryx\.com\/go\/|More from the organiser/);
 });

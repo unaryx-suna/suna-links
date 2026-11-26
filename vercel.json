@@ -118,6 +118,11 @@
       "permanent": false
     },
     {
+      "source": "/q/:path*",
+      "destination": "https://unaryx.com/q/:path*",
+      "permanent": true
+    },
+    {
       "source": "/",
       "destination": "https://unaryx.com/",
       "statusCode": 301

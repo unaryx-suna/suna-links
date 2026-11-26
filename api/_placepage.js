@@ -135,6 +135,14 @@ export function sized(url, w = 640) {
   const i = clean.lastIndexOf('/');
   return `${clean.slice(0, i)}/_w/${w}${clean.slice(i)}`;
 }
+// W-314 OD-web-Q9-1: the hero from the resized copies (320/640/1280, image-variants-sweep) with width and height,
+// so a phone fetches ~40 KB, not the original; the original if a copy is missing; any other host as it is.
+export function heroImg(url, alt = '') {
+  if (!url) return '';
+  const stored = /\/storage\/v1\/object\/public\//.test(url);
+  const set = stored ? ` srcset="${[320, 640, 1280].map((w) => `${esc(sized(url, w))} ${w}w`).join(', ')}" sizes="(min-width: 560px) 560px, 100vw"` : '';
+  return `<img class="hi" src="${esc(stored ? sized(url, 640) : url)}"${set} width="640" height="440" data-full="${esc(url)}" onerror="this.onerror=null;this.removeAttribute('srcset');this.src=this.dataset.full" alt="${esc(alt)}" fetchpriority="high" decoding="async">`;
+}
 const img = (url, cls, alt = '', w = 640) => url
   ? `<img class="${cls}" src="${esc(sized(url, w))}" data-full="${esc(url)}" onerror="this.onerror=null;this.src=this.dataset.full" alt="${esc(alt)}" loading="lazy" decoding="async">`
   : '';
@@ -153,9 +161,10 @@ a{color:inherit}
 .pill{background:var(--sand);color:#1d1408;font-weight:700;font-size:15px;border-radius:999px;padding:9px 16px;text-decoration:none}
 .hero{height:440px;position:relative;background:var(--surface2);overflow:hidden}
 .hero img.hi{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .rep{position:absolute;z-index:2;top:12px;right:12px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600}   /* W-314 OD-web-Q9-2 */
 .hero:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,17,16,.55) 0%,rgba(15,17,16,0) 22%,rgba(15,17,16,0) 45%,rgba(15,17,16,.9) 82%,var(--ink) 100%)}
 .hero .in{position:absolute;left:16px;right:16px;bottom:14px;z-index:2}
-.kick{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--sand);margin:0}
+.kick{font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--sand);margin:0}
 h1{font-size:34px;line-height:1.05;font-weight:800;margin:8px 0;letter-spacing:-.3px;overflow-wrap:anywhere}
 .lede{font-size:16px;color:#d9d5cc;line-height:1.4;margin:0}
 .pad{padding:0 16px}
@@ -298,7 +307,7 @@ export function placeBody(d) {
   ].filter(Boolean).join('');
   return `${topBar(d.store)}
 <main>
-<div class="hero">${d.cover ? `<img class="hi" src="${esc(d.cover)}" alt="${esc(p.name)}" fetchpriority="high">` : ''}<div class="in">
+<div class="hero">${heroImg(d.cover, d.stock ? '' : p.name)}${d.stock ? '<span class="rep">Representative photo</span>' : ''}<div class="in">
 ${kicker ? `<p class="kick">${esc(kicker)}</p>` : ''}<h1>${esc(p.name)}</h1>
 ${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>
 <div class="pad">

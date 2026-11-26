@@ -73,7 +73,7 @@ await t('an itinerary we can\'t show: a long dash is put back to -- (301); the -
     assert.equal(dash.hdr.location, '/i/secret-trip--zzzzzzzzzz?via=me');
     for (const p of ['/i/secret-trip--zzzzzzzzzz?via=me', '/i/zzzzzzzzzz']) {
       const r = await get(p);
-      assert.equal(r.code, 200, p);
+      assert.equal(r.code, 404, p);   // W-314 W-Q3-7
       assert.match(r.body, /<meta name="robots" content="noindex">/, p);
     }
   } finally { found = true; }

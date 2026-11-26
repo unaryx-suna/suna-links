@@ -12,7 +12,7 @@ import invite, { targetFrom, playURL } from './api/invite.js';
 const SRC = readFileSync(new URL('./public/android.js', import.meta.url), 'utf8');
 const PLAY = 'https://play.google.com/store/apps/details?id=com.unaryx.suna';
 let bad = 0;
-const t = (name, fn) => { try { fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
+const t = async (name, fn) => { try { await fn(); console.log('  ok   ' + name); } catch (e) { bad++; console.log('  FAIL ' + name + '\n       ' + e.message); } };
 
 /** Runs the script on `url` (page kind `from`) with one App Store button; returns its href after the swap. */
 function swapOn(url, from, appHref = 'https://apps.apple.com/app/id6759053765?pt=128539200&mt=8') {
@@ -83,14 +83,16 @@ t('the encoded target is 200 characters at most', () => {
   assert.ok(encodeURIComponent(tgt).length <= 200);
 });
 
-t('/u/<username> (server redirect): the profile rides in the referrer; a bad username is left out', () => {
+await t('/u/<username> (server redirect): the profile rides in the referrer; a bad username is left out', async () => {
+  const realF = globalThis.fetch; globalThis.fetch = async () => new Response('[]', { status: 200 });   // W-314: no public profile → the redirect
   assert.equal(targetFrom('/u/Elina.lotus?via=qr'), '%2Fu%2FElina.lotus');
   for (const u of ['/u/', '/u/bad%20name', '/u/' + 'a'.repeat(41), '/u/a/b', '/x/Elina']) assert.equal(targetFrom(u), '', u);
   let L; const res = { setHeader(k, v) { if (k === 'Location') L = v; return res; }, status() { return res; }, end() {} };
-  invite({ url: '/u/Elina.lotus?via=qr', headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14)' } }, res);
+  await invite({ url: '/u/Elina.lotus?via=qr', headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14)' } }, res);
   assert.equal(ref(L), 'utm_source=suna&utm_campaign=invite-qr&suna_target=%2Fu%2FElina.lotus');
-  invite({ url: '/u/Elina.lotus', headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)' } }, res);
+  await invite({ url: '/u/Elina.lotus', headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)' } }, res);
   assert.doesNotMatch(L, /Elina/, 'never in the App Store link');
+  globalThis.fetch = realF;
   assert.equal(playURL('', ''), PLAY);
 });
 

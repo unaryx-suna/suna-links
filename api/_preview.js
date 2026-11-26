@@ -436,9 +436,9 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .cover{height:400px}
 .fade-bottom{top:auto;bottom:0;height:280px;background:linear-gradient(180deg,rgba(15,17,16,0) 0%,rgba(15,17,16,.85) 60%,#0f1110 100%)}
 .intro.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.more{background:none;border:0;padding:0;margin:4px 0 0;color:#B3A6FF;font:700 14px var(--font);cursor:pointer}
+.more{background:none;border:0;padding:0;margin:0;min-height:44px;color:#B3A6FF;font:700 14px var(--font);cursor:pointer}
 .cover-text{bottom:18px}
-.cover-text .kick{margin:0;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.65)}
+.cover-text .kick{margin:0;font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.65)}
 .cover-text h1{font-size:32px;line-height:1.08;font-weight:800}
 .cover-sub{font-size:16px;line-height:1.4;color:#d9d5cc}
 .daychips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 16px 0}
@@ -452,15 +452,18 @@ body.pv-body{padding:0 0 40px;background:#0f1110}
 .sc{display:flex;border-radius:18px;background:#181b19;border-color:#2a2f2c}
 .sc .stop-pic{width:96px;height:auto;min-height:112px;flex:none}
 .sc .stop-pic::before,.sc .stop-pic::after{display:none}
+/* W-314 OD-web-Q3-11: the map sits inset in its tile, whole, so Apple's logo and Legal are never cut by the card's corner. */
+.sc .stop-pic.map{padding:6px;box-sizing:border-box;display:flex;align-items:center;background:#202020}
+.sc .stop-pic.map img{width:100%;height:auto;aspect-ratio:200/240;object-fit:contain;border-radius:10px}
 .sc .stop-pic.map img{width:100%;height:100%;object-fit:cover;display:block}
 .sc .stop-pic.px-tile{display:flex;align-items:center;justify-content:center;background:#202421}
 .px-tile img{width:52px;height:52px;image-rendering:pixelated;border:2px solid #2B1E0E;border-radius:6px;box-shadow:3px 3px 0 #2B1E0E;background:#FFF9D5;padding:6px}
 .sc .stop-text{padding:12px 14px;gap:4px;flex:1;min-width:0}
 .sc .stop-name{font-size:16.5px;font-weight:800;line-height:1.2}
 .sc .stop-note{border:0;padding:0;margin:2px 0 0;font-size:14px;line-height:1.4;color:#cfcbc2}
-.sc .dir{font-size:13.5px;color:#B3A6FF;font-weight:700;margin-top:6px;text-decoration:none}
+.sc .dir{display:inline-flex;align-items:center;min-height:44px;font-size:13.5px;color:#B3A6FF;font-weight:700;text-decoration:none}
 .photo-credit{display:none}
-.cover-credit{margin:6px 16px 0;font-size:11px;line-height:1.3;color:#a3a8a4;text-align:right}
+.cover-credit{margin:6px 16px 0;font-size:12px;line-height:1.3;color:#a3a8a4;text-align:right}
 .day-label{margin:22px 0 4px -34px;font-size:13px;letter-spacing:1.4px;font-weight:800;color:rgba(255,255,255,.65)}
 .stop-locked{list-style:none;margin:4px 0 0 -34px}
 .lock{position:relative;border-radius:20px;overflow:hidden;border:1px solid #2a2f2c;background:#181b19;min-height:300px}
@@ -479,6 +482,10 @@ a.cta.copy{display:flex;align-items:center;justify-content:center;gap:8px;width:
 .cover-img{opacity:0;transition:opacity .35s ease}
 .cover-img.in{opacity:1}
 .by-mark{background:rgba(255,255,255,.12)!important}
+/* W-314 OD-web-Q3-10: a visible white 8% shape that pulses until the cover paints (QA saw near-black boxes); the creator's photo the same. */
+.by-avatar{background:rgba(255,255,255,.12)}
+@media (prefers-reduced-motion:no-preference){.cover:has(.cover-img:not(.in)){animation:pv-skel 1.4s ease-in-out infinite}}
+@keyframes pv-skel{50%{background-color:rgba(255,255,255,.16)}}
 @media (prefers-reduced-motion:reduce){.cover-img{transition:none}}
 /* FIX 3: "Suna's pick" is a white 20% chip (no orange surfaces; #FF8C18 is for event labels only). */
 .pick:not(.creator){background:rgba(255,255,255,.2);color:#fff}
@@ -508,12 +515,20 @@ body.pv-body{padding-bottom:132px}
  * the nightly sweep has none, and a 400 before the fallback cost the KL test
  * page seconds). Phones get 640, wide screens 1280.
  */
+/** W-314 W-Q9-3: the cover preloaded with the same srcset, so the browser asks for it before it reads the body. */
+export function coverPreload(cover, variants) {
+  if (!cover) return '';
+  if (!variants || !variants[640]) return `<link rel="preload" as="image" href="${escapeHtml(cover)}" fetchpriority="high">`;
+  const set = [variants[320] && `${variants[320]} 320w`, `${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
+  return `<link rel="preload" as="image" href="${escapeHtml(variants[640])}" imagesrcset="${escapeHtml(set)}" imagesizes="(min-width: 700px) 640px, 100vw" fetchpriority="high">`;
+}
+
 function coverImg(cover, variants) {
   const alt = '';
   if (!variants || !variants[640]) {
     return `<img class="cover-img" src="${escapeHtml(cover)}" alt="${alt}" decoding="async" fetchpriority="high" onload="this.classList.add('in')">`;
   }
-  const set = [`${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
+  const set = [variants[320] && `${variants[320]} 320w`, `${variants[640]} 640w`, variants[1280] && `${variants[1280]} 1280w`].filter(Boolean).join(', ');
   return `<img class="cover-img" src="${escapeHtml(variants[640])}" srcset="${escapeHtml(set)}"`
     + ` sizes="(min-width: 700px) 640px, 100vw" data-full="${escapeHtml(cover)}"`
     + ` onerror="if(this.src!==this.dataset.full){this.srcset='';this.src=this.dataset.full}"`
@@ -523,10 +538,11 @@ function coverImg(cover, variants) {
 /** Which sized copies of the cover exist, checked once per render. */
 export async function coverVariants(cover, resolves) {
   if (!cover) return null;
-  const [a, b] = [sized(cover, 640), sized(cover, 1280)];
+  const [s, a, b] = [sized(cover, 320), sized(cover, 640), sized(cover, 1280)];
   if (!a) return null;
-  const [okA, okB] = await Promise.all([resolves(a), resolves(b)]);
-  return { 640: okA ? a : null, 1280: okB ? b : null };
+  // W-314 W-Q9-3: the 320 copy too, for phones.
+  const [okS, okA, okB] = await Promise.all([resolves(s), resolves(a), resolves(b)]);
+  return { 320: okS ? s : null, 640: okA ? a : null, 1280: okB ? b : null };
 }
 
 /** The body of the preview page: Figma B1, "The shared itinerary". */
