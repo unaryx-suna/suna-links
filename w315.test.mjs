@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
 const pre = 'const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>"\']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;", "\'": "&#39;" }[c]));\nfunction plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }\n';
-const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtWhen, wtWord, wtDay, wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
+const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtIso, wtLocal, wtWhen, wtWord, wtDay, wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 console.log('w315');
@@ -76,7 +76,7 @@ t('fix in place: price (Not set / Free / Paid + amount), credit, kind, venue, pi
   const h = L.wtEditHTML({ e: { price_type: 'paid', price_amount: 35, image_credit: 'A "B"', category: null, venue: 'Arch <G>', latitude: 3.15, longitude: 101.7 } });
   assert.match(h, /<option value="paid" selected>Paid<\/option><\/select><input id="wt-pa" inputmode="decimal" placeholder="From \(amount\)" value="35">/);
   assert.match(h, /id="wt-cr" value="A &quot;B&quot;"/); assert.match(h, /id="wt-ven" value="Arch &lt;G&gt;"/);
-  assert.match(h, /id="wt-pin" value="3\.15000, 101\.70000"/);
+  assert.match(h, /id="wt-pinxy" value="3\.15000, 101\.70000"/); assert.match(h, /<img class="wt-map"[^>]*src="\/api\/map\?lat=3\.15000&lng=101\.70000&w=560&h=180"/); assert.match(h, /Pin set\.<\/p><input id="wt-pin" value=""/);
   assert.match(L.wtEditHTML({ e: { price_type: null } }), /<option value="" selected>Not set<\/option>[\s\S]*id="wt-pa"[^>]* hidden>/);
   assert.match(html, /update\(patch\)\.eq\('id', it\.e\.id\)\.eq\('status', 'pending'\)/);
   assert.match(html, /queueCountryWork\(\{ kind: 'event_photo', eventID: it\.e\.id/);
@@ -98,6 +98,14 @@ t('W315-9: rows read as words: 6 pm, Ready by 7 Dec, codes capitalised', () => {
   assert.equal(L.wtDay('2026-12-07'), '7 Dec');
   assert.equal(L.wtWord('wrong_hours'), 'Wrong hours');
   assert.equal(L.wtWord(''), '');
+});
+
+t('W315-6: the line gives start to end; local time round-trips in KL and in Sydney summer time', () => {
+  assert.equal(L.wtWhen({ start_time: '2027-01-13T10:00:00Z', end_time: '2027-01-13T14:00:00Z' }), 'Wed 13 Jan, 6 pm to 10 pm');
+  assert.equal(L.wtWhen({ start_time: '2027-01-13T10:00:00Z', end_time: '2027-01-14T18:00:00Z' }), 'Wed 13 Jan, 6 pm to Fri 15 Jan, 2 am');
+  assert.equal(L.wtIso('2027-01-13', '18:00', 'Asia/Kuala_Lumpur'), '2027-01-13T10:00:00.000Z');
+  assert.equal(L.wtIso('2027-01-13', '18:00', 'Australia/Sydney'), '2027-01-13T07:00:00.000Z');
+  assert.deepEqual(L.wtLocal('2027-01-13T07:00:00Z', 'Australia/Sydney'), { day: '2027-01-13', hm: '18:00' });
 });
 
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');

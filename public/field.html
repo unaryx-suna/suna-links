@@ -558,6 +558,10 @@
   .wt-nofm { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
   .wt-edit { display: grid; gap: 10px; margin: 16px 0 0; }
   @media (min-width: 900px) { .wt-edit { grid-template-columns: 1fr 1fr; } .wt-edit .wt-saved { grid-column: 1 / -1; } }
+  .wt-wrow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; } .wt-wrow > #wt-day { grid-column: 1 / -1; } .wt-wrow input { min-width: 0; }   /* the date on its own line, start to end under it: fits 390 */ .wt-wrow > span { color: var(--muted); }
+  .wt-when, .wt-pinbox { grid-column: 1 / -1; } .wt-pinbox { display: grid; gap: 8px; } .wt-pinl { color: var(--muted); font-size: 13px; }
+  .wt-map { width: 100%; height: 180px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); } .wt-pinst { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .wt-xy > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); font-size: 14px; } .wt-xy input { min-height: 44px; }
   .wt-edit label { display: grid; gap: 4px; } .wt-edit label > span:first-child { color: var(--muted); font-size: 13px; }
   .wt-edit input, .wt-edit select { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; width: 100%; box-sizing: border-box; }
   .wt-price { display: flex; gap: 8px; } .wt-price select { flex: 0 0 110px; }
@@ -9051,11 +9055,35 @@ function wtAge(at, now) {
   if (ms < WT_DAY) return Math.round(ms / 3600000) + ' h';
   return plural(Math.floor(ms / WT_DAY), 'day');
 }
+/** W315-6: an event's own time zone: the nearest Suna city to its pin (events carry no zone); KL without a pin. */
+function wtTz(e) {
+  const cs = typeof EV_CITIES !== 'undefined' ? EV_CITIES : [];
+  if (!e || e.latitude == null || e.longitude == null || !cs.length) return 'Asia/Kuala_Lumpur';
+  let best = null, bd = Infinity;
+  for (const c of cs) { const d = (c.lat - e.latitude) ** 2 + (c.lng - e.longitude) ** 2; if (d < bd) { bd = d; best = c; } }
+  return best.tz;
+}
+/** The local 'YYYY-MM-DD' and 'HH:MM' of an instant in a zone. */
+function wtLocal(iso, tz) {
+  const d = new Date(iso); if (isNaN(d)) return { day: '', hm: '' };
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { day: p.year + '-' + p.month + '-' + p.day, hm: p.hour + ':' + p.minute };
+}
+/** The instant of a local date and time in a zone (two passes for daylight saving). */
+function wtIso(day, hm, tz) {
+  let t = Date.parse(day + 'T' + hm + ':00Z'); if (isNaN(t)) return null;
+  for (let k = 0; k < 2; k++) { const l = wtLocal(new Date(t).toISOString(), tz); t -= Date.parse(l.day + 'T' + l.hm + ':00Z') - Date.parse(day + 'T' + hm + ':00Z'); }
+  return new Date(t).toISOString();
+}
 function wtWhen(e) {
   try {
-    const d = new Date(e.start_time);
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kuala_Lumpur' })
-      + ', ' + d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' }).replace(':00', '').replace(/\s*([ap])m$/i, ' $1m').toLowerCase();   // W315-9: '6 pm', the site's rule
+    const tz = wtTz(e);
+    const dayOf = (d) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz });
+    const clock = (d) => d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz }).replace(':00', '').replace(/\s*([ap])m$/i, ' $1m').toLowerCase();   // W315-9: '6 pm'
+    const a = new Date(e.start_time); if (isNaN(a)) return '';
+    const b = e.end_time ? new Date(e.end_time) : null;
+    const end = !b || isNaN(b) || b <= a ? '' : ' to ' + (dayOf(b) === dayOf(a) ? '' : dayOf(b) + ', ') + clock(b);   // W315-6: '6 pm to 10 pm'
+    return dayOf(a) + ', ' + clock(a) + end;
   } catch (err) { return ''; }
 }
 /** W315-9: codes read as words ('wrong_hours' → 'Wrong hours'); a date as '7 Dec'. */
@@ -9086,7 +9114,7 @@ async function loadWait(render) {
   try {
     const nowIso = new Date().toISOString();
     const [ev, live, rp, fl, fb] = await Promise.all([
-      db.from('world_events').select('id,name,start_time,venue,category,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
+      db.from('world_events').select('id,name,start_time,end_time,venue,category,latitude,longitude,image_url,image_credit,price_type,price_amount,created_at,source_url,organiser:organisers(name)')
         .eq('status', 'pending').gte('end_time', nowIso).order('created_at', { ascending: true }).limit(200),
       db.from('world_events').select('id,name,image_url,start_time,venue,status').in('status', ['pending', 'approved']).gte('end_time', nowIso).limit(1500),
       db.from('reports').select('id,created_at,landmark_id,issue_type,landmark_name,status')
@@ -9191,13 +9219,21 @@ function wtDetail() {
 function wtEditHTML(it) {
   const e = it.e, v = (x) => escapeHtml(x == null ? '' : String(x));
   const pin = e.latitude != null && e.longitude != null ? Number(e.latitude).toFixed(5) + ', ' + Number(e.longitude).toFixed(5) : '';
-  return '<div class="wt-edit">'
+  const tz = wtTz(e), a = e.start_time ? wtLocal(e.start_time, tz) : { day: '', hm: '' }, b = e.end_time ? wtLocal(e.end_time, tz) : { hm: '' };
+  // W315-6: When, as frame 6 (date, start to end), in the event's own city time.
+  const when = '<label class="wt-when"><span>When</span><span class="wt-wrow"><input type="date" id="wt-day" value="' + v(a.day) + '" aria-label="Date"><input type="time" id="wt-t1" value="' + v(a.hm) + '" aria-label="Starts"><span>to</span><input type="time" id="wt-t2" value="' + v(b.hm) + '" aria-label="Ends"></span></label>';
+  // W315-5: a map with the pin and the paste-a-link field; raw coordinates only behind 'Enter coordinates'.
+  const map = pin ? '<img class="wt-map" alt="The pin on a map" src="/api/map?lat=' + Number(e.latitude).toFixed(5) + '&lng=' + Number(e.longitude).toFixed(5) + '&w=560&h=180" onerror="this.hidden=true">' : '';
+  const pinF = '<div class="wt-pinbox"><span class="wt-pinl">Pin</span>' + map + '<p class="wt-pinst">' + (pin ? 'Pin set.' : 'No pin yet.') + '</p>'
+    + '<input id="wt-pin" value="" placeholder="Paste a Google Maps link" aria-label="Paste a Google Maps link">'
+    + '<details class="wt-xy"><summary>Enter coordinates</summary><input id="wt-pinxy" value="' + v(pin) + '" placeholder="lat, lng" aria-label="Coordinates"></details></div>';
+  return '<div class="wt-edit">' + when
     + '<label><span>Price</span><span class="wt-price"><select id="wt-pt"><option value=""' + (!e.price_type ? ' selected' : '') + '>Not set</option><option value="free"' + (e.price_type === 'free' ? ' selected' : '') + '>Free</option><option value="paid"' + (e.price_type === 'paid' ? ' selected' : '') + '>Paid</option></select>'
     + '<input id="wt-pa" inputmode="decimal" placeholder="From (amount)" value="' + v(e.price_amount) + '"' + (e.price_type === 'paid' ? '' : ' hidden') + '></span></label>'
     + '<label><span>Photo credit</span><input id="wt-cr" value="' + v(e.image_credit) + '" placeholder="Who took it"></label>'
     + '<label><span>Kind</span><input id="wt-cat" value="' + v(e.category) + '" placeholder="Festival, Market, Music…"></label>'
     + '<label><span>Venue</span><input id="wt-ven" value="' + v(e.venue) + '" placeholder="Venue and street"></label>'
-    + '<label><span>Pin</span><input id="wt-pin" value="' + v(pin) + '" placeholder="Paste a Google Maps link or lat, lng"></label>'
+    + pinF
     + '<p class="wt-saved" id="wt-saved" role="status"></p></div>';
 }
 /** lat, lng from '3.15, 101.71' or a Google Maps link (@lat,lng or ?q=lat,lng); null if neither. */
@@ -9227,11 +9263,22 @@ function wtRecheck(it) {
   const n = wtItems.filter((x) => x.part === 'need').length; $('wait-count').textContent = String(n); $('wait-count').classList.toggle('zero', n === 0);
 }
 let wtTyping = null;
+/** W315-6: the When field's patch: start and end in the event's zone; an end before the start is the next day. */
+function wtWhenPatch(it) {
+  const day = $('wt-day').value, t1 = $('wt-t1').value, t2 = $('wt-t2').value, tz = wtTz(it.e);
+  if (!day || !t1) { $('wt-saved').textContent = 'Pick a date and a start time.'; return null; }
+  const start = wtIso(day, t1, tz); if (!start) return null;
+  let end = t2 ? wtIso(day, t2, tz) : null;
+  if (end && Date.parse(end) <= Date.parse(start)) end = new Date(Date.parse(end) + 86400000).toISOString();
+  return end ? { start_time: start, end_time: end } : { start_time: start };
+}
 function wtField(ev) {
   const it = wtItems.find((x) => x.key === wtSel); if (!it || !it.e) return;
   const id = ev.target.id;
   if (id === 'wt-pt') { $('wt-pa').hidden = ev.target.value !== 'paid'; wtSave(it, { price_type: ev.target.value || null, price_amount: ev.target.value === 'paid' ? (Number($('wt-pa').value) || null) : null }); return; }
   const map = { 'wt-pa': () => ({ price_amount: Number(ev.target.value) || null }), 'wt-cr': () => ({ image_credit: ev.target.value.trim() || null }), 'wt-cat': () => ({ category: ev.target.value.trim() || null }), 'wt-ven': () => ({ venue: ev.target.value.trim() || null }),
+    'wt-day': () => wtWhenPatch(it), 'wt-t1': () => wtWhenPatch(it), 'wt-t2': () => wtWhenPatch(it),
+    'wt-pinxy': () => { const p = wtPinFrom(ev.target.value); if (!p) { $('wt-saved').textContent = ev.target.value.trim() ? "That isn't a pin: lat, lng" : ''; return null; } return p; },
     'wt-pin': () => { const p = wtPinFrom(ev.target.value); if (!p) { $('wt-saved').textContent = ev.target.value.trim() ? "That isn't a pin: paste a Google Maps link or lat, lng" : ''; return null; } return p; } };
   if (!map[id]) return;
   clearTimeout(wtTyping);
