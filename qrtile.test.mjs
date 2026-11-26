@@ -13,4 +13,8 @@ t('a noindex page (ended, not found) has no tile; the CSS hides it under 1024', 
   assert.match(page(base), /class="qrtile"/); assert.doesNotMatch(page({ ...base, noindex: true }), /class="qrtile"/);
   assert.match(page(base), /@media \(min-width: 1024px\) and \(hover: hover\)/);
 });
+t('an /e/ page whose canonical is unaryx.com still gets the tile, from its own address (OD-web-Q3-24)', () => {
+  const h = page({ title: 'T', description: 'D', canonical: 'https://unaryx.com/events/kuala-lumpur/x-11111111', ogUrl: 'https://app.unaryx.com/e/11111111-1111-4111-8111-111111111111', body: '' });
+  assert.match(h, /api\/qr\?e=11111111-1111-4111-8111-111111111111/);
+});
 if (fails) process.exit(1);

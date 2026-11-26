@@ -579,7 +579,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
 </head>
 <body${bodyClass ? ` class="${bodyClass}"` : ''}>
 ${body}
-${noindex ? "" : qrTile(canonical)}
+${noindex ? "" : qrTile(ogUrl || canonical)}
 ${PAGE_SCRIPT}
 ${androidTag(android || undefined)}
 </body>
