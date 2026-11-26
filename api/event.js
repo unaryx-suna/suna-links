@@ -122,7 +122,7 @@ export function eventBody(e, now = new Date(), more = [], { ct = 'web-e' } = {})
   const go = `https://unaryx.com/go/e-${escapeHtml(e.id)}`;
 
   // W-197 (5), Ops OPS-135: a darker scrim under the title, so poster text never shows through it.
-  const hero = `<header class="hero hero-e">
+  const hero = `<header class="hero hero-e${img ? '' : ' hero-fold'}">   ${''/* OD-web-Q3-21: no cover, no empty 200 pt: the hero folds */}
     ${img ? `<img src="${escapeHtml(img)}" alt="" fetchpriority="high" decoding="async">` : ''}
     <div class="hero-top">${MARK}</div>
     <div>

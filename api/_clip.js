@@ -497,13 +497,14 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     /* W-314 OD-web-Q3-19, -Q3-20: black 40% over the top 120 px (the Suna pill reads on any cover), then 0 to 85%
        from the middle down, so only our date, title and venue read there, not the poster's own words. */
     .hero-e::after { background: linear-gradient(rgba(0,0,0,.4) 0, rgba(0,0,0,0) 120px, rgba(0,0,0,0) 30%, rgba(0,0,0,.85) 52%, rgba(0,0,0,.95) 70%, var(--bg)); }
-    .hero-e .hero-top .mark { background: rgba(20,15,46,.6); }   /* OD-web-Q3-19: the pill reads on a light cover */
+    .hero-e .hero-top .mark { background: rgba(20,15,46,.6); }
+    .hero-e.hero-fold { min-height: 0; gap: 20px; padding-bottom: 8px; } .hero-e.hero-fold::after { display: none; }   /* OD-web-Q3-21: date and title right under the pill */   /* OD-web-Q3-19: the pill reads on a light cover */
     .hero-e h1, .hero-e .hero-sub { text-shadow: 0 1px 12px rgba(0,0,0,.55); }
     .hero > * { position: relative; z-index: 1; }
     .hero > img { z-index: 0; }
     .hero-top { align-self: flex-start; }
     .pills { display: flex; gap: 7px; margin: 0 0 7px; }
-    .pill { padding: 4px 9px; border-radius: 999px; background: var(--pill); color: #fff; font-size: 11px; font-weight: 700;
+    .pill { padding: 4px 9px; border-radius: 999px; background: var(--pill); color: #fff; font-size: 13px; font-weight: 700;
       text-transform: uppercase; letter-spacing: .02em; }
     /* W-314 OD-web-Q3-4: the date is orange text, no fill (white on #FF8C18 was 2.3:1); the price chip white 8% / 65%. */
     .pills { align-items: center; }
@@ -541,9 +542,10 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .row .thumb img { display: block; border-radius: 0; }
     .row .stock-tint { position: absolute; inset: 0; }
     .row-text { display: grid; gap: 3px; min-width: 0; }
-    .row-eyebrow { color: var(--now); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+    .row-eyebrow { color: var(--now); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
     .row-name { font-size: 15px; font-weight: 600; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }   /* W-314 OD-web-Q3-16: two lines */
-    .row-meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* OD-web-Q3-28: 12 px minimum, 13 px for caps labels, at every width */
+    .row-meta { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chev { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 24px; font-weight: 500; }
     .state { background: var(--card); border-radius: 18px; padding: 16px; margin: 20px 0 36px; }
     .state p { margin: 0; }
@@ -555,6 +557,7 @@ export function page({ title, description, canonical, ogUrl, image, body, ld, no
     .clipbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; color: var(--muted); font-size: 13px; }
     .clipbar a { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; font-size: 16px; text-decoration: none; }
     .clipbar .mark-dot { width: 22px; height: 22px; }
+    .clipbar-c { flex-direction: column; align-items: flex-start; gap: 6px; } .clipbar-c .clip-from { color: rgba(255,255,255,.65); font-size: 14px; }
     .venue-h1 { font-size: 28px; margin: 16px 0 4px; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 26px; }
     .has-bar main { padding-bottom: 150px; }

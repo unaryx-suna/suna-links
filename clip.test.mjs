@@ -81,7 +81,7 @@ await t('/c/: events within 800 m only, when there are any (Ops W6: Near <venue>
   assert.match(r.body, /<meta property="og:image" content="https:\/\/unaryx\.com\/api\/og\/venue\/worq-ttdi\.jpg">/);
   assert.match(r.body, /<meta name="twitter:card" content="summary_large_image">/);
   assert.match(r.body, /<p class="sub">Within a 10-minute walk<\/p>/);
-  assert.match(r.body, /· Card from WORQ TTDI/);
+  assert.match(r.body, /<span class="clip-from">Card from WORQ TTDI<\/span>/);
   assert.match(r.body, new RegExp(`<a class="row" href="/e/${U(1)}">`));
   assert.doesNotMatch(r.body, new RegExp(U(2)));
   assert.doesNotMatch(r.body, new RegExp(U(3)));
@@ -252,7 +252,7 @@ await t('/e/ (W-197 (5), Ops OPS-135): the hero has its own darker scrim under t
   state.eventRow = ev(U(4), 0.0045, { start_time: '2027-03-05T11:30:00Z', end_time: '2027-03-05T14:00:00Z' });
   state.events = [];
   const r = await render(event, `/e/${U(4)}`);
-  assert.match(r.body, /<header class="hero hero-e">/);
+  assert.match(r.body, /<header class="hero hero-e( hero-fold)?">/);
   assert.match(r.body, /\.hero-e::after \{ background: linear-gradient\(rgba\(0,0,0,\.4\) 0, rgba\(0,0,0,0\) 120px, rgba\(0,0,0,0\) 30%, rgba\(0,0,0,\.85\) 52%/);
   assert.match(r.body, /\.hero::after \{ content: ""; position: absolute; inset: 0; background: linear-gradient\(rgba\(17,17,17,0\) 30%, var\(--bg\)\); \}/, 'the shared scrim unchanged');
 });

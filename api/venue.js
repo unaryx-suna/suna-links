@@ -15,7 +15,7 @@
 
 import {
   VENUES_URL, rest, escapeHtml, distanceKm, cityFor, zoneFor, endOfLocalDay, ourImage,
-  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer,
+  eventsPage, storeURL, page, send, segment, eventRow, eventsAround, footer, MARK,
 } from './_clip.js';
 import { saveInSuna } from './_maps.js';
 import { isLodging, hasRealContent, LIST_DESCRIPTION_LENGTH } from './sitemap.js';
@@ -122,7 +122,6 @@ export function venueBody(venue, found, now, places = []) {
   const name = venue ? venue.name : null;
   // W-246: a /c/ code is a printed card, so Apple's link says ct=print (the page's data-ct keeps the venue's own ct).
   const store = venue && venue.ct ? storeURL('print', 'web-c') : storeURL(null, 'web-c');
-  const mark = '<a href="https://unaryx.com/events"><span class="mark-dot" aria-hidden="true"></span>Suna</a>';
   let content;
   if (!venue) {
     content = `<h1 class="venue-h1">What's on near you</h1>
@@ -145,7 +144,7 @@ export function venueBody(venue, found, now, places = []) {
     ? saveInSuna(`suna://venue?slug=${encodeURIComponent(venue.slug)}`, store, 'btn', 'See it all in Suna')
     : `<a class="btn" href="${escapeHtml(store)}">Get Suna</a>`;
   return `<main>
-  <div class="clipbar">${mark}${name ? `<span>· Card from ${escapeHtml(name)}</span>` : ''}</div>
+  <div class="clipbar clipbar-c">${MARK}${name ? `<span class="clip-from">Card from ${escapeHtml(name)}</span>` : ''}</div>   ${''/* OD-web-Q3-23: the mark and wordmark as on /e/ and /q/, 'Card from' on its own line, no dot */}
   ${content}
   ${footer()}
 </main>
