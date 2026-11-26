@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./public/field.html', import.meta.url), 'utf8');
 const cut = (a, b) => html.slice(html.indexOf(a), html.indexOf(b));
 const pre = 'const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>"\']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;", "\'": "&#39;" }[c]));\nfunction plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }\n';
-const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
+const L = new Function(pre + cut('/* W315-LOGIC-START */', '/* W315-LOGIC-END */').replace(/^document\.addEventListener[\s\S]*$/m, '') + '\nreturn { wtWhen, wtWord, wtDay, wtMissing, wtAge, wtRowHTML, WT_PLAN, wtGroup, WT_GROUPS, wtPinFrom, wtEditHTML, set: (k) => { wtSel = k; } };')();
 let bad = 0;
 const t = (n, fn) => { try { fn(); console.log('  ok   ' + n); } catch (e) { bad++; console.log('  FAIL ' + n + '\n       ' + e.message); } };
 console.log('w315');
@@ -26,9 +26,9 @@ t('a ready listing row: Turn down and Approve; Approve disabled without a pin; r
   assert.match(h, /data-wt-do="down"[^>]*>Turn down<\/button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="ev:1" disabled title="No pin yet">Approve<\/button>/);
   assert.match(h, /<span class="wt-age red">2 days<\/span>/);
 });
-t('an AI row: Send to AI shown but disabled (panel-ai not deployed); a name is escaped', () => {
+t('an AI row: no Send to AI in the row while panel-ai is off (OD-web-W315-7); a name is escaped', () => {
   const h = L.wtRowHTML({ key: 'ev:2', part: 'ai', kind: 'fix', label: 'Listing, missing info', title: '<b>Gather</b>', sub: 'No photo, no price', at: '2026-11-25T00:00:00Z', e: {} }, now);
-  assert.match(h, /<button type="button" class="wt-btn" disabled title="Send to AI needs the panel-ai server piece">Send to AI<\/button>/);
+  assert.doesNotMatch(h, />Send to AI<\/button>/);
   assert.match(h, /&lt;b&gt;Gather&lt;\/b&gt;/);
 });
 t('markup: an admin-only menu row with the Needs you count, the pane, the first home group, the tab list, Undo before writing', () => {
@@ -92,5 +92,13 @@ t('DX-3: a pending listing with the same name as another upcoming one on the sam
   assert.match(html, /label: same \? 'Listing, possible duplicate' : 'Listing, ready'/);
   assert.match(html, /Open that one ↗<\/a> <a href="https:\/\/app\.unaryx\.com\/e\/' \+ escapeHtml\(it\.e\.id\)/);
 });
+t('W315-9: rows read as words: 6 pm, Ready by 7 Dec, codes capitalised', () => {
+  assert.equal(L.wtWhen({ start_time: '2027-01-13T10:00:00Z' }), 'Wed 13 Jan, 6 pm');
+  assert.equal(L.wtWhen({ start_time: '2027-01-13T10:30:00Z' }), 'Wed 13 Jan, 6:30 pm');
+  assert.equal(L.wtDay('2026-12-07'), '7 Dec');
+  assert.equal(L.wtWord('wrong_hours'), 'Wrong hours');
+  assert.equal(L.wtWord(''), '');
+});
+
 console.log(bad ? `\n✗ ${bad} failed` : '\nall passed');
 process.exit(bad ? 1 : 0);

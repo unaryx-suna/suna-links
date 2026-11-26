@@ -533,16 +533,18 @@
   .wt-btns { display: flex; gap: 8px; }
   .wt-btn { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: none; color: #fff; font: 700 14px/1 inherit; cursor: pointer; }
   .wt-btn.w { background: #fff; color: #140F2E; border-color: #fff; }
-  .wt-btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .wt-btn[disabled], .wt-btn.w[disabled], .wt-h button.r[disabled] { opacity: 1; background: rgba(255,255,255,.06); border-color: transparent; color: rgba(255,255,255,.4); cursor: not-allowed; }   /* W315-8: one disabled style (role map, dark disabled) */
+  .wt-soon { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 13px; }
+  @media (max-width: 600px) { .wt-tx b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } }   /* W315-7 */
   .wt-pill { padding: 4px 8px; border-radius: 8px; background: rgba(179,166,255,.16); color: #B3A6FF; font-size: 12.5px; font-weight: 700; }
   .wt-detail { border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: rgba(255,255,255,.03); }
   .wt-detail[hidden] { display: none; }
   .wt-dtop { display: grid; gap: 14px; }
-  @media (min-width: 900px) { .wt-dtop { grid-template-columns: 200px minmax(0, 1fr); } }
-  .wt-pic { aspect-ratio: 1; border-radius: 14px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); overflow: hidden; }
+  @media (min-width: 900px) { .wt-dtop { grid-template-columns: 200px minmax(0, 1fr); } .wt-pic { aspect-ratio: 1; max-height: none; } }
+  .wt-pic { aspect-ratio: 16 / 9; max-height: 220px; border-radius: 14px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); overflow: hidden; }
   .wt-pic img { width: 100%; height: 100%; object-fit: cover; }
   .wt-dtop h2 { margin: 4px 0 8px; font: 800 24px/1.15 Urbanist, system-ui, sans-serif; }
-  .wt-miss { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; } .wt-miss span { padding: 4px 8px; border-radius: 8px; background: rgba(255,122,107,.14); color: #FF7A6B; font-size: 13px; font-weight: 700; }
+  .wt-miss { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; } .wt-miss span { padding: 4px 8px; border-radius: 8px; background: rgba(245,181,68,.16); color: #F5B544; font-size: 13px; font-weight: 700; }
   .wt-plan { margin: 16px 0 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
   .wt-plan div { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 15px; } .wt-plan div:first-child { border-top: 0; }
   .wt-plan dt { color: var(--muted); } .wt-plan dd { margin: 0; }
@@ -580,11 +582,11 @@
   .rp-tile { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.03); }
   .rp-tile b { display: block; font: 800 28px/1.1 Urbanist, system-ui, sans-serif; } .rp-tile span { color: var(--muted); font-size: 14px; }
   .rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
-  .rp-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
+  .rp-chips { display: flex; flex-wrap: nowrap; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; } .rp-chips > * { flex: none; }   /* W315-12: one sideways row */
   .rp-chips button { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: none; color: #fff; font: 600 14px/1 inherit; cursor: pointer; }
   .rp-chips button[aria-pressed="true"] { background: #5A44C8; border-color: #5A44C8; }
   .rp-chips button em { font-style: normal; color: var(--muted); margin-left: 4px; } .rp-chips button[aria-pressed="true"] em { color: #fff; }
-  .rp-bar input[type=search] { min-height: 44px; flex: 0 1 260px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; }
+  .rp-bar input[type=search] { min-height: 44px; flex: 1 1 100%; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); color: #fff; font: 15px inherit; }
   .rp-table { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
   .rp-table table { width: 100%; border-collapse: collapse; font-size: 15px; }
   .rp-table th { text-align: left; padding: 12px 14px; font: 800 11.5px/1 Urbanist, system-ui, sans-serif; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
@@ -9053,9 +9055,12 @@ function wtWhen(e) {
   try {
     const d = new Date(e.start_time);
     return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kuala_Lumpur' })
-      + ', ' + d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' }).replace(':00', '').replace(' ', '');
+      + ', ' + d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' }).replace(':00', '').replace(/\s*([ap])m$/i, ' $1m').toLowerCase();   // W315-9: '6 pm', the site's rule
   } catch (err) { return ''; }
 }
+/** W315-9: codes read as words ('wrong_hours' → 'Wrong hours'); a date as '7 Dec'. */
+const wtWord = (x) => String(x || '').replace(/_/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
+function wtDay(iso) { try { const d = new Date(String(iso).length === 10 ? iso + 'T12:00:00+08:00' : iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kuala_Lumpur' }); } catch (err) { return String(iso || ''); } }
 /** What a pending listing lacks, in the design's words. */
 function wtMissing(e, dupOf) {
   const m = [];
@@ -9113,11 +9118,11 @@ async function loadWait(render) {
       items.push({ key: 'cl:' + c.id, part: 'need', kind: 'claim', label: 'Claim', title: (c.event && c.event.name) || 'Claim', sub: c.domain_match ? 'Email matches the website' : (c.role ? 'Says they are the ' + String(c.role) : 'Organiser claim'), at: c.created_at, c });
     }
     for (const o of (typeof orRows !== 'undefined' ? orRows : []).filter((x) => WT_OUR_MOVE.includes(x.step))) {
-      items.push({ key: 'or:' + o.session_id, part: 'need', kind: 'order', label: 'Order, waiting on us', title: o.business || 'Order', sub: (o.ready_by ? 'Ready by ' + o.ready_by : '') + (o.step ? (o.ready_by ? ', ' : '') + String(o.step).replace(/_/g, ' ') : ''), at: o.step_at || o.created_at, o });
+      items.push({ key: 'or:' + o.session_id, part: 'need', kind: 'order', label: 'Order, waiting on us', title: o.business || 'Order', sub: (o.ready_by ? 'Ready by ' + wtDay(o.ready_by) : '') + (o.step ? (o.ready_by ? ', ' : '') + (o.ready_by ? String(o.step).replace(/_/g, ' ') : wtWord(o.step)) : ''), at: o.step_at || o.created_at, o });
     }
-    for (const r of rp.data || []) items.push({ key: 'rp:' + r.id, part: 'ai', kind: 'place', label: 'Reported place', title: r.landmark_name || 'A place', sub: String(r.issue_type || 'Something is wrong').replace(/_/g, ' '), at: r.created_at, r });
-    for (const f of fl.data || []) items.push({ key: 'fl:' + f.id, part: 'ai', kind: 'flag', label: 'Place check', title: f.suspected_problem || (f.flag_reasons || []).join(', ') || 'Place to check', sub: (f.flag_reasons || []).join(', ').replace(/_/g, ' '), at: f.created_at, f });
-    for (const f of fb.data || []) items.push({ key: 'fb:' + f.id, part: 'ai', kind: 'feedback', label: 'Feedback to sort', title: String(f.body || '').slice(0, 80) || 'Feedback', sub: f.kind || '', at: f.created_at, fb: f });
+    for (const r of rp.data || []) items.push({ key: 'rp:' + r.id, part: 'ai', kind: 'place', label: 'Reported place', title: r.landmark_name || 'A place', sub: wtWord(r.issue_type || 'Something is wrong'), at: r.created_at, r });
+    for (const f of fl.data || []) items.push({ key: 'fl:' + f.id, part: 'ai', kind: 'flag', label: 'Place check', title: f.suspected_problem || (f.flag_reasons || []).join(', ') || 'Place to check', sub: wtWord((f.flag_reasons || []).join(', ')), at: f.created_at, f });
+    for (const f of fb.data || []) items.push({ key: 'fb:' + f.id, part: 'ai', kind: 'feedback', label: 'Feedback to sort', title: String(f.body || '').slice(0, 80) || 'Feedback', sub: wtWord(f.kind), at: f.created_at, fb: f });
     items.sort((a, b) => Date.parse(a.at || 0) - Date.parse(b.at || 0));
     wtItems = items;
     note.hidden = true;
@@ -9133,7 +9138,7 @@ function wtRowHTML(it, now) {
   const red = it.part === 'need' && now - Date.parse(it.at || 0) > WT_DAY;
   const th = it.thumb ? '<img src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy">' : (it.kind === 'fix' || it.kind === 'ready' ? 'No<br>photo' : escapeHtml(String(it.title || '?').trim().charAt(0).toUpperCase()));
   const quick = it.kind === 'ready' ? '<span class="wt-btns"><button type="button" class="wt-btn" data-wt-do="down" data-wt="' + escapeHtml(it.key) + '">Turn down</button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="' + escapeHtml(it.key) + '"' + (it.e.latitude == null ? ' disabled title="No pin yet"' : '') + '>Approve</button></span>' : '';
-  const ai = it.part === 'ai' ? '<button type="button" class="wt-btn" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>' : '';
+  const ai = '';   // W315-7: no Send to AI in the rows while it's off; the pane's footer has it and says why
   return '<div class="wt-row' + (wtSel === it.key ? ' on' : '') + '" role="button" tabindex="0" data-wt="' + escapeHtml(it.key) + '"><span class="wt-th">' + th + '</span>'
     + '<span class="wt-tx"><small' + (it.kind === 'place' || it.kind === 'flag' ? ' class="red"' : '') + '>' + escapeHtml(it.label) + '</small><b>' + escapeHtml(it.title) + '</b><span>' + escapeHtml(it.sub || '') + '</span></span>'
     + '<span class="wt-end"><span class="wt-age' + (red ? ' red' : '') + '">' + escapeHtml(wtAge(it.at, now)) + '</span>' + quick + ai + '</span></div>';
@@ -9173,8 +9178,8 @@ function wtDetail() {
   if (it.kind === 'ready') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="down" data-wt="' + escapeHtml(it.key) + '">Turn down</button><button type="button" class="wt-btn w" data-wt-do="approve" data-wt="' + escapeHtml(it.key) + '"' + (e.latitude == null ? ' disabled title="No pin yet"' : '') + '>Approve</button>';
   else if (it.kind === 'claim') actions = '<p>Claims are decided in Claims, with the proof.</p><button type="button" class="wt-btn w" data-wt-go="claims">Open in Claims</button>';
   else if (it.kind === 'order') actions = '<p>Its checklist and the organiser\'s messages are in Orders.</p><button type="button" class="wt-btn w" data-wt-go="orders">Open in Orders</button>';
-  else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
-  else actions = '<p>Nothing goes live without your Approve.</p>' + (e && planKeys.length ? '<button type="button" class="wt-btn" data-wt-fixme>Fix it myself</button>' : '<button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button>') + '<button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button>';
+  else if (it.kind === 'feedback') actions = '<p>Nothing goes live without your Approve.</p><button type="button" class="wt-btn" data-wt-do="sorted" data-wt="' + escapeHtml(it.key) + '">Mark sorted</button><button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button><p class="wt-soon">Send to AI turns on soon. Fix it yourself for now.</p>';
+  else actions = '<p>Nothing goes live without your Approve.</p>' + (e && planKeys.length ? '<button type="button" class="wt-btn" data-wt-fixme>Fix it myself</button>' : '<button type="button" class="wt-btn" data-wt-go="' + (it.kind === 'fix' ? 'events' : 'review') + '">Fix it myself</button>') + '<button type="button" class="wt-btn w" disabled title="Send to AI needs the panel-ai server piece">Send to AI</button><p class="wt-soon">Send to AI turns on soon. Fix it yourself for now.</p>';
   box.innerHTML = '<div class="wt-nofm"><button type="button" class="wt-btn wt-back" data-wt-back>‹ Back</button><span class="sub">' + (i + 1) + ' of ' + list.length + '</span></div>'
     + '<div class="wt-dtop">' + (e ? '<label class="wt-pic wt-drop" title="Drop a photo here, or tap to choose one">' + (it.thumb ? pic : 'No photo yet<br><small>Drop one here or tap to add</small>') + '<input type="file" accept="image/*" id="wt-photo" hidden></label>' : '') + '<div><p class="wt-tx" style="margin:0"><small>' + escapeHtml(it.label) + '</small></p><h2>' + escapeHtml(it.title) + '</h2>' + miss + '<p class="sub" style="margin:0">' + escapeHtml(facts) + '</p></div></div>'
     + (it.same ? '<p class="wt-dup">Possible duplicate of <b>' + escapeHtml(it.same.name) + '</b>' + (it.same.status === 'approved' ? ' (live)' : ' (in review)') + '. <a href="https://app.unaryx.com/e/' + escapeHtml(it.same.id) + '" target="_blank" rel="noopener">Open that one ↗</a> <a href="https://app.unaryx.com/e/' + escapeHtml(it.e.id) + '" target="_blank" rel="noopener">Open this one ↗</a></p>' : '') + (e && plan ? plan + '<details class="wt-fixme" id="wt-fixme"><summary>Fix it myself</summary>' + wtEditHTML(it) + '</details>' : (e ? wtEditHTML(it) : '') + plan) + '<div id="wt-why-box" hidden><textarea class="wt-why" id="wt-why" placeholder="Why it isn\'t listed (the organiser sees this)"></textarea><div class="wt-btns" style="margin-top:8px"><button type="button" class="wt-btn" data-wt-cancel>Cancel</button><button type="button" class="wt-btn w" data-wt-do="down-go" data-wt="' + escapeHtml(it.key) + '">Turn down</button></div></div>'
@@ -10263,7 +10268,7 @@ async function renderSide() {
   let queued = 0;
   try { queued = (await idbAll('queue')).length; } catch (e) { /* no store yet */ }
   side.replaceChildren();
-  side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || ''));
+  side.append(dkEl('div', 'brand', 'Suna Panel'), dkEl('div', 'city', (typeof cap !== 'undefined' && cap && cap.cityName) || (profile && profile.is_admin ? 'All cities' : ''))   /* W315-14: the queue is every city's unless you're out in one */);
   const add = dkEl('button', 'primary add', 'Add a place'); add.type = 'button';
   add.onclick = () => { if (runActive()) leaveRun(); switchTab('capture'); };
   if (!(profile && profile.is_admin)) side.appendChild(add);   // W-315: an admin has Add a place under Tools
