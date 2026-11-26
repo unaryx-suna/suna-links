@@ -12,7 +12,9 @@
             { "/": "/e/*" },
             { "/": "/u/*" },
             { "/": "/cp/*" },
-            { "/": "/first-light" }
+            { "/": "/first-light" },
+            { "/": "/pro", "comment": "W-321: Suna Pro" },
+            { "/": "/pro/*", "comment": "W-321: Suna Pro" }
           ] 
         }                                                                       
       ]
