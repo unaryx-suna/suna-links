@@ -14,7 +14,8 @@
             { "/": "/cp/*" },
             { "/": "/first-light" },
             { "/": "/pro", "comment": "W-321: Suna Pro" },
-            { "/": "/pro/*", "comment": "W-321: Suna Pro" }
+            { "/": "/pro/*", "comment": "W-321: Suna Pro" },
+            { "/": "/q/remind", "comment": "DEX-150 (3) / iOS I-781 (a): Quests with the Thursday reminder on" }
           ] 
         }                                                                       
       ]
