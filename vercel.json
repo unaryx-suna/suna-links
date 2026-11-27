@@ -118,6 +118,11 @@
       "permanent": false
     },
     {
+      "source": "/q/remind",
+      "destination": "https://unaryx.com/get?ct=q-remind",
+      "permanent": false
+    },
+    {
       "source": "/q/:path*",
       "destination": "https://unaryx.com/q/:path*",
       "permanent": true
