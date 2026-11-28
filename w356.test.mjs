@@ -23,7 +23,7 @@ const db = { from: () => ({ update: (patch) => ({ eq: (_c, id) => ({ select: asy
   if (bend) Object.assign(row, bend);
   return { data: [cols.split(',').reduce((o, c) => { o[c] = row[c]; return o; }, {})], error: null };
 } }) }) }) };
-const ctx = vm.createContext({ db, console, JSON, Object, Math, Set, Error, cap: null });
+const ctx = vm.createContext({ db, console, JSON, Object, Math, Set, Error, Date, Number, cap: null });
 vm.runInContext([block("const EDIT_NEVER = new Set([", ']);'), fn('editPatch'), fn('sameValue'), fn('writeEditedColumns'), fn('looksLikeAuthFailure'),
   "const SIGNED_OUT_MESSAGE = 'x';", block('const DAY_NAMES = [', '];'), block('const MON_FIRST = [', '];'), fn('inheritedFrom'), fn('effectivePeriods'), fn('hhmm'), fn('ampm'), fn('buildOperatingHours')].join('\n'), ctx);
 const ID = 'p1';
@@ -61,7 +61,10 @@ await t('a photo-only edit never writes the row', async () => {
 await t("an RLS refusal (0 rows) or a value that comes back different is an error, never 'Saved'", async () => {
   fresh(); refuse = true;
   await assert.rejects(write({ id: ID, last_verified_at: 'now', name: 'X' }), /Didn’t save: the place wasn’t updated/);
-  refuse = false; bend = { name: 'Something else' };
+  // the same moment in another form is the same value (live 28 Nov: '…Z' sent, '+00:00' back)
+  refuse = false; bend = { last_verified_at: '2026-11-28T10:20:01.123+00:00' };
+  await write({ id: ID, last_verified_at: '2026-11-28T10:20:01.123Z', name: 'Y' });
+  bend = { name: 'Something else' };
   await assert.rejects(write({ id: ID, last_verified_at: 'now', name: 'X' }), /Didn’t save: name came back different/);
   bend = null;
 });

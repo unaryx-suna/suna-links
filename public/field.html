@@ -1563,7 +1563,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v72';
+const BUILD = 'field-v73';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -5552,6 +5552,8 @@ function sameValue(a, b) {
     if (Array.isArray(v)) return v.map(norm);
     if (v && typeof v === 'object') return Object.keys(v).sort().reduce((o, k) => { o[k] = norm(v[k]); return o; }, {});
     if (typeof v === 'number') return Math.round(v * 1e6) / 1e6;
+    // W-356 follow-up: a timestamp comes back as '+00:00' where '…Z' was sent (the same moment).
+    if (typeof v === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) && !Number.isNaN(Date.parse(v))) return new Date(v).toISOString();
     return v;
   };
   return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
