@@ -84,7 +84,10 @@ export function creditFor(landmark) {
   if (!landmark) return null;
   const name = String(landmark.photographer_name || '').trim();
   if (!name || name.toLowerCase() === 'suna' || landmark.cover_source === 'google_places') return null;
-  const licence = LICENCE[landmark.cover_source] || '';
+  // W-355: a Commons or other cover keeps its licence after ' · ' in cover_source_ref ('commons:<File> · CC BY-SA 4.0').
+  const ref = String(landmark.cover_source_ref || '');
+  const own = (landmark.cover_source === 'commons' || landmark.cover_source === 'other') && ref.includes(' · ') ? ref.split(' · ').pop().trim() : '';
+  const licence = LICENCE[landmark.cover_source] || own || '';
   return `Photo: ${name}${licence ? `, ${licence}` : ''}`;
 }
 /**

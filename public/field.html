@@ -505,6 +505,12 @@
   .evgal-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block; }
   .evgal-item input { font-size: 16px; padding: 8px 10px; }
   .evgal-item { position: relative; }
+  .pm-item[draggable="true"] { cursor: grab; } .pm-item.drag { opacity: .45; } .pm-item.over { outline: 2px solid #B3A6FF; }
+  .pm-item .cr { font-size: 13px; color: var(--dim, #9aa); margin: 0; overflow-wrap: anywhere; }
+  .pm-item .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pm-item .acts button { font-size: 13px; padding: 6px 10px; min-height: 34px; }
+  .pm-video { display: grid; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+  .pm-video video { width: 100%; max-height: 320px; border-radius: 10px; background: #000; }
   .evgal-item .evgal-rm { position: absolute; top: 12px; right: 12px; z-index: 1; min-height: 0; padding: 4px 8px; border: 0; border-radius: 8px; background: rgba(17,19,18,.85); color: var(--danger); font-size: 12.5px; font-weight: 700; width: auto; }
   .evgal .addphoto { width: auto; height: auto; min-height: 120px; }
   /* W-315 (Brian 22:18, panel-gaps 6-one-queue + 7-needs-you-and-ai): Waiting on you. Needs you, then AI can fix;
@@ -828,10 +834,28 @@
         <p class="note" id="cover-info" style="margin:6px 0 0"></p>
         <div class="row">
           <button class="ghost" id="cover-replace">Replace this image</button>
+          <button class="ghost" id="cover-credit">Edit credit</button>
           <button class="danger" id="cover-reject">Not this place</button>
           <button class="ghost" id="dupe-report">Same as another place</button>
         </div>
         <p class="note" id="flag-result" style="margin:6px 0 0" hidden></p>
+      </div>
+      <!-- W-354 (OPS-367, Brian 28 Nov): a place's own photos (up to 8, after the cover) and one video, each with a
+           credit AND a licence. landmarks.gallery [{url, path, credit, licence}], landmarks.video
+           {url, path, poster_url, credit, licence, seconds}. Admin, on a saved place. -->
+      <div class="pmedia" id="pm-block" hidden>
+        <label>More photos (up to 8)</label>
+        <p class="sub" style="margin:0 0 6px">After the cover on the place page. Drag, or use ‹ ›, to change the order.</p>
+        <div class="evgal" id="pm-gal"></div>
+        <div class="row" style="margin-top:6px"><button class="ghost" id="pm-add" type="button">Add a photo</button></div>
+        <input id="in-pm-gal" type="file" accept="image/*" hidden>
+        <input id="pm-link" type="text" inputmode="url" autocomplete="off" autocapitalize="off" style="margin-top:8px"
+               placeholder="Or paste a Wikimedia Commons link">
+        <label style="margin-top:14px">Video (one, .mp4)</label>
+        <div id="pm-video"></div>
+        <div class="row" style="margin-top:6px"><button class="ghost" id="pm-vadd" type="button">Add a video</button></div>
+        <input id="in-pm-video" type="file" accept="video/mp4,.mp4" hidden>
+        <p class="note" id="pm-note" style="margin:6px 0 0" hidden></p>
       </div>
       <div class="thumbs" id="f-thumbs">
         <button class="addphoto" id="btn-camera">Camera</button>
@@ -850,8 +874,10 @@
            can see. -->
       <input id="stock-link" type="text" inputmode="url" autocomplete="off"
              autocapitalize="off" style="margin-top:8px"
-             placeholder="Or paste a Pexels or Unsplash link">
+             placeholder="Or paste a Pexels, Unsplash or Wikimedia Commons link">
       <p class="note" id="stock-note" style="margin:6px 0 0" hidden></p>
+      <!-- W-355: the first photo becomes the cover, so it says whose it is. -->
+      <p class="note" id="newcover-credit" style="margin:6px 0 0" hidden><span></span> <button class="linkish" id="newcover-credit-btn" type="button">Change</button></p>
     </div>
 
     <div class="fg">
@@ -983,6 +1009,13 @@
 
     <div id="finish-list"></div>
     <button class="ghost" id="finish-more" hidden style="width:100%;margin-top:12px">Load more</button>
+  </div>
+
+  <!-- W-355: covers credited to an admin username (an uploaded Wikimedia photo said 'admin'). -->
+  <div class="wrap" id="pane-credits" hidden>
+    <h1>Needs a credit</h1>
+    <p class="sub" id="credits-sub">Covers credited to an admin username. Tap one to say whose photo it is.</p>
+    <div id="credits-list"></div>
   </div>
 
   <!-- queue -->
@@ -1311,9 +1344,43 @@
       <button class="opt" id="replace-lib">Choose a file<small>Photo or video from this device</small></button>
       <label for="replace-link" style="margin-top:10px">Or paste a stock link</label>
       <input id="replace-link" type="text" inputmode="url" autocomplete="off"
-             autocapitalize="off" placeholder="A Pexels or Unsplash link">
+             autocapitalize="off" placeholder="A Pexels, Unsplash or Wikimedia Commons link">
       <p class="note" id="replace-note" style="margin:6px 0 0" hidden></p>
       <button class="linkish" id="replace-close" style="margin-top:10px">Close</button>
+    </div>
+  </div>
+
+  <!-- W-355 (Brian 28 Nov 17:3x): whose photo is this? One sheet for a new cover, a replacement and an existing
+       cover's credit. 'Someone else's' needs an author AND a licence; a Commons link fills both. -->
+  <div class="sheet" id="credit-sheet" hidden>
+    <div>
+      <h1 style="margin-top:0">Whose photo is this?</h1>
+      <p class="sub" id="cr-what"></p>
+      <div class="chips" style="margin:4px 0 12px">
+        <button class="chip" id="cr-mine" aria-pressed="true">Mine</button>
+        <button class="chip" id="cr-other" aria-pressed="false">Someone else&rsquo;s</button>
+      </div>
+      <p class="note" id="cr-mine-note" style="margin:0 0 10px"></p>
+      <div id="cr-other-box" hidden>
+        <label for="cr-commons">Paste a Wikimedia Commons link</label>
+        <input id="cr-commons" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
+               placeholder="commons.wikimedia.org/wiki/File:… or upload.wikimedia.org/…">
+        <p class="note" id="cr-commons-note" style="margin:4px 0 10px" hidden></p>
+        <label for="cr-author">Credit (who took it)</label>
+        <input id="cr-author" type="text" autocomplete="off" placeholder="The photographer or the account">
+        <label for="cr-licence" style="margin-top:10px">Licence</label>
+        <select id="cr-licence" style="width:100%">
+          <option value="">Choose the licence</option>
+          <option>CC BY 4.0</option><option>CC BY-SA 4.0</option><option>CC BY-SA 3.0</option><option>CC BY 2.0</option>
+          <option value="CC0">CC0 / public domain</option><option value="other">Other</option>
+        </select>
+        <input id="cr-licence-other" type="text" autocomplete="off" placeholder="The licence, as the source writes it" hidden style="margin-top:6px">
+        <label for="cr-source" style="margin-top:10px">Source link (optional)</label>
+        <input id="cr-source" type="text" inputmode="url" autocomplete="off" autocapitalize="off" placeholder="Where the photo came from">
+      </div>
+      <p class="note err" id="cr-note" style="margin:8px 0 0" hidden></p>
+      <button class="primary" id="cr-save" style="width:100%;margin-top:12px" disabled>Use this credit</button>
+      <button class="linkish" id="cr-close" style="margin-top:10px">Cancel</button>
     </div>
   </div>
 
@@ -1393,6 +1460,7 @@
   <div>
     <h1 style="margin-top:0">Suna Panel</h1>
     <button class="opt" id="menu-finish">Finish these<small>Places missing a photo, hours or a description</small></button>
+    <button class="opt" id="menu-credits" hidden>Needs a credit <span class="badge" id="credits-count" hidden></span><small>Covers credited to an admin, not the photographer</small></button>
     <button class="opt" id="menu-queue">Queue<small id="menu-queue-sub">Nothing waiting</small></button>
     <button class="opt" id="menu-country" hidden>Country<small>Hero image, subtitle, foods and apps</small></button>
     <button class="opt" id="menu-events" hidden>Event photos<small>Upcoming events, missing photos first</small></button>
@@ -1448,7 +1516,7 @@
 <div class="sheet" id="dupe-sheet" hidden>
   <div>
     <h1 style="margin-top:0">Already in the catalogue?</h1>
-    <p class="sub">Something with a similar name is within 150m.</p>
+    <p class="sub">The same name in this city, or a similar name within 150m.</p>
     <div id="dupe-options"></div>
     <button class="ghost" id="dupe-different" style="width:100%;margin-top:8px">No, this is a different place</button>
     <button class="linkish" id="dupe-close" style="margin-top:12px">Cancel</button>
@@ -1491,7 +1559,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v69';
+const BUILD = 'field-v71';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -2020,6 +2088,20 @@ function renderHours() {
   const box = $('hours-grid');
   if (!box) return;
   box.innerHTML = '';
+
+  // W-355: a place with no hours says so. The grid's 09:00 to 18:00 pickers read as real hours (Masjid Negara has
+  // none stored), so they only appear once he asks to add hours; still nothing is written until he changes one.
+  if (!Object.keys(cap.hours || {}).length && !cap.addingHours) {
+    const none = document.createElement('div');
+    none.className = 'hnone';
+    none.innerHTML = '<p class="note" style="margin:0 0 8px">Hours not listed.</p>';
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'ghost'; add.id = 'hours-add'; add.textContent = 'Add hours';
+    add.onclick = () => { cap.addingHours = true; renderHours(); };
+    none.appendChild(add);
+    box.appendChild(none);
+    return;
+  }
 
   for (const day of MON_FIRST) {
     const entry = cap.hours[day];
@@ -3425,6 +3507,28 @@ async function addStockPhoto(link) {
   }
 }
 
+/** W-355: a Wikimedia Commons photo by its link: the credit sheet shows Commons' author and licence to confirm,
+ *  then the image is added like any other photo, carrying that provenance. */
+async function addCommonsPhoto(file) {
+  stockNote('Reading Commons…');
+  try {
+    const info = await commonsInfo(file);
+    if (!info || !info.image) { stockNote('Commons has no file by that name.', true); return false; }
+    const prov = await askCredit({ what: 'From Wikimedia Commons. Check the author and the licence.',
+      start: { source: 'commons', ref: 'commons:' + info.file + ' · ' + info.licence, photographer: info.author, image: info.image } });
+    if (!prov) { stockNote(''); return false; }
+    const r = await fetch(prov.image || info.image);
+    if (!r.ok) { stockNote('That image could not be fetched from Commons.', true); return false; }
+    const { blob, width, height } = await reencode(await r.blob());
+    cap.photos.push({ photoId: crypto.randomUUID(), blob, width, height,
+      stock: { provider: prov.source, ref: prov.ref, photographer: prov.photographer } });
+    markTouched('cover');
+    renderThumbs(); renderSaveState();
+    stockNote('Added: ' + prov.photographer + ', ' + String(prov.ref).split(' · ').pop() + '.');
+    return true;
+  } catch { stockNote('That image could not be fetched from Commons.', true); return false; }
+}
+
 /** W-213 (2): run `fn` when a link box's value is ready: after a paste lands, on
  *  Enter, or on change (leaving the box). Typing clears an old note, nothing more. */
 function onLinkReady(id, fn) {
@@ -3446,8 +3550,10 @@ onLinkReady('stock-link', async () => {
     stockNote(UNSPLASH_PAGE_HELP, true);
     return;                                   // leave it in the box to edit
   }
+  const cfile = !link ? commonsFileFromLink($('stock-link').value) : null;
+  if (cfile) { $('stock-link').value = ''; freshIfUntouched(); await addCommonsPhoto(cfile); return; }
   if (!link) {
-    stockNote($('stock-link').value.trim() ? 'Not a Pexels or Unsplash link.' : '');
+    stockNote($('stock-link').value.trim() ? 'Not a Pexels, Unsplash or Wikimedia Commons link.' : '');
     return;
   }
   $('stock-link').value = '';
@@ -3906,7 +4012,31 @@ async function deleteStored(entry) {
   }
 }
 
+/** W-355: 'Cover credit: Mine (<username>)' or the author and licence, under the strip, for the photo that will
+ *  become the cover (the first). */
+function renderNewCoverCredit() {
+  const el = $('newcover-credit'); if (!el) return;
+  const first = cap.photos[0];
+  if (!first || cap.hadCover) { el.hidden = true; return; }
+  const st = first.stock;
+  el.querySelector('span').textContent = 'Cover credit: ' + (st
+    ? (st.photographer || 'no name') + (String(st.ref || '').includes(' · ') ? ', ' + String(st.ref).split(' · ').pop() : (st.provider ? ', ' + capitalise(st.provider) : ''))
+    : 'Mine (' + (profile.username || 'you') + ')');
+  el.hidden = false;
+}
+$('newcover-credit-btn').onclick = async () => {
+  const first = cap.photos[0]; if (!first) return;
+  const st = first.stock;
+  const prov = await askCredit({ what: 'The first photo becomes the cover.',
+    start: st ? { source: st.provider, ref: st.ref, photographer: st.photographer } : { source: 'user' } });
+  if (!prov) return;
+  first.stock = prov.source === 'user' ? null : { provider: prov.source, ref: prov.ref, photographer: prov.photographer };
+  markTouched('cover');
+  renderNewCoverCredit(); renderSaveState();
+};
+
 function renderThumbs() {
+  setTimeout(renderNewCoverCredit, 0);
   const box = $('f-thumbs');
   box.querySelectorAll('.thumb').forEach((n) => n.remove());
 
@@ -4374,7 +4504,30 @@ let dupeDismissed = false;
 async function runDuplicateCheck() {
   $('dupe-note').hidden = true;
   dupeCandidates = [];
-  if (cap.lat == null || !navigator.onLine || cap.editing) return;
+  if (!navigator.onLine || cap.editing) return;
+  // W-354 (OPS-367): the same name anywhere in the city, and hidden rows too ('Hidden on purpose. Don't add it
+  // again.'). Hidden rows need panel_place_matches (admin-only RPC, staged for Brian's yes); until it exists the
+  // visible rows are checked as before, plus the same name in the city.
+  const typed = cap.name.trim().toLowerCase();
+  try {
+    const { data, error } = await db.rpc('panel_place_matches', { p_name: cap.name.trim(), p_city: cap.cityId || null, p_lat: cap.lat, p_lng: cap.lon });
+    if (!error && Array.isArray(data)) {
+      dupeCandidates = data
+        .filter((r) => r.same_name || (r.km != null && r.km <= 0.15 && (!typed || nameLooksSame(typed, (r.name || '').toLowerCase()))))
+        .sort((a, b) => (b.is_hidden - a.is_hidden) || ((a.km ?? 99) - (b.km ?? 99)));
+      dupeNote();
+      return;
+    }
+  } catch { /* not there yet: the checks below */ }
+  try {
+    if (typed && cap.cityId) {
+      const { data } = await db.from('landmarks').select('id,name,latitude,longitude,cover_image_url,is_hidden')
+        .eq('city_id', cap.cityId).ilike('name', cap.name.trim().replace(/[%_]/g, '')).limit(5);
+      (data || []).forEach((r) => dupeCandidates.push({ ...r, same_name: true,
+        km: cap.lat != null && r.latitude != null ? haversineKm(cap.lat, cap.lon, r.latitude, r.longitude) : null }));
+    }
+  } catch { /* skip */ }
+  if (cap.lat == null) { dupeNote(); return; }
   try {
     // ±0.002° ≈ 220m. A bounding box, because no PostGIS RPC is exposed to the
     // publishable key and a box is enough to catch a re-capture.
@@ -4384,18 +4537,26 @@ async function runDuplicateCheck() {
       .gte('longitude', cap.lon - 0.002).lte('longitude', cap.lon + 0.002)
       .limit(20);
     if (error) return;
-    const typed = cap.name.trim().toLowerCase();
-    dupeCandidates = (data || [])
+    const seen = new Set(dupeCandidates.map((r) => r.id));
+    dupeCandidates = dupeCandidates.concat((data || [])
+      .filter((r) => !seen.has(r.id))
       .map((r) => ({ ...r, km: haversineKm(cap.lat, cap.lon, r.latitude, r.longitude) }))
       .filter((r) => r.km <= 0.15)
-      .filter((r) => !typed || nameLooksSame(typed, (r.name || '').toLowerCase()))
-      .sort((a, b) => a.km - b.km);
-    if (dupeCandidates.length && !dupeDismissed) {
-      $('dupe-note').textContent = dupeCandidates.length
-        + ' place' + (dupeCandidates.length === 1 ? '' : 's') + ' within 150m look similar. Tap Save to review.';
-      $('dupe-note').hidden = false;
-    }
+      .filter((r) => !typed || nameLooksSame(typed, (r.name || '').toLowerCase())))
+      .sort((a, b) => (a.km ?? 99) - (b.km ?? 99));
+    dupeNote();
   } catch { /* offline or refused — §9 says skip rather than block a capture */ }
+}
+
+/** The line under the form: how many look the same, and whether one is hidden on purpose. */
+function dupeNote() {
+  if (!dupeCandidates.length || dupeDismissed) return;
+  const hidden = dupeCandidates.some((r) => r.is_hidden);
+  const same = dupeCandidates.some((r) => r.same_name);
+  $('dupe-note').textContent = hidden ? 'A place with this name is hidden on purpose. Don’t add it again. Tap Save to see it.'
+    : same ? 'A place with this name is already in this city. Tap Save to review.'
+    : dupeCandidates.length + ' place' + (dupeCandidates.length === 1 ? '' : 's') + ' within 150m look similar. Tap Save to review.';
+  $('dupe-note').hidden = false;
 }
 
 /** Close enough to be worth asking about, not close enough to decide. */
@@ -4412,14 +4573,21 @@ function nameLooksSame(a, b) {
 
 function showDuplicateSheet() {
   $('dupe-options').innerHTML = '';
+  const anyHidden = dupeCandidates.some((r) => r.is_hidden);
   dupeCandidates.slice(0, 6).forEach((r) => {
     const b = document.createElement('button');
     b.className = 'opt';
-    b.innerHTML = (r.name || 'Unnamed') + '<small>' + Math.round(r.km * 1000) + 'm away, '
-      + (r.cover_image_url ? 'has a cover' : 'no cover — worth a photo') + '</small>';
-    b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
+    const where = r.km != null ? Math.round(r.km * 1000) + 'm away' : 'elsewhere in this city';
+    const name = document.createElement('span'); name.textContent = r.name || 'Unnamed';
+    const sm = document.createElement('small');
+    sm.textContent = r.is_hidden ? 'Hidden on purpose. Don’t add it again.' : where + ', ' + (r.cover_image_url ? 'has a cover' : 'no cover, worth a photo');
+    b.append(name, sm);
+    if (r.is_hidden) b.disabled = true;
+    else b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
     $('dupe-options').appendChild(b);
   });
+  // W-354: no Save past a place hidden on purpose.
+  $('dupe-different').hidden = anyHidden;
   $('dupe-sheet').hidden = false;
 }
 $('dupe-close').onclick = () => { $('dupe-sheet').hidden = true; };
@@ -4580,6 +4748,9 @@ function buildRow() {
     // `blank()` seeds 'user', so a capture created here is still 'user'.
     origin: cap.origin || 'user',
     place_kind: 'place',
+    // W-354 (OPS-367): a row the Panel made says so; the runs and the Monday review read it. Never on an edit (dropped
+    // by onlyWhatWasEdited, which doesn't keep it).
+    ...(cap.editing ? {} : { added_via: 'panel' }),
     // **An existing row is only ever improved, never demoted.**
     //
     // `is_hidden: !complete` is right for a NEW capture and dangerous for an
@@ -4631,11 +4802,12 @@ function coverStock() {
  */
 const ALWAYS_WRITE = new Set([
   'id', 'submitted_by', 'origin', 'place_kind', 'approval_status', 'is_hidden',
-  'photographer_name', 'coordinate_verified_at', 'last_verified_at',
-  // The cover and its provenance travel together or not at all — a cover with
-  // neither a photographer nor a ref is what §3 refuses.
-  'cover_source', 'cover_source_ref',
+  'coordinate_verified_at', 'last_verified_at',
 ]);
+// W-355 (Brian 28 Nov 17:3x: "saving re-saves the whole form"): the credit and its provenance were in ALWAYS_WRITE,
+// so every save of an existing place re-stamped his username over a Commons credit. They travel only with a new
+// cover (a photo in this save) or a changed credit.
+const COVER_KEYS = ['photographer_name', 'cover_source', 'cover_source_ref'];
 const EDIT_KEYS = {
   name: ['name'],
   note: ['description'],
@@ -4649,6 +4821,7 @@ const EDIT_KEYS = {
 
 function onlyWhatWasEdited(row) {
   const keep = new Set(ALWAYS_WRITE);
+  if (cap.photos.length && !cap.hadCover) COVER_KEYS.forEach((c) => keep.add(c));
   (cap.touched || new Set()).forEach((what) => {
     (EDIT_KEYS[what] || []).forEach((col) => keep.add(col));
   });
@@ -5638,6 +5811,7 @@ function openMenu() {
   $('menu-inbox').hidden = !(profile && profile.is_admin);
   $('menu-wait').hidden = !(profile && profile.is_admin);
   $('menu-orgs').hidden = !(profile && profile.is_admin);
+  $('menu-credits').hidden = !(profile && profile.is_admin);
   $('menu-feedback').hidden = !(profile && profile.is_admin);
   $('menu-door').hidden = !(profile && profile.is_admin);
   idbAll('queue').then((items) => {
@@ -5655,6 +5829,7 @@ function closeMenu() {
 $('btn-menu').onclick     = () => openMenu();
 $('menu-close').onclick   = () => closeMenu();
 $('menu-finish').onclick  = () => { closeMenu(); switchTab('finish'); };
+$('menu-credits').onclick = () => { closeMenu(); switchTab('credits'); };
 $('menu-queue').onclick   = () => { closeMenu(); switchTab('queue'); };
 $('menu-country').onclick = () => { closeMenu(); switchTab('country'); };
 $('menu-events').onclick = () => { closeMenu(); switchTab('events'); };
@@ -5675,7 +5850,7 @@ $('menu-signout').onclick = () => { closeMenu(); signOut(); };
 function pnSkel(id) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="pn-skel"></div><div class="pn-skel"></div><div class="pn-skel"></div>'; }
 function switchTab(which) {
   // Only `capture` still has a button in the bar; the rest are menu entries.
-  for (const t of ['home', 'capture', 'finish', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback']) {
+  for (const t of ['home', 'capture', 'finish', 'credits', 'queue', 'country', 'events', 'creators', 'addplace', 'claims', 'review', 'payments', 'door', 'orders', 'inbox', 'wait', 'orgs', 'feedback']) {
     $('pane-' + t).hidden = t !== which;
   }
   $('tab-capture').setAttribute('aria-selected', String(which === 'home'));
@@ -5689,6 +5864,7 @@ function switchTab(which) {
   // scroll and its order. The filter chips and the scope select reload it
   // themselves when they change, which is when it should reload.
   if (which === 'finish') { buildFinishScope(); if (!finishRows.length) loadFinishList(false); }
+  if (which === 'credits') loadCredits();
   if (which === 'queue') loadQueueList();
   if (which === 'country') renderCountryTab();
   if (which === 'events') loadEventList();
@@ -5712,7 +5888,7 @@ function switchTab(which) {
    rule lives in one place) and its count is the menu badge's. A count turns purple when > 0. */
 const HOME_GROUPS = [
   ['Waiting on you', [['wait', 'Waiting on you', 'Only what needs your call']]],   // W-315: first
-  ['Places', [['finish', 'Finish these', 'Missing a photo, hours or a description'], ['review', 'Review places', 'Keep details current, the most used first'],
+  ['Places', [['finish', 'Finish these', 'Missing a photo, hours or a description'], ['credits', 'Needs a credit', 'Covers credited to an admin, not the photographer'], ['review', 'Review places', 'Keep details current, the most used first'],
               ['addplace', 'Add from Google Maps link', 'A tipped place, straight from Google Maps'], ['queue', 'Upload queue', 'Places still uploading from this phone']]],
   ['Events and organisers', [['events', 'Event photos', 'Upcoming events without our photo'], ['claims', 'Claims', 'Organisers waiting for an answer'], ['orgs', 'Organisers and partners', 'Every organiser, their plan and live events'], ['feedback', 'Feedback', 'What people sent from the app'],
                              ['creators', 'Creators', 'The purple Creator tag']]],
@@ -5723,7 +5899,7 @@ const SIDE_GROUPS = [
   ['Reports', [['review', 'Places'], ['events', 'Events'], ['orgs', 'Organisers and partners'], ['orders', 'Money and tickets'], ['feedback', 'Feedback']]],
   ['Tools', [['capture', 'Add a place'], ['addplace', 'Google Maps link'], ['queue', 'Upload queue'], ['door', 'Door']]],
 ];
-const HOME_COUNT = { claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count', wait: 'wait-count' };
+const HOME_COUNT = { credits: 'credits-count', claims: 'claims-count', orders: 'orders-count', payments: 'payments-count', inbox: 'inbox-count', wait: 'wait-count' };
 /** W-288: the feature row is a toggle (the purple switch shows aria-pressed), no star glyph. */
 function featuredHTML() {
   return '<span>Feature on its Welcome to screen<small>Fills the Top Places block. Added after the place uploads.</small></span><i class="tog" aria-hidden="true"></i>';
@@ -5915,6 +6091,192 @@ async function fetchFinishRows() {
     }
   }
   return [];
+}
+
+/* ── W-354: a place's photos and video ──────────────────────────────────────────────────────── */
+const PM_MAX = 8;
+function pmNote(msg, bad) { const el = $('pm-note'); el.textContent = msg || ''; el.hidden = !msg; el.className = 'note' + (bad ? ' err' : ''); }
+const pmCredit = (g) => [String(g.credit || '').replace(/^(photo|video)(\s*:|\s+by\b)\s*/i, ''), g.licence].filter(Boolean).join(', ');
+
+/** One write: the gallery (null when empty) and/or the video, read back into the form. */
+async function pmSave(patch, okMsg) {
+  if (!cap.id) return false;
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id).select('id,gallery,video'));
+  if (res.error || !res.data || !res.data.length) {
+    pmNote(res.error && res.error.code === 'signed_out' ? res.error.message : 'Couldn’t save: ' + ((res.error && res.error.message) || 'the place was not updated.'), true);
+    return false;
+  }
+  cap.gallery = Array.isArray(res.data[0].gallery) ? res.data[0].gallery : [];
+  cap.video = res.data[0].video || null;
+  renderPlaceMedia(); pmNote(okMsg || '');
+  return true;
+}
+const pmGalleryPatch = (list) => ({ gallery: list.length ? list : null });
+
+function renderPlaceMedia() {
+  const block = $('pm-block'); if (!block) return;
+  block.hidden = !(cap.editing && cap.id && profile && profile.is_admin);
+  if (block.hidden) return;
+  const box = $('pm-gal'); box.replaceChildren();
+  const gal = cap.gallery || [];
+  gal.forEach((g, i) => {
+    const card = document.createElement('div'); card.className = 'evgal-item pm-item'; card.draggable = true; card.dataset.i = String(i);
+    const im = document.createElement('img'); im.src = sizedURL(g.url, 360); im.alt = ''; im.loading = 'lazy';
+    im.onerror = () => { if (im.src !== g.url) im.src = g.url; };
+    const cr = document.createElement('p'); cr.className = 'cr'; cr.textContent = pmCredit(g) || 'No credit yet';
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const mk = (label, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls || 'ghost'; b.textContent = label; b.onclick = fn; acts.appendChild(b); return b; };
+    const move = (d) => { const j = i + d; if (j < 0 || j >= gal.length) return; const next = gal.slice(); [next[i], next[j]] = [next[j], next[i]]; pmSave(pmGalleryPatch(next), 'Order saved.'); };
+    if (i > 0) mk('‹', () => move(-1)).setAttribute('aria-label', 'Move earlier');
+    if (i < gal.length - 1) mk('›', () => move(1)).setAttribute('aria-label', 'Move later');
+    mk('Credit', async () => {
+      const prov = await askCredit({ what: 'This photo’s credit on the place page.', needLicence: true,
+        start: { source: 'other', ref: (g.licence ? ' · ' + g.licence : ''), photographer: String(g.credit || '').replace(/^photo(\s*:|\s+by\b)\s*/i, '') } });
+      if (!prov) return;
+      const next = gal.map((x, n) => n === i ? Object.assign({}, x, { credit: prov.photographer, licence: String(prov.ref).split(' · ').pop() }) : x);
+      pmSave(pmGalleryPatch(next), 'Credit saved.');
+    });
+    mk('Remove', () => pmSave(pmGalleryPatch(gal.filter((_, n) => n !== i)), 'Removed from the place page.'), 'danger');
+    card.append(im, cr, acts);
+    card.addEventListener('dragstart', (e) => { card.classList.add('drag'); e.dataTransfer.setData('text/plain', String(i)); });
+    card.addEventListener('dragend', () => card.classList.remove('drag'));
+    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('over'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault(); card.classList.remove('over');
+      const from = Number(e.dataTransfer.getData('text/plain')); if (!Number.isFinite(from) || from === i) return;
+      const next = gal.slice(); const [moved] = next.splice(from, 1); next.splice(i, 0, moved);
+      pmSave(pmGalleryPatch(next), 'Order saved.');
+    });
+    box.appendChild(card);
+  });
+  $('pm-add').hidden = gal.length >= PM_MAX;
+  $('pm-link').hidden = gal.length >= PM_MAX;
+  // the video
+  const vb = $('pm-video'); vb.replaceChildren();
+  const v = cap.video;
+  if (v && v.url) {
+    const w = document.createElement('div'); w.className = 'pm-video';
+    const el = document.createElement('video'); el.src = v.url; if (v.poster_url) el.poster = v.poster_url; el.controls = true; el.muted = true; el.playsInline = true; el.preload = 'none';
+    const cr = document.createElement('p'); cr.className = 'cr'; cr.textContent = (pmCredit(v) || 'No credit yet') + (v.seconds ? ', ' + v.seconds + ' s' : '') + (v.poster_url ? '' : '. No poster: the place page won’t show it.');
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'danger'; rm.textContent = 'Remove the video';
+    rm.onclick = () => pmSave({ video: null }, 'Video removed from the place page.');
+    w.append(el, cr, rm); vb.appendChild(w);
+  }
+  $('pm-vadd').textContent = v && v.url ? 'Replace the video' : 'Add a video';
+}
+
+/** A photo into our storage: 1600 px JPEG (EXIF gone with the canvas), then its credit, then the row. */
+async function pmAddPhotoBlob(fileOrBlob, start) {
+  if ((cap.gallery || []).length >= PM_MAX) { pmNote('That’s 8 already. Remove one first.', true); return; }
+  const prov = await askCredit({ what: 'Who took it, and the licence it’s under. Both show on the place page.', needLicence: true, start });
+  if (!prov) { pmNote(''); return; }
+  pmNote('Preparing…');
+  try {
+    const file = fileOrBlob instanceof File ? fileOrBlob : new File([fileOrBlob], 'photo.jpg', { type: fileOrBlob.type || 'image/jpeg' });
+    const { blob } = await evResize(file);
+    const path = cap.id + '/gallery-' + stamp() + '.jpg';
+    const up = await authedWrite(() => db.storage.from('landmark-covers').upload(path, blob, { contentType: 'image/jpeg', upsert: false }));
+    if (up.error) { pmNote(uploadMessage(up.error, 'landmark-covers'), true); return; }
+    const url = db.storage.from('landmark-covers').getPublicUrl(path).data.publicUrl;
+    const entry = { url, path, credit: prov.photographer, licence: String(prov.ref).split(' · ').pop() };
+    await pmSave(pmGalleryPatch((cap.gallery || []).concat([entry])), 'Added to the place page.');
+  } catch (e) { pmNote(e.message || 'Couldn’t add that photo.', true); }
+}
+$('pm-add').onclick = () => $('in-pm-gal').click();
+$('in-pm-gal').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) pmAddPhotoBlob(f, null); };
+onLinkReady('pm-link', async () => {
+  const file = commonsFileFromLink($('pm-link').value);
+  if (!file) { pmNote('Not a Wikimedia Commons file link.', true); return; }
+  $('pm-link').value = '';
+  pmNote('Reading Commons…');
+  try {
+    const info = await commonsInfo(file);
+    if (!info || !info.image) { pmNote('Commons has no file by that name.', true); return; }
+    const r = await fetch(info.image);
+    if (!r.ok) { pmNote('That image could not be fetched from Commons.', true); return; }
+    await pmAddPhotoBlob(await r.blob(), { source: 'commons', ref: 'commons:' + info.file + ' · ' + info.licence, photographer: info.author, image: info.image });
+  } catch { pmNote('That image could not be fetched from Commons.', true); }
+});
+
+/** A frame from the video, as a JPEG, for its poster (the place page shows a video only with one). */
+function pmPosterFrom(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+    const fail = (m) => { URL.revokeObjectURL(url); reject(new Error(m)); };
+    const t = setTimeout(() => fail('The video took too long to open.'), 20000);
+    v.onerror = () => { clearTimeout(t); fail('This video can’t be read here. Is it H.264 .mp4?'); };
+    v.onloadedmetadata = () => { v.currentTime = Math.min(1, (v.duration || 2) / 4); };
+    v.onseeked = () => {
+      clearTimeout(t);
+      const w = v.videoWidth, h = v.videoHeight;
+      if (!w || !h) return fail('This video has no picture.');
+      const scale = Math.min(1, 1280 / Math.max(w, h));
+      const c = document.createElement('canvas'); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      c.toBlob((b) => { URL.revokeObjectURL(url); b ? resolve({ blob: b, seconds: Math.round(v.duration || 0) || null }) : reject(new Error('No poster frame.')); }, 'image/jpeg', 0.85);
+    };
+  });
+}
+$('pm-vadd').onclick = () => $('in-pm-video').click();
+$('in-pm-video').onchange = async (e) => {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!f || !cap.id) return;
+  // iPhones can't play .webm or .ogg; the place page needs an .mp4.
+  if (!(f.type === 'video/mp4' || /\.mp4$/i.test(f.name))) { pmNote('Needs an .mp4. Convert it first.', true); return; }
+  const prov = await askCredit({ what: 'Who made the video, and its licence. Both show on the place page.', needLicence: true });
+  if (!prov) return;
+  pmNote('Reading the video…');
+  try {
+    const { blob: poster, seconds } = await pmPosterFrom(f);
+    const s = stamp();
+    pmNote('Uploading the video…');
+    const vp = cap.id + '/video-' + s + '.mp4', pp = cap.id + '/video-' + s + '-poster.jpg';
+    const up1 = await authedWrite(() => db.storage.from('landmark-covers').upload(vp, f, { contentType: 'video/mp4', upsert: false }));
+    if (up1.error) { pmNote(uploadMessage(up1.error, 'landmark-covers'), true); return; }
+    const up2 = await authedWrite(() => db.storage.from('landmark-covers').upload(pp, poster, { contentType: 'image/jpeg', upsert: false }));
+    if (up2.error) { pmNote(uploadMessage(up2.error, 'landmark-covers'), true); return; }
+    const pub = (p) => db.storage.from('landmark-covers').getPublicUrl(p).data.publicUrl;
+    await pmSave({ video: { url: pub(vp), path: vp, poster_url: pub(pp), credit: prov.photographer, licence: String(prov.ref).split(' · ').pop(), seconds } }, 'Video added to the place page.');
+  } catch (err) { pmNote(err.message || 'Couldn’t add that video.', true); }
+};
+
+/* ── W-355: Needs a credit ─────────────────────────────────────────────────────────────────── */
+// An uploaded cover was always credited to the operator, so Wikimedia photos read 'admin'. These are the covers
+// whose credit is an admin's username on a 'user' cover; each opens the place with the credit sheet.
+/** The badge only (no list): a head count. Hidden at 0. */
+async function countCredits() {
+  const names = [...new Set(['admin', profile && profile.username].filter(Boolean))];
+  const { count } = await db.from('landmarks').select('id', { count: 'exact', head: true })
+    .eq('cover_source', 'user').in('photographer_name', names).not('cover_image_url', 'is', null);
+  const c = $('credits-count'); if (c) { c.textContent = String(count || 0); c.hidden = !count; }
+}
+async function loadCredits() {
+  const list = $('credits-list');
+  list.innerHTML = '<p class="sub">Loading…</p>';
+  const names = [...new Set(['admin', profile && profile.username].filter(Boolean))];
+  const { data, error } = await db.from('landmarks')
+    .select('id,name,photographer_name,cover_image_url')
+    .eq('cover_source', 'user').in('photographer_name', names).not('cover_image_url', 'is', null)
+    .order('name').limit(500);
+  if (error) { list.innerHTML = '<p class="sub">Couldn’t load the list: ' + escapeHtml(error.message) + '</p>'; return; }
+  const rows = data || [];
+  const c = $('credits-count'); if (c) { c.textContent = String(rows.length); c.hidden = !rows.length; }
+  if (!rows.length) { list.innerHTML = '<p class="sub">Every cover has its photographer’s credit.</p>'; return; }
+  list.innerHTML = '';
+  for (const r of rows) {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = '<h3>' + escapeHtml(r.name || 'Unnamed') + '</h3><p>Credited to ' + escapeHtml(r.photographer_name) + '</p>';
+    d.onclick = async () => {
+      await openExisting(r.id);
+      switchTab('capture');
+      $('cover-credit').click();
+    };
+    list.appendChild(d);
+  }
 }
 
 async function loadFinishList(append) {
@@ -6567,6 +6929,8 @@ async function openExisting(id) {
   cap.coverSourceRef = data.cover_source_ref || null;
   cap.photographer = data.photographer_name || null;
   cap.submittedBy = data.submitted_by || null;
+  cap.gallery = Array.isArray(data.gallery) ? data.gallery : [];   // W-354
+  cap.video = data.video && typeof data.video === 'object' ? data.video : null;
   // Opening a place settles the name, so the search list does not reopen over
   // the row that was just chosen.
   nameSearchSettled = cap.name;
@@ -6608,6 +6972,7 @@ async function openExisting(id) {
  *  because nothing records where it came from — most of the catalogue, since
  *  those columns only exist from 20260921000002 onwards. */
 function renderCoverInfo() {
+  try { renderPlaceMedia(); } catch (e) { /* the media block never blocks the cover */ }
   const block = $('cover-block');
   const img = $('cover-img');
   const line = $('cover-info');
@@ -6989,6 +7354,153 @@ function ownProvenance() {
   };
 }
 
+/* ── W-355 (Brian 28 Nov 17:3x): whose photo is this? ───────────────────────────────────────
+ * "Almost all of my covers are Wikimedia photos whose licence requires credit", and an uploaded file was always
+ * credited to the operator. Every cover now says whose it is: 'Mine' (the username, as before) or 'Someone
+ * else's' (an author AND a licence, Save off until both are there). A Commons link fills both from the Commons
+ * API (shown to confirm), stored as the Commons covers already are: cover_source 'commons',
+ * cover_source_ref 'commons:<File name> · <licence>', photographer_name the author. Anything else: 'other',
+ * '<link> · <licence>'. */
+const CR_LICENCES = ['CC BY 4.0', 'CC BY-SA 4.0', 'CC BY-SA 3.0', 'CC BY 2.0', 'CC0'];
+
+/** The Commons file name in a file-page or upload.wikimedia.org link, or null. */
+function commonsFileFromLink(text) {
+  let u; try { u = new URL(String(text || '').trim()); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  const host = u.hostname.toLowerCase(), path = decodeURIComponent(u.pathname);
+  if (/(^|\.)wiki(m|p)edia\.org$/.test(host) && host !== 'upload.wikimedia.org' && host !== 'thumb.wikimedia.org') {
+    const m = path.match(/\/wiki\/(?:File|Image):(.+)$/i) || (u.hash || '').match(/^#\/media\/File:(.+)$/i);
+    return m ? m[1].replace(/_/g, ' ') : null;
+  }
+  if (host === 'upload.wikimedia.org' || host === 'thumb.wikimedia.org') {
+    // /wikipedia/commons/a/ab/Name.jpg or /wikipedia/commons/thumb/a/ab/Name.jpg/320px-Name.jpg
+    const m = path.match(/\/commons\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/i);
+    return m ? m[1].replace(/_/g, ' ') : null;
+  }
+  return null;
+}
+
+/** Commons' own record for a file: the author, the licence, a 1600 px copy. Null when Commons says nothing. */
+async function commonsInfo(file) {
+  const q = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo'
+    + '&iiprop=url%7Cextmetadata&iiurlwidth=1600&titles=' + encodeURIComponent('File:' + file);
+  const r = await fetch(q);
+  if (!r.ok) return null;
+  const j = await r.json();
+  const page = j && j.query && j.query.pages ? Object.values(j.query.pages)[0] : null;
+  const ii = page && page.imageinfo && page.imageinfo[0];
+  if (!ii) return null;
+  const meta = ii.extmetadata || {};
+  const text = (v) => { const d = document.createElement('div'); d.innerHTML = String((v && v.value) || ''); return d.textContent.replace(/\s+/g, ' ').trim(); };
+  let licence = text(meta.LicenseShortName);
+  if (/public domain|^pd\b|cc0/i.test(licence)) licence = 'CC0';
+  return { file: String(page.title || '').replace(/^File:/, ''), author: text(meta.Artist), licence,
+           image: ii.thumburl || ii.url, page: ii.descriptionurl || null };
+}
+
+let crState = null;   // { resolve, kind }
+
+function crLicence() {
+  const v = $('cr-licence').value;
+  return v === 'other' ? $('cr-licence-other').value.trim() : v;
+}
+function crSetLicence(lic) {
+  const hit = CR_LICENCES.find((x) => x.toLowerCase() === String(lic || '').toLowerCase());
+  $('cr-licence').value = hit || (lic ? 'other' : '');
+  $('cr-licence-other').hidden = $('cr-licence').value !== 'other';
+  $('cr-licence-other').value = hit ? '' : (lic || '');
+}
+function crMine(on) {
+  $('cr-mine').setAttribute('aria-pressed', String(on));
+  $('cr-other').setAttribute('aria-pressed', String(!on));
+  $('cr-other-box').hidden = on;
+  $('cr-mine-note').hidden = !on;
+  crValidate();
+}
+function crValidate() {
+  const mine = $('cr-mine').getAttribute('aria-pressed') === 'true';
+  const ok = mine || ($('cr-author').value.trim() && crLicence());
+  $('cr-save').disabled = !ok;
+  return ok;
+}
+function crNote(id, msg, bad) { const el = $(id); el.textContent = msg || ''; el.hidden = !msg; el.className = 'note' + (bad ? ' err' : ''); }
+
+/** The provenance the sheet says, in the three columns' shape (plus the Commons image when one was pasted). */
+function crProvenance() {
+  if ($('cr-mine').getAttribute('aria-pressed') === 'true') return ownProvenance();
+  const author = $('cr-author').value.trim(), licence = crLicence(), link = $('cr-source').value.trim();
+  if (crState && crState.commons && crState.commons.author === author) {
+    return { source: 'commons', ref: 'commons:' + crState.commons.file + ' · ' + licence, photographer: author, image: crState.commons.image };
+  }
+  return { source: 'other', ref: (link ? link + ' · ' : '') + licence, photographer: author };
+}
+
+/** Opens the sheet; resolves with the provenance, or null when cancelled. `start` pre-fills it. */
+function askCredit({ what = '', start = null, needLicence = false } = {}) {
+  return new Promise((resolve) => {
+    crState = { resolve, commons: null };
+    // W-354: a gallery photo or the video always says who and which licence ('Mine' would credit the operator).
+    $('cr-mine').hidden = needLicence;
+    $('cr-what').textContent = what;
+    $('cr-mine-note').textContent = 'Credited to ' + (profile.username || 'you') + '. Only for a photo you took.';
+    for (const id of ['cr-commons', 'cr-author', 'cr-source', 'cr-licence-other']) $(id).value = '';
+    crSetLicence('');
+    crNote('cr-commons-note', ''); crNote('cr-note', '');
+    if (start && start.source && start.source !== 'user') {
+      $('cr-author').value = start.photographer || '';
+      const lic = String(start.ref || '').split(' · ').pop();
+      crSetLicence(start.ref && start.ref.includes(' · ') ? lic : '');
+      if (start.source === 'commons') crState.commons = { file: String(start.ref).replace(/^commons:/, '').split(' · ')[0], author: start.photographer || '', image: start.image || null };
+      else if (start.ref && start.ref.includes(' · ')) $('cr-source').value = start.ref.split(' · ')[0];
+      crMine(false);
+    } else crMine(!needLicence && (!start || start.source === 'user'));
+    $('credit-sheet').hidden = false;
+  });
+}
+function crFinish(result) {
+  const st = crState; crState = null;
+  $('credit-sheet').hidden = true;
+  if (st) st.resolve(result);
+}
+$('cr-mine').onclick = () => crMine(true);
+$('cr-other').onclick = () => crMine(false);
+$('cr-close').onclick = () => crFinish(null);
+for (const id of ['cr-author', 'cr-licence-other', 'cr-source']) $(id).addEventListener('input', crValidate);
+$('cr-licence').onchange = () => { $('cr-licence-other').hidden = $('cr-licence').value !== 'other'; crValidate(); };
+$('cr-save').onclick = () => { if (crValidate()) crFinish(crProvenance()); };
+onLinkReady('cr-commons', async () => {
+  const file = commonsFileFromLink($('cr-commons').value);
+  if (!file) { crNote('cr-commons-note', 'Not a Wikimedia Commons file link.', true); return; }
+  crNote('cr-commons-note', 'Reading Commons…');
+  try {
+    const info = await commonsInfo(file);
+    if (!info) { crNote('cr-commons-note', 'Commons has no file by that name.', true); return; }
+    crState.commons = info;
+    $('cr-author').value = info.author || '';
+    crSetLicence(info.licence);
+    if (info.page) $('cr-source').value = info.page;
+    crNote('cr-commons-note', 'From Commons: ' + (info.author || 'no author listed') + ', ' + (info.licence || 'no licence listed') + '. Check them, then use this credit.');
+    crValidate();
+  } catch { crNote('cr-commons-note', 'Commons could not be reached. Type the credit instead.', true); }
+});
+
+/** The cover's credit, changed without touching the photo: the three provenance columns and nothing else. */
+async function saveCoverCredit(prov) {
+  const patch = { cover_source: prov.source, cover_source_ref: prov.ref, photographer_name: prov.photographer };
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id));
+  if (res.error) { flagResult(res.error.code === 'signed_out' ? res.error.message : 'The credit could not be saved. Nothing was changed.'); return false; }
+  cap.coverSource = prov.source; cap.coverSourceRef = prov.ref; cap.photographer = prov.photographer;
+  renderCoverInfo();
+  flagResult('Credit saved: ' + prov.photographer + '.');
+  return true;
+}
+$('cover-credit').onclick = async () => {
+  if (!cap.id || !cap.coverURL) return;
+  const prov = await askCredit({ what: 'The cover this place is showing. Only the credit changes.',
+    start: { source: cap.coverSource, ref: cap.coverSourceRef, photographer: cap.photographer } });
+  if (prov) await saveCoverCredit(prov);
+};
+
 $('cover-replace').onclick = () => openReplaceSheet({ kind: 'cover' });
 $('replace-close').onclick = () => closeReplaceSheet();
 $('replace-cam').onclick = () => $('in-replace-cam').click();
@@ -6998,7 +7510,11 @@ for (const id of ['in-replace-cam', 'in-replace-lib']) {
   $(id).onchange = async (e) => {
     const file = (e.target.files || [])[0];
     e.target.value = '';                        // so the same file can be picked twice
-    if (file) await applyReplacement(file, ownProvenance());
+    if (!file) return;
+    // W-355: whose photo is it? A file is only his when he says so.
+    const prov = replaceTarget && replaceTarget.kind === 'cover'
+      ? await askCredit({ what: 'The new cover. Its credit shows under it on the place page.' }) : ownProvenance();
+    if (prov) await applyReplacement(file, prov);
   };
 }
 
@@ -7006,7 +7522,25 @@ onLinkReady('replace-link', async () => {
   const raw = $('replace-link').value;
   const link = parseStockLink(raw);
   if (link && link.unsupported === 'unsplash-page') { replaceNote(UNSPLASH_PAGE_HELP, true); return; }
-  if (!link) { replaceNote(raw.trim() ? 'Not a Pexels or Unsplash link.' : ''); return; }
+  // W-355: a Wikimedia Commons link: its author and licence, confirmed in the credit sheet, then the image.
+  const cfile = !link && replaceTarget && replaceTarget.kind === 'cover' ? commonsFileFromLink(raw) : null;
+  if (cfile) {
+    $('replace-link').value = '';
+    replaceNote('Reading Commons…');
+    try {
+      const info = await commonsInfo(cfile);
+      if (!info || !info.image) { replaceNote('Commons has no file by that name.', true); return; }
+      const prov = await askCredit({ what: 'From Wikimedia Commons. Check the author and the licence.',
+        start: { source: 'commons', ref: 'commons:' + info.file + ' · ' + info.licence, photographer: info.author, image: info.image } });
+      if (!prov) { replaceNote(''); return; }
+      const r = await fetch(prov.image || info.image);
+      if (!r.ok) { replaceNote('That image could not be fetched from Commons.', true); return; }
+      const blob = await r.blob();
+      await applyReplacement(new File([blob], 'commons.jpg', { type: blob.type || 'image/jpeg' }), prov);
+    } catch { replaceNote('That image could not be fetched from Commons.', true); }
+    return;
+  }
+  if (!link) { replaceNote(raw.trim() ? 'Not a Pexels, Unsplash or Wikimedia Commons link.' : ''); return; }
   $('replace-link').value = '';
   replaceNote('Fetching the photo…');
   try {
@@ -8782,6 +9316,7 @@ async function loadProfile() {
   $('menu-door').hidden = !profile.is_admin;
   // W-202: the pending count on the menu row, fetched once per sign-in.
   if (profile.is_admin) loadClaims(false).catch(() => {});
+  if (profile.is_admin) countCredits().catch(() => {});   // W-355: the Needs a credit badge
   if (profile.is_admin) loadTickets(null).catch(() => {});
   if (profile.is_admin) loadOrders(false).catch(() => {});   // W-284: the due-today badge
   if (profile.is_admin) loadInbox(false).catch(() => {});    // W-308 G: the unread badge
