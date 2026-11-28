@@ -11,7 +11,7 @@ import { isGooglePhoto } from './_stock.js';
 
 const MAX_PHOTOS = 8;
 // I-790 stores credits as 'Photo: …'; the page adds its own 'Photo: ' / 'Video: ', so the stored one is dropped.
-const bare = (c) => String(c || '').trim().replace(/^(photo|video)\s*:\s*/i, '');
+const bare = (c) => String(c || '').trim().replace(/^(photo|video)(\s*:|\s+by\b)\s*/i, '');
 const https = (u) => typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) && !isGooglePhoto(u);
 
 /** The cleaned gallery and video of a landmark row ({gallery, video}); empty when there is none. */
