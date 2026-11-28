@@ -1491,7 +1491,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v68';
+const BUILD = 'field-v69';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -7835,14 +7835,16 @@ function openEventPhoto(id) {
 const EV_GAL_MAX = 4;
 function evGallery() { return Array.isArray(evCurrent && evCurrent.gallery) ? evCurrent.gallery.filter((g) => g && g.url) : []; }
 function evGalNote(msg, bad) { const n = $('ev-gal-note'); n.hidden = !msg; n.textContent = msg || ''; n.classList.toggle('ev-bad', !!bad); }
-async function evSaveGallery(next, okMsg) {
+async function evSaveGallery(next, okMsg, redraw = true) {
   const id = evCurrent.id;
   const { data, error } = await db.from('world_events').update({ gallery: next.length ? next : null }).eq('id', id).select('id,gallery');
   if (error) { evGalNote('Couldn’t save: ' + error.message, true); return false; }
   if (!data || !data.length) { evGalNote('Couldn’t save: the event was not updated (not found, or not allowed).', true); return false; }
   evCurrent.gallery = data[0].gallery;
   const row = evRows.find((x) => x.id === id); if (row) row.gallery = data[0].gallery;
-  evRenderGallery(); evGalNote(okMsg || '');
+  // W-303 (bug found 23 Nov): a credit save no longer redraws the strip, so text typed in another card isn't lost.
+  if (redraw) evRenderGallery();
+  evGalNote(okMsg || '');
   return true;
 }
 function evRenderGallery() {
@@ -7857,7 +7859,7 @@ function evRenderGallery() {
     const card = document.createElement('div'); card.className = 'evgal-item';
     const im = document.createElement('img'); im.src = g.url; im.alt = ''; im.loading = 'lazy';
     const credit = document.createElement('input'); credit.type = 'text'; credit.value = g.credit || ''; credit.placeholder = 'Credit (optional)'; credit.autocomplete = 'off';
-    credit.onchange = () => { const next = evGallery().map((x, n) => n === i ? Object.assign({}, x, { credit: credit.value.trim() || null }) : x); evSaveGallery(next, 'Credit saved.'); };
+    credit.onchange = () => { const next = evGallery().map((x, n) => n === i ? Object.assign({}, x, { credit: credit.value.trim() || null }) : x); evSaveGallery(next, 'Credit saved.', false); };
     const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'evgal-rm'; rm.textContent = 'Remove';
     rm.onclick = () => evSaveGallery(evGallery().filter((x, n) => n !== i), 'Removed from the event page.');
     card.append(rm, im, credit); box.appendChild(card);
