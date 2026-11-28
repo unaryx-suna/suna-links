@@ -92,6 +92,7 @@ function urlEntry({ loc, lastmod, changefreq, priority }) {
 
 export default async function handler(req, res) {
   const entries = [urlEntry({ loc: '/', changefreq: 'weekly', priority: '1.0' })];
+  let partial = false;   // W-349: a read that failed part way
 
   try {
     // Published creator itineraries. `public_itineraries` is the anon-readable
@@ -149,6 +150,7 @@ export default async function handler(req, res) {
   } catch {
     // A sitemap that 500s teaches a crawler to stop asking. Serving the entries
     // gathered so far — at minimum the home page — is strictly better.
+    partial = true;
   }
 
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -162,7 +164,9 @@ export default async function handler(req, res) {
     // Cached hard: this is a crawler-facing document that changes when content
     // is published, not per request. Six hours at the edge, a day of stale
     // service while it revalidates.
-    .setHeader('Cache-Control', 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400')
+    // W-349 (OPS-357): but a list cut short by a failed read is kept one minute, never six hours (plus a day stale)
+    // in place of the whole one.
+    .setHeader('Cache-Control', partial ? 'public, max-age=60, s-maxage=60' : 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400')
     .send(xml);
 }
 
