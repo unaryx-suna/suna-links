@@ -55,7 +55,7 @@ await t('every cover path asks: the Replace sheet (file and Commons link), a new
   assert.match(H, /replaceTarget\.kind === 'cover'\s*\? await askCredit\(/);
   assert.match(H, /async function addCommonsPhoto\(file\)/);
   assert.match(H, /id="newcover-credit-btn"/);
-  assert.match(H, /const patch = \{ cover_source: prov\.source, cover_source_ref: prov\.ref, photographer_name: prov\.photographer \};\s*const res = await authedWrite\(\(\) => db\.from\('landmarks'\)\.update\(patch\)\.eq\('id', cap\.id\)\);/);
+  assert.match(H, /const patch = \{ cover_source: prov\.source, cover_source_ref: prov\.ref, photographer_name: prov\.photographer \};\s*const res = await authedWrite\(\(\) => db\.from\('landmarks'\)\.update\(patch\)\.eq\('id', cap\.id\)\.select\('id'\)\);/);
 });
 await t("'Needs a credit': user covers credited to an admin username, opening the credit sheet; its badge hides at 0", () => {
   assert.match(H, /\.eq\('cover_source', 'user'\)\.in\('photographer_name', names\)\.not\('cover_image_url', 'is', null\)/);
