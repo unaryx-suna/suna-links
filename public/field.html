@@ -505,6 +505,12 @@
   .evgal-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block; }
   .evgal-item input { font-size: 16px; padding: 8px 10px; }
   .evgal-item { position: relative; }
+  .pm-item[draggable="true"] { cursor: grab; } .pm-item.drag { opacity: .45; } .pm-item.over { outline: 2px solid #B3A6FF; }
+  .pm-item .cr { font-size: 13px; color: var(--dim, #9aa); margin: 0; overflow-wrap: anywhere; }
+  .pm-item .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pm-item .acts button { font-size: 13px; padding: 6px 10px; min-height: 34px; }
+  .pm-video { display: grid; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+  .pm-video video { width: 100%; max-height: 320px; border-radius: 10px; background: #000; }
   .evgal-item .evgal-rm { position: absolute; top: 12px; right: 12px; z-index: 1; min-height: 0; padding: 4px 8px; border: 0; border-radius: 8px; background: rgba(17,19,18,.85); color: var(--danger); font-size: 12.5px; font-weight: 700; width: auto; }
   .evgal .addphoto { width: auto; height: auto; min-height: 120px; }
   /* W-315 (Brian 22:18, panel-gaps 6-one-queue + 7-needs-you-and-ai): Waiting on you. Needs you, then AI can fix;
@@ -833,6 +839,23 @@
           <button class="ghost" id="dupe-report">Same as another place</button>
         </div>
         <p class="note" id="flag-result" style="margin:6px 0 0" hidden></p>
+      </div>
+      <!-- W-354 (OPS-367, Brian 28 Nov): a place's own photos (up to 8, after the cover) and one video, each with a
+           credit AND a licence. landmarks.gallery [{url, path, credit, licence}], landmarks.video
+           {url, path, poster_url, credit, licence, seconds}. Admin, on a saved place. -->
+      <div class="pmedia" id="pm-block" hidden>
+        <label>More photos (up to 8)</label>
+        <p class="sub" style="margin:0 0 6px">After the cover on the place page. Drag, or use ‹ ›, to change the order.</p>
+        <div class="evgal" id="pm-gal"></div>
+        <div class="row" style="margin-top:6px"><button class="ghost" id="pm-add" type="button">Add a photo</button></div>
+        <input id="in-pm-gal" type="file" accept="image/*" hidden>
+        <input id="pm-link" type="text" inputmode="url" autocomplete="off" autocapitalize="off" style="margin-top:8px"
+               placeholder="Or paste a Wikimedia Commons link">
+        <label style="margin-top:14px">Video (one, .mp4)</label>
+        <div id="pm-video"></div>
+        <div class="row" style="margin-top:6px"><button class="ghost" id="pm-vadd" type="button">Add a video</button></div>
+        <input id="in-pm-video" type="file" accept="video/mp4,.mp4" hidden>
+        <p class="note" id="pm-note" style="margin:6px 0 0" hidden></p>
       </div>
       <div class="thumbs" id="f-thumbs">
         <button class="addphoto" id="btn-camera">Camera</button>
@@ -1493,7 +1516,7 @@
 <div class="sheet" id="dupe-sheet" hidden>
   <div>
     <h1 style="margin-top:0">Already in the catalogue?</h1>
-    <p class="sub">Something with a similar name is within 150m.</p>
+    <p class="sub">The same name in this city, or a similar name within 150m.</p>
     <div id="dupe-options"></div>
     <button class="ghost" id="dupe-different" style="width:100%;margin-top:8px">No, this is a different place</button>
     <button class="linkish" id="dupe-close" style="margin-top:12px">Cancel</button>
@@ -1536,7 +1559,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v70';
+const BUILD = 'field-v71';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -4481,7 +4504,30 @@ let dupeDismissed = false;
 async function runDuplicateCheck() {
   $('dupe-note').hidden = true;
   dupeCandidates = [];
-  if (cap.lat == null || !navigator.onLine || cap.editing) return;
+  if (!navigator.onLine || cap.editing) return;
+  // W-354 (OPS-367): the same name anywhere in the city, and hidden rows too ('Hidden on purpose. Don't add it
+  // again.'). Hidden rows need panel_place_matches (admin-only RPC, staged for Brian's yes); until it exists the
+  // visible rows are checked as before, plus the same name in the city.
+  const typed = cap.name.trim().toLowerCase();
+  try {
+    const { data, error } = await db.rpc('panel_place_matches', { p_name: cap.name.trim(), p_city: cap.cityId || null, p_lat: cap.lat, p_lng: cap.lon });
+    if (!error && Array.isArray(data)) {
+      dupeCandidates = data
+        .filter((r) => r.same_name || (r.km != null && r.km <= 0.15 && (!typed || nameLooksSame(typed, (r.name || '').toLowerCase()))))
+        .sort((a, b) => (b.is_hidden - a.is_hidden) || ((a.km ?? 99) - (b.km ?? 99)));
+      dupeNote();
+      return;
+    }
+  } catch { /* not there yet: the checks below */ }
+  try {
+    if (typed && cap.cityId) {
+      const { data } = await db.from('landmarks').select('id,name,latitude,longitude,cover_image_url,is_hidden')
+        .eq('city_id', cap.cityId).ilike('name', cap.name.trim().replace(/[%_]/g, '')).limit(5);
+      (data || []).forEach((r) => dupeCandidates.push({ ...r, same_name: true,
+        km: cap.lat != null && r.latitude != null ? haversineKm(cap.lat, cap.lon, r.latitude, r.longitude) : null }));
+    }
+  } catch { /* skip */ }
+  if (cap.lat == null) { dupeNote(); return; }
   try {
     // ±0.002° ≈ 220m. A bounding box, because no PostGIS RPC is exposed to the
     // publishable key and a box is enough to catch a re-capture.
@@ -4491,18 +4537,26 @@ async function runDuplicateCheck() {
       .gte('longitude', cap.lon - 0.002).lte('longitude', cap.lon + 0.002)
       .limit(20);
     if (error) return;
-    const typed = cap.name.trim().toLowerCase();
-    dupeCandidates = (data || [])
+    const seen = new Set(dupeCandidates.map((r) => r.id));
+    dupeCandidates = dupeCandidates.concat((data || [])
+      .filter((r) => !seen.has(r.id))
       .map((r) => ({ ...r, km: haversineKm(cap.lat, cap.lon, r.latitude, r.longitude) }))
       .filter((r) => r.km <= 0.15)
-      .filter((r) => !typed || nameLooksSame(typed, (r.name || '').toLowerCase()))
-      .sort((a, b) => a.km - b.km);
-    if (dupeCandidates.length && !dupeDismissed) {
-      $('dupe-note').textContent = dupeCandidates.length
-        + ' place' + (dupeCandidates.length === 1 ? '' : 's') + ' within 150m look similar. Tap Save to review.';
-      $('dupe-note').hidden = false;
-    }
+      .filter((r) => !typed || nameLooksSame(typed, (r.name || '').toLowerCase())))
+      .sort((a, b) => (a.km ?? 99) - (b.km ?? 99));
+    dupeNote();
   } catch { /* offline or refused — §9 says skip rather than block a capture */ }
+}
+
+/** The line under the form: how many look the same, and whether one is hidden on purpose. */
+function dupeNote() {
+  if (!dupeCandidates.length || dupeDismissed) return;
+  const hidden = dupeCandidates.some((r) => r.is_hidden);
+  const same = dupeCandidates.some((r) => r.same_name);
+  $('dupe-note').textContent = hidden ? 'A place with this name is hidden on purpose. Don’t add it again. Tap Save to see it.'
+    : same ? 'A place with this name is already in this city. Tap Save to review.'
+    : dupeCandidates.length + ' place' + (dupeCandidates.length === 1 ? '' : 's') + ' within 150m look similar. Tap Save to review.';
+  $('dupe-note').hidden = false;
 }
 
 /** Close enough to be worth asking about, not close enough to decide. */
@@ -4519,14 +4573,21 @@ function nameLooksSame(a, b) {
 
 function showDuplicateSheet() {
   $('dupe-options').innerHTML = '';
+  const anyHidden = dupeCandidates.some((r) => r.is_hidden);
   dupeCandidates.slice(0, 6).forEach((r) => {
     const b = document.createElement('button');
     b.className = 'opt';
-    b.innerHTML = (r.name || 'Unnamed') + '<small>' + Math.round(r.km * 1000) + 'm away, '
-      + (r.cover_image_url ? 'has a cover' : 'no cover — worth a photo') + '</small>';
-    b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
+    const where = r.km != null ? Math.round(r.km * 1000) + 'm away' : 'elsewhere in this city';
+    const name = document.createElement('span'); name.textContent = r.name || 'Unnamed';
+    const sm = document.createElement('small');
+    sm.textContent = r.is_hidden ? 'Hidden on purpose. Don’t add it again.' : where + ', ' + (r.cover_image_url ? 'has a cover' : 'no cover, worth a photo');
+    b.append(name, sm);
+    if (r.is_hidden) b.disabled = true;
+    else b.onclick = () => { openExisting(r.id); $('dupe-sheet').hidden = true; };
     $('dupe-options').appendChild(b);
   });
+  // W-354: no Save past a place hidden on purpose.
+  $('dupe-different').hidden = anyHidden;
   $('dupe-sheet').hidden = false;
 }
 $('dupe-close').onclick = () => { $('dupe-sheet').hidden = true; };
@@ -4687,6 +4748,9 @@ function buildRow() {
     // `blank()` seeds 'user', so a capture created here is still 'user'.
     origin: cap.origin || 'user',
     place_kind: 'place',
+    // W-354 (OPS-367): a row the Panel made says so; the runs and the Monday review read it. Never on an edit (dropped
+    // by onlyWhatWasEdited, which doesn't keep it).
+    ...(cap.editing ? {} : { added_via: 'panel' }),
     // **An existing row is only ever improved, never demoted.**
     //
     // `is_hidden: !complete` is right for a NEW capture and dangerous for an
@@ -6029,6 +6093,156 @@ async function fetchFinishRows() {
   return [];
 }
 
+/* ── W-354: a place's photos and video ──────────────────────────────────────────────────────── */
+const PM_MAX = 8;
+function pmNote(msg, bad) { const el = $('pm-note'); el.textContent = msg || ''; el.hidden = !msg; el.className = 'note' + (bad ? ' err' : ''); }
+const pmCredit = (g) => [String(g.credit || '').replace(/^(photo|video)(\s*:|\s+by\b)\s*/i, ''), g.licence].filter(Boolean).join(', ');
+
+/** One write: the gallery (null when empty) and/or the video, read back into the form. */
+async function pmSave(patch, okMsg) {
+  if (!cap.id) return false;
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id).select('id,gallery,video'));
+  if (res.error || !res.data || !res.data.length) {
+    pmNote(res.error && res.error.code === 'signed_out' ? res.error.message : 'Couldn’t save: ' + ((res.error && res.error.message) || 'the place was not updated.'), true);
+    return false;
+  }
+  cap.gallery = Array.isArray(res.data[0].gallery) ? res.data[0].gallery : [];
+  cap.video = res.data[0].video || null;
+  renderPlaceMedia(); pmNote(okMsg || '');
+  return true;
+}
+const pmGalleryPatch = (list) => ({ gallery: list.length ? list : null });
+
+function renderPlaceMedia() {
+  const block = $('pm-block'); if (!block) return;
+  block.hidden = !(cap.editing && cap.id && profile && profile.is_admin);
+  if (block.hidden) return;
+  const box = $('pm-gal'); box.replaceChildren();
+  const gal = cap.gallery || [];
+  gal.forEach((g, i) => {
+    const card = document.createElement('div'); card.className = 'evgal-item pm-item'; card.draggable = true; card.dataset.i = String(i);
+    const im = document.createElement('img'); im.src = sizedURL(g.url, 360); im.alt = ''; im.loading = 'lazy';
+    im.onerror = () => { if (im.src !== g.url) im.src = g.url; };
+    const cr = document.createElement('p'); cr.className = 'cr'; cr.textContent = pmCredit(g) || 'No credit yet';
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const mk = (label, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls || 'ghost'; b.textContent = label; b.onclick = fn; acts.appendChild(b); return b; };
+    const move = (d) => { const j = i + d; if (j < 0 || j >= gal.length) return; const next = gal.slice(); [next[i], next[j]] = [next[j], next[i]]; pmSave(pmGalleryPatch(next), 'Order saved.'); };
+    if (i > 0) mk('‹', () => move(-1)).setAttribute('aria-label', 'Move earlier');
+    if (i < gal.length - 1) mk('›', () => move(1)).setAttribute('aria-label', 'Move later');
+    mk('Credit', async () => {
+      const prov = await askCredit({ what: 'This photo’s credit on the place page.', needLicence: true,
+        start: { source: 'other', ref: (g.licence ? ' · ' + g.licence : ''), photographer: String(g.credit || '').replace(/^photo(\s*:|\s+by\b)\s*/i, '') } });
+      if (!prov) return;
+      const next = gal.map((x, n) => n === i ? Object.assign({}, x, { credit: prov.photographer, licence: String(prov.ref).split(' · ').pop() }) : x);
+      pmSave(pmGalleryPatch(next), 'Credit saved.');
+    });
+    mk('Remove', () => pmSave(pmGalleryPatch(gal.filter((_, n) => n !== i)), 'Removed from the place page.'), 'danger');
+    card.append(im, cr, acts);
+    card.addEventListener('dragstart', (e) => { card.classList.add('drag'); e.dataTransfer.setData('text/plain', String(i)); });
+    card.addEventListener('dragend', () => card.classList.remove('drag'));
+    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('over'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault(); card.classList.remove('over');
+      const from = Number(e.dataTransfer.getData('text/plain')); if (!Number.isFinite(from) || from === i) return;
+      const next = gal.slice(); const [moved] = next.splice(from, 1); next.splice(i, 0, moved);
+      pmSave(pmGalleryPatch(next), 'Order saved.');
+    });
+    box.appendChild(card);
+  });
+  $('pm-add').hidden = gal.length >= PM_MAX;
+  $('pm-link').hidden = gal.length >= PM_MAX;
+  // the video
+  const vb = $('pm-video'); vb.replaceChildren();
+  const v = cap.video;
+  if (v && v.url) {
+    const w = document.createElement('div'); w.className = 'pm-video';
+    const el = document.createElement('video'); el.src = v.url; if (v.poster_url) el.poster = v.poster_url; el.controls = true; el.muted = true; el.playsInline = true; el.preload = 'none';
+    const cr = document.createElement('p'); cr.className = 'cr'; cr.textContent = (pmCredit(v) || 'No credit yet') + (v.seconds ? ', ' + v.seconds + ' s' : '') + (v.poster_url ? '' : '. No poster: the place page won’t show it.');
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'danger'; rm.textContent = 'Remove the video';
+    rm.onclick = () => pmSave({ video: null }, 'Video removed from the place page.');
+    w.append(el, cr, rm); vb.appendChild(w);
+  }
+  $('pm-vadd').textContent = v && v.url ? 'Replace the video' : 'Add a video';
+}
+
+/** A photo into our storage: 1600 px JPEG (EXIF gone with the canvas), then its credit, then the row. */
+async function pmAddPhotoBlob(fileOrBlob, start) {
+  if ((cap.gallery || []).length >= PM_MAX) { pmNote('That’s 8 already. Remove one first.', true); return; }
+  const prov = await askCredit({ what: 'Who took it, and the licence it’s under. Both show on the place page.', needLicence: true, start });
+  if (!prov) { pmNote(''); return; }
+  pmNote('Preparing…');
+  try {
+    const file = fileOrBlob instanceof File ? fileOrBlob : new File([fileOrBlob], 'photo.jpg', { type: fileOrBlob.type || 'image/jpeg' });
+    const { blob } = await evResize(file);
+    const path = cap.id + '/gallery-' + stamp() + '.jpg';
+    const up = await authedWrite(() => db.storage.from('landmark-covers').upload(path, blob, { contentType: 'image/jpeg', upsert: false }));
+    if (up.error) { pmNote(uploadMessage(up.error, 'landmark-covers'), true); return; }
+    const url = db.storage.from('landmark-covers').getPublicUrl(path).data.publicUrl;
+    const entry = { url, path, credit: prov.photographer, licence: String(prov.ref).split(' · ').pop() };
+    await pmSave(pmGalleryPatch((cap.gallery || []).concat([entry])), 'Added to the place page.');
+  } catch (e) { pmNote(e.message || 'Couldn’t add that photo.', true); }
+}
+$('pm-add').onclick = () => $('in-pm-gal').click();
+$('in-pm-gal').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) pmAddPhotoBlob(f, null); };
+onLinkReady('pm-link', async () => {
+  const file = commonsFileFromLink($('pm-link').value);
+  if (!file) { pmNote('Not a Wikimedia Commons file link.', true); return; }
+  $('pm-link').value = '';
+  pmNote('Reading Commons…');
+  try {
+    const info = await commonsInfo(file);
+    if (!info || !info.image) { pmNote('Commons has no file by that name.', true); return; }
+    const r = await fetch(info.image);
+    if (!r.ok) { pmNote('That image could not be fetched from Commons.', true); return; }
+    await pmAddPhotoBlob(await r.blob(), { source: 'commons', ref: 'commons:' + info.file + ' · ' + info.licence, photographer: info.author, image: info.image });
+  } catch { pmNote('That image could not be fetched from Commons.', true); }
+});
+
+/** A frame from the video, as a JPEG, for its poster (the place page shows a video only with one). */
+function pmPosterFrom(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+    const fail = (m) => { URL.revokeObjectURL(url); reject(new Error(m)); };
+    const t = setTimeout(() => fail('The video took too long to open.'), 20000);
+    v.onerror = () => { clearTimeout(t); fail('This video can’t be read here. Is it H.264 .mp4?'); };
+    v.onloadedmetadata = () => { v.currentTime = Math.min(1, (v.duration || 2) / 4); };
+    v.onseeked = () => {
+      clearTimeout(t);
+      const w = v.videoWidth, h = v.videoHeight;
+      if (!w || !h) return fail('This video has no picture.');
+      const scale = Math.min(1, 1280 / Math.max(w, h));
+      const c = document.createElement('canvas'); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      c.toBlob((b) => { URL.revokeObjectURL(url); b ? resolve({ blob: b, seconds: Math.round(v.duration || 0) || null }) : reject(new Error('No poster frame.')); }, 'image/jpeg', 0.85);
+    };
+  });
+}
+$('pm-vadd').onclick = () => $('in-pm-video').click();
+$('in-pm-video').onchange = async (e) => {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!f || !cap.id) return;
+  // iPhones can't play .webm or .ogg; the place page needs an .mp4.
+  if (!(f.type === 'video/mp4' || /\.mp4$/i.test(f.name))) { pmNote('Needs an .mp4. Convert it first.', true); return; }
+  const prov = await askCredit({ what: 'Who made the video, and its licence. Both show on the place page.', needLicence: true });
+  if (!prov) return;
+  pmNote('Reading the video…');
+  try {
+    const { blob: poster, seconds } = await pmPosterFrom(f);
+    const s = stamp();
+    pmNote('Uploading the video…');
+    const vp = cap.id + '/video-' + s + '.mp4', pp = cap.id + '/video-' + s + '-poster.jpg';
+    const up1 = await authedWrite(() => db.storage.from('landmark-covers').upload(vp, f, { contentType: 'video/mp4', upsert: false }));
+    if (up1.error) { pmNote(uploadMessage(up1.error, 'landmark-covers'), true); return; }
+    const up2 = await authedWrite(() => db.storage.from('landmark-covers').upload(pp, poster, { contentType: 'image/jpeg', upsert: false }));
+    if (up2.error) { pmNote(uploadMessage(up2.error, 'landmark-covers'), true); return; }
+    const pub = (p) => db.storage.from('landmark-covers').getPublicUrl(p).data.publicUrl;
+    await pmSave({ video: { url: pub(vp), path: vp, poster_url: pub(pp), credit: prov.photographer, licence: String(prov.ref).split(' · ').pop(), seconds } }, 'Video added to the place page.');
+  } catch (err) { pmNote(err.message || 'Couldn’t add that video.', true); }
+};
+
 /* ── W-355: Needs a credit ─────────────────────────────────────────────────────────────────── */
 // An uploaded cover was always credited to the operator, so Wikimedia photos read 'admin'. These are the covers
 // whose credit is an admin's username on a 'user' cover; each opens the place with the credit sheet.
@@ -6715,6 +6929,8 @@ async function openExisting(id) {
   cap.coverSourceRef = data.cover_source_ref || null;
   cap.photographer = data.photographer_name || null;
   cap.submittedBy = data.submitted_by || null;
+  cap.gallery = Array.isArray(data.gallery) ? data.gallery : [];   // W-354
+  cap.video = data.video && typeof data.video === 'object' ? data.video : null;
   // Opening a place settles the name, so the search list does not reopen over
   // the row that was just chosen.
   nameSearchSettled = cap.name;
@@ -6756,6 +6972,7 @@ async function openExisting(id) {
  *  because nothing records where it came from — most of the catalogue, since
  *  those columns only exist from 20260921000002 onwards. */
 function renderCoverInfo() {
+  try { renderPlaceMedia(); } catch (e) { /* the media block never blocks the cover */ }
   const block = $('cover-block');
   const img = $('cover-img');
   const line = $('cover-info');
@@ -7219,9 +7436,11 @@ function crProvenance() {
 }
 
 /** Opens the sheet; resolves with the provenance, or null when cancelled. `start` pre-fills it. */
-function askCredit({ what = '', start = null } = {}) {
+function askCredit({ what = '', start = null, needLicence = false } = {}) {
   return new Promise((resolve) => {
     crState = { resolve, commons: null };
+    // W-354: a gallery photo or the video always says who and which licence ('Mine' would credit the operator).
+    $('cr-mine').hidden = needLicence;
     $('cr-what').textContent = what;
     $('cr-mine-note').textContent = 'Credited to ' + (profile.username || 'you') + '. Only for a photo you took.';
     for (const id of ['cr-commons', 'cr-author', 'cr-source', 'cr-licence-other']) $(id).value = '';
@@ -7234,7 +7453,7 @@ function askCredit({ what = '', start = null } = {}) {
       if (start.source === 'commons') crState.commons = { file: String(start.ref).replace(/^commons:/, '').split(' · ')[0], author: start.photographer || '', image: start.image || null };
       else if (start.ref && start.ref.includes(' · ')) $('cr-source').value = start.ref.split(' · ')[0];
       crMine(false);
-    } else crMine(!start || start.source === 'user');
+    } else crMine(!needLicence && (!start || start.source === 'user'));
     $('credit-sheet').hidden = false;
   });
 }

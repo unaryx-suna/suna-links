@@ -25,7 +25,7 @@ export function mediaOf(row) {
     .slice(0, MAX_PHOTOS);
   const v = row && row.video && typeof row.video === 'object' ? row.video : null;
   const video = v && https(v.url) && https(v.poster_url)
-    ? { url: v.url.trim(), poster: v.poster_url.trim(), credit: bare(v.credit), seconds: Number.isFinite(Number(v.seconds)) ? Math.round(Number(v.seconds)) : null }
+    ? { url: v.url.trim(), poster: v.poster_url.trim(), credit: [bare(v.credit), String(v.licence || '').trim()].filter(Boolean).join(', '), seconds: Number.isFinite(Number(v.seconds)) ? Math.round(Number(v.seconds)) : null }
     : null;
   return { photos, video };
 }
