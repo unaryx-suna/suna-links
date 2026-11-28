@@ -935,12 +935,16 @@
       <label for="f-address">Address</label>
       <input id="f-address" type="text" autocomplete="off">
       <label>Opening hours</label>
-      <p class="note" style="margin:0 0 8px">Set one day. The rest follow until you change one.</p>
+      <p class="note" style="margin:0 0 8px">Set each day you know. A day you leave is 'not listed', never closed.</p>
       <div class="row" style="gap:8px;margin-bottom:10px">
         <button class="ghost" id="hours-24" style="flex:1;padding:9px 12px;font-size:13px">Open 24 hours</button>
         <button class="ghost" id="hours-clear" style="flex:1;padding:9px 12px;font-size:13px">Clear all</button>
       </div>
       <div id="hours-grid"></div>
+      <button class="ghost" id="hours-copy" type="button" hidden style="margin-top:8px;padding:9px 12px;font-size:13px"></button>
+      <!-- W-356 (Ops on OPS-367): where the hours came from, saved with them; required whenever hours were typed. -->
+      <label for="f-hours-source" style="margin-top:10px">Hours source</label>
+      <input id="f-hours-source" type="text" autocomplete="off" placeholder="A link, or 'contacted: WhatsApp 7 Nov'">
       <label for="f-building">Building name</label>
       <input id="f-building" type="text" autocomplete="off">
       <label>Suna Tips &amp; Hints</label>
@@ -1559,7 +1563,7 @@
  *  and the header says so when the two disagree: the page you are looking at
  *  and the worker that served it are different things, and twice now a stale
  *  shell has been argued about as though it were a deployed fix. */
-const BUILD = 'field-v71';
+const BUILD = 'field-v72';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Fbarg84I-sAT--HQkoZ9lw_y-YDKp7R';
@@ -1990,6 +1994,10 @@ const MON_FIRST = [1, 2, 3, 4, 5, 6, 0];
 
 /** The day whose hours `day` inherits, or null when it is explicit or first. */
 function inheritedFrom(day) {
+  // W-356 (Ops on OPS-367): typing ONE day's hours saves only that day. A day nobody set stays unknown, never copied
+  // from the day before (it was: 'The rest follow'), never 9 to 6, never 'Closed'. Copying is an explicit button now.
+  return null;
+  // eslint-disable-next-line no-unreachable
   const entry = cap.hours[day];
   if (entry && entry.open === false) return null;              // explicitly closed
   if (entry && entry.periods && entry.periods.length) return null;  // explicit
@@ -2037,8 +2045,10 @@ function buildOperatingHours() {
     if (!ps.length) {
       // Only counts as "set" if the user explicitly closed it — otherwise a
       // form nobody touched would claim the place is shut all week.
-      if (cap.hours[day] && cap.hours[day].open === false) any = true;
-      descriptions.push(label + 'Closed');
+      // W-356: and a day nobody set is 'Hours not listed', never 'Closed'.
+      const closedOnPurpose = !!(cap.hours[day] && cap.hours[day].open === false);
+      if (closedOnPurpose) any = true;
+      descriptions.push(label + (closedOnPurpose ? 'Closed' : 'Hours not listed'));
       continue;
     }
     any = true;
@@ -2088,6 +2098,13 @@ function renderHours() {
   const box = $('hours-grid');
   if (!box) return;
   box.innerHTML = '';
+  setTimeout(() => {   // W-356: 'Copy <day>'s hours to the days not listed', only when one is set and one is empty
+    const b = $('hours-copy'); if (!b) return;
+    const src = MON_FIRST.find((d) => cap.hours[d] && cap.hours[d].open !== false && (cap.hours[d].periods || []).length);
+    const empty = MON_FIRST.filter((d) => !cap.hours[d]).length;
+    b.hidden = src == null || !empty;
+    if (src != null) b.textContent = 'Copy ' + DAY_NAMES[src] + '’s hours to the ' + empty + ' day' + (empty === 1 ? '' : 's') + ' not listed';
+  }, 0);
 
   // W-355: a place with no hours says so. The grid's 09:00 to 18:00 pickers read as real hours (Masjid Negara has
   // none stored), so they only appear once he asks to add hours; still nothing is written until he changes one.
@@ -2112,6 +2129,19 @@ function renderHours() {
     const row = document.createElement('div');
     row.className = 'hrow';
 
+    // W-356: a day nobody set says so, with one button to set it (no pickers pretending 9 to 6, no 'open' tick).
+    if (!entry) {
+      const l0 = document.createElement('div'); l0.className = 'hday'; l0.textContent = DAY_SHORT[day];
+      const b0 = document.createElement('div'); b0.className = 'hbody';
+      const nl = document.createElement('span'); nl.className = 'hinherit'; nl.textContent = 'Not listed. ';
+      const set = document.createElement('button'); set.type = 'button'; set.textContent = 'Set hours';
+      set.onclick = () => { markTouched('hours'); cap.hours[day] = { open: true, periods: [{ from: '09:00', to: '18:00' }] }; renderHours(); };
+      const shut = document.createElement('button'); shut.type = 'button'; shut.textContent = 'Closed';
+      shut.onclick = () => { markTouched('hours'); cap.hours[day] = { open: false, periods: [] }; renderHours(); };
+      nl.append(set, document.createTextNode(' or '), shut);
+      b0.appendChild(nl); row.append(l0, b0); box.appendChild(row);
+      continue;
+    }
     const left = document.createElement('div');
     left.className = 'hday';
     const lbl = document.createElement('label');
@@ -4628,6 +4658,8 @@ function renderSaveState() {
       : 'a city');
   }
   if (!cap.photos.length && cap.hadCover !== true) why.push('a photo');
+  // W-356: typed hours say where they came from.
+  const hoursNeedSource = cap.touched && cap.touched.has('hours') && !!buildOperatingHours() && !(cap.hoursSource || '').trim();
 
   const btn = $('btn-save');
   // A capture short of live is still worth keeping — that is the whole point of
@@ -4662,7 +4694,8 @@ function renderSaveState() {
   // invisible to everyone but its creator — saving it is not a partial success.
   // W-91: an admin's place 25-100 km out saves with no city, by design.
   const canSave = !!cap.name.trim() && cap.lat != null && !!cap.category
-    && (cap.cityId != null || cap.onServer || cap.farCity != null);
+    && (cap.cityId != null || cap.onServer || cap.farCity != null) && !hoursNeedSource;
+  if (hoursNeedSource) why.unshift('an hours source (where the hours came from)');
   btn.disabled = !canSave;
   btn.textContent = isComplete() ? 'Save place' : 'Save as incomplete';
   $('save-why').textContent = !canSave
@@ -4700,7 +4733,7 @@ function buildRow() {
     operating_hours: buildOperatingHours(),
     hours_source: buildOperatingHours() ? 'admin' : null,
     // W-214: new hours drop the old written source; Review places asks for it again.
-    hours_source_ref: null,
+    hours_source_ref: buildOperatingHours() ? ((cap.hoursSource || '').trim() || null) : null,   // W-356: where the hours came from
     building_name: cap.building.trim() || null,
     // **NOT NULL with a `'{}'` default** — an empty array, never null.
     // **`signature_dishes` stays on the table and keeps its data**, but the
@@ -4948,7 +4981,7 @@ function resetForm() {
   renderSticker();
   exifCandidate = null;
   dupeCandidates = []; dupeDismissed = false;
-  ['f-name', 'f-note', 'f-address', 'f-building']
+  ['f-name', 'f-note', 'f-address', 'f-building', 'f-hours-source']
     .forEach((id) => { $(id).value = ''; });
   document.querySelectorAll('#f-categories .chip')
     .forEach((c) => c.setAttribute('aria-pressed', 'false'));
@@ -5332,7 +5365,15 @@ async function uploadOne(item) {
    * It also removes the ownership question entirely: a targeted column update
    * cannot take a row from its author.
    */
-  if (item.editing) return uploadPhotosToExistingPlace(item, row, photos, uid);
+  if (item.editing) {
+    // W-356 (Brian 28 Nov 18:0x: "it says Saved but nothing actually saves"): this used to return
+    // uploadPhotosToExistingPlace, which returns at once with no photos, so every edit of an existing place
+    // (hours, name, note, address, building, category, location, city) was dropped since 21 Sep while the queue
+    // said Saved. Now: the edited columns in ONE targeted update (never the identity columns, never a cover), read
+    // back before 'Saved'; then the photos as before.
+    await writeEditedColumns(row);
+    return uploadPhotosToExistingPlace(item, row, photos, uid);
+  }
 
   // **Cover first**, because the row carries its URL. `landmark-covers` at
   // `<landmark_id>/cover.jpg` — that bucket's policies key on the bucket, not
@@ -5489,6 +5530,48 @@ async function uploadOne(item) {
  *  the meantime — and "never replace an existing cover" has to be true at the
  *  moment of writing, not at the moment of capturing.
  */
+// W-356: never re-asserted on an existing row (the 21 Sep RLS reason), and never flipped by an edit: visibility and
+// approval are decided by review, and a cover goes only through uploadPhotosToExistingPlace / Replace / Edit credit.
+const EDIT_NEVER = new Set(['id', 'submitted_by', 'origin', 'place_kind', 'approval_status', 'is_hidden',
+  'cover_image_url', 'cover_source', 'cover_source_ref', 'photographer_name', 'added_via', 'signature_dishes']);
+
+/** The columns an edit writes: what onlyWhatWasEdited kept, minus EDIT_NEVER; coordinate_verified_at only with a
+ *  moved pin. Empty when only photos changed (then nothing but last_verified_at would go, so nothing goes). */
+function editPatch(row) {
+  const patch = {};
+  for (const [k, v] of Object.entries(row)) if (!EDIT_NEVER.has(k) && v !== undefined) patch[k] = v;
+  if (!('latitude' in patch)) delete patch.coordinate_verified_at;
+  const real = Object.keys(patch).filter((k) => k !== 'last_verified_at' && k !== 'coordinate_verified_at');
+  return real.length ? patch : null;
+}
+
+/** Same value, as the database hands it back (jsonb key order and number/string forms aside). */
+function sameValue(a, b) {
+  const norm = (v) => {
+    if (v === undefined || v === '') return null;
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === 'object') return Object.keys(v).sort().reduce((o, k) => { o[k] = norm(v[k]); return o; }, {});
+    if (typeof v === 'number') return Math.round(v * 1e6) / 1e6;
+    return v;
+  };
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+}
+
+async function writeEditedColumns(row) {
+  const patch = editPatch(row);
+  if (!patch) return;
+  const cols = Object.keys(patch);
+  const { data, error } = await db.from('landmarks').update(patch).eq('id', row.id).select(['id'].concat(cols).join(','));
+  if (error) { const e = new Error('Didn’t save: ' + error.message); e.final = !looksLikeAuthFailure(error.message); throw e; }
+  if (!data || !data.length) {
+    const e = new Error('Didn’t save: the place wasn’t updated (it’s not editable from this account, or it was removed).');
+    e.final = true; throw e;
+  }
+  // **'Saved' only after a read-back.** What the server returns is what is stored.
+  const off = cols.filter((c) => !sameValue(patch[c], data[0][c]));
+  if (off.length) { const e = new Error('Didn’t save: ' + off.join(', ') + ' came back different.'); e.final = true; throw e; }
+}
+
 async function uploadPhotosToExistingPlace(item, row, photos, uid) {
   if (!photos.length) return;
 
@@ -6842,6 +6925,7 @@ async function openQueued(id) {
   cap.note = row.description || '';
   cap.address = row.address || '';
   cap.hours = hoursFromOperating(row.operating_hours);
+  cap.hoursSource = row.hours_source_ref || '';
   cap.building = row.building_name || '';
   cap.submittedBy = row.submitted_by || null;
   cap.featured = !!item.featured;
@@ -6855,6 +6939,7 @@ async function openQueued(id) {
   $('f-note').value = cap.note;
   $('f-address').value = cap.address;
   $('f-building').value = cap.building;
+  $('f-hours-source').value = cap.hoursSource || '';
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
     c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
   $('f-featured').setAttribute('aria-pressed', String(cap.featured));
@@ -6904,6 +6989,7 @@ async function openExisting(id) {
   cap.note = data.description || '';
   cap.address = data.address || '';
   cap.hours = hoursFromOperating(data.operating_hours);
+  cap.hoursSource = data.hours_source_ref || '';   // W-356
   cap.building = data.building_name || '';
   cap.dishes = Array.isArray(data.signature_dishes) ? data.signature_dishes.join(', ') : '';
 
@@ -6911,6 +6997,7 @@ async function openExisting(id) {
   $('f-note').value = cap.note;
   $('f-address').value = cap.address;
   $('f-building').value = cap.building;
+  $('f-hours-source').value = cap.hoursSource || '';
   document.querySelectorAll('#f-categories .chip').forEach((c) =>
     c.setAttribute('aria-pressed', String(c.textContent === cap.category)));
 
@@ -7269,9 +7356,10 @@ async function replaceCover(bytes, provenance) {
     cover_source_ref: provenance.ref,
     photographer_name: provenance.photographer,
   };
-  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id));
-  if (res.error) {
-    return { ok: false, msg: res.error.code === 'signed_out' ? res.error.message
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id).select('id'));
+  // W-356: a refusal RLS turns into '0 rows updated' is a refusal, not a success.
+  if (res.error || !res.data || !res.data.length) {
+    return { ok: false, msg: res.error && res.error.code === 'signed_out' ? res.error.message
       : 'The image uploaded, but this row is not yours to edit, so the cover still points at the old one. Nothing was lost.' };
   }
   cap.coverURL = url;
@@ -7487,8 +7575,8 @@ onLinkReady('cr-commons', async () => {
 /** The cover's credit, changed without touching the photo: the three provenance columns and nothing else. */
 async function saveCoverCredit(prov) {
   const patch = { cover_source: prov.source, cover_source_ref: prov.ref, photographer_name: prov.photographer };
-  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id));
-  if (res.error) { flagResult(res.error.code === 'signed_out' ? res.error.message : 'The credit could not be saved. Nothing was changed.'); return false; }
+  const res = await authedWrite(() => db.from('landmarks').update(patch).eq('id', cap.id).select('id'));
+  if (res.error || !res.data || !res.data.length) { flagResult(res.error && res.error.code === 'signed_out' ? res.error.message : 'The credit could not be saved. Nothing was changed.'); return false; }
   cap.coverSource = prov.source; cap.coverSourceRef = prov.ref; cap.photographer = prov.photographer;
   renderCoverInfo();
   flagResult('Credit saved: ' + prov.photographer + '.');
@@ -9091,6 +9179,14 @@ $('dupe-report').onclick = () => {
   if (dupePickTarget) cancelDuplicatePick(); else startDuplicatePick();
 };
 
+$('f-hours-source').addEventListener('input', () => { cap.hoursSource = $('f-hours-source').value; markTouched('hours'); renderSaveState(); });
+$('hours-copy').onclick = () => {
+  const src = MON_FIRST.find((d) => cap.hours[d] && cap.hours[d].open !== false && (cap.hours[d].periods || []).length);
+  if (src == null) return;
+  markTouched('hours');
+  for (const d of MON_FIRST) if (!cap.hours[d]) cap.hours[d] = { open: true, periods: cap.hours[src].periods.map((p) => ({ ...p })) };
+  renderHours();
+};
 ['f-name','f-note','f-address','f-building'].forEach((id) => {
   $(id).addEventListener('input', () => {
     const key = { 'f-name':'name','f-note':'note','f-address':'address',
@@ -10423,8 +10519,9 @@ function rvToggleCard(row, p) {
     row.querySelector('p').textContent = rvLine(p);
   };
   const write = async (patch) => {
-    const { error } = await db.from('landmarks').update(patch).eq('id', p.id);
+    const { data, error } = await db.from('landmarks').update(patch).eq('id', p.id).select('id');
     if (error) { say('Not saved: ' + error.message, true); return false; }
+    if (!data || !data.length) { say('Not saved: this place wasn’t updated (not editable from this account).', true); return false; }   // W-356
     Object.assign(p, patch); refresh(); return true;
   };
   $c('[data-act="edit"]').onclick = async () => { switchTab('capture'); await openExisting(p.id); };

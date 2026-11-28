@@ -58,7 +58,7 @@ t('wiring: an admin-only menu entry, the pane, its tab, and a tap opens the edit
   assert.match(html, /hours_source: 'admin', hours_source_ref: src, hours_checked_at:/);
   assert.match(html, /business_status: \$c\('\[data-f="st"\]'\)\.value, business_status_checked_at:/);
   assert.match(html, /hours: \['operating_hours', 'hours_source', 'hours_source_ref'\]/, 'editing hours clears the old source');
-  assert.match(html, /hours_source_ref: null,/);
+  assert.match(html, /hours_source_ref: buildOperatingHours\(\) \? \(\(cap\.hoursSource \|\| ''\)\.trim\(\) \|\| null\) : null,/   /* W-356: new hours carry the typed source (required), else none */);
   assert.match(html, /write\(\{ last_verified_at: new Date\(\)\.toISOString\(\) \}\)/);
 });
 console.log(bad ? `\nw214: ${bad} FAILED` : '\nw214: all passed');
