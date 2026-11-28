@@ -35,7 +35,7 @@ await t('before I-790 is applied (no columns): the page is as before, one hero p
   assert.ok(!Array.isArray(ld(h).image) && !ld(h).video, 'JSON-LD as before: the cover only');
 });
 const FULL = { gallery: [
-  { url: G1, path: 'landmark-gallery/a.jpg', credit: 'Islamic Arts Museum Malaysia', licence: '' },
+  { url: G1, path: 'landmark-gallery/a.jpg', credit: 'Photo: Islamic Arts Museum Malaysia', licence: '' },   // I-790 stores 'Photo: …'
   { url: G2, credit: 'Jane Tan', licence: 'CC BY-SA 4.0' },
   { url: 'https://lh3.googleusercontent.com/p/AF1Qip-x=s1600', credit: 'Google', licence: '' },   // never a Google photo
   { url: 'https://example.com/no-credit.jpg', credit: '', licence: '' },                            // never without a credit

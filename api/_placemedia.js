@@ -10,6 +10,8 @@ import { esc, sized } from './_placepage.js';
 import { isGooglePhoto } from './_stock.js';
 
 const MAX_PHOTOS = 8;
+// I-790 stores credits as 'Photo: …'; the page adds its own 'Photo: ' / 'Video: ', so the stored one is dropped.
+const bare = (c) => String(c || '').trim().replace(/^(photo|video)\s*:\s*/i, '');
 const https = (u) => typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) && !isGooglePhoto(u);
 
 /** The cleaned gallery and video of a landmark row ({gallery, video}); empty when there is none. */
@@ -17,13 +19,13 @@ export function mediaOf(row) {
   const raw = row && Array.isArray(row.gallery) ? row.gallery : [];
   const photos = raw
     .filter((g) => g && https(g.url))
-    .map((g) => ({ url: g.url.trim(), credit: String(g.credit || '').trim(), licence: String(g.licence || '').trim() }))
+    .map((g) => ({ url: g.url.trim(), credit: bare(g.credit), licence: String(g.licence || '').trim() }))
     // A photo without a credit isn't shown (the app's rule, I-790); CC ones carry author + licence.
     .filter((g) => g.credit)
     .slice(0, MAX_PHOTOS);
   const v = row && row.video && typeof row.video === 'object' ? row.video : null;
   const video = v && https(v.url) && https(v.poster_url)
-    ? { url: v.url.trim(), poster: v.poster_url.trim(), credit: String(v.credit || '').trim(), seconds: Number.isFinite(Number(v.seconds)) ? Math.round(Number(v.seconds)) : null }
+    ? { url: v.url.trim(), poster: v.poster_url.trim(), credit: bare(v.credit), seconds: Number.isFinite(Number(v.seconds)) ? Math.round(Number(v.seconds)) : null }
     : null;
   return { photos, video };
 }
