@@ -8,6 +8,7 @@
 // without a verdict.
 
 import { directions, saveInSuna, hasPin } from './_maps.js';
+import { heroSlides } from './_placemedia.js';
 
 export const esc = (v) => String(v ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -305,11 +306,14 @@ export function placeBody(d) {
     d.hours ? `<div class="row"><span class="k">Hours</span><span><b>${esc(d.hours.summary)}</b><details><summary>See the week</summary><ul>${d.hours.week.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></details></span></div>` : '',
     p.address ? `<div class="row"><span class="k">Where</span><span>${esc(p.address)}</span></div>` : '',
   ].filter(Boolean).join('');
+  // W-352: with Ops's photos or a video, the hero is a row of slides (our own cover first; a stock picture never mixes in).
+  const m = d.media || { photos: [], video: null };
+  const slides = heroSlides({ cover: d.stock ? null : d.cover, coverCredit: d.coverCredit, name: p.name, photos: m.photos, video: m.video });
   return `${topBar(d.store)}
 <main>
-<div class="hero">${heroImg(d.cover, d.stock ? '' : p.name)}${d.stock ? '<span class="rep">Representative photo</span>' : ''}<div class="in">
+${slides ? `<div class="hero has-slides">${slides.hero}` : `<div class="hero">${heroImg(d.cover, d.stock ? '' : p.name)}${d.stock ? '<span class="rep">Representative photo</span>' : ''}`}<div class="in">
 ${kicker ? `<p class="kick">${esc(kicker)}</p>` : ''}<h1>${esc(p.name)}</h1>
-${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>
+${lede ? `<p class="lede">${esc(lede.length > 140 ? `${lede.slice(0, 139).replace(/\s+\S*$/, '')}…` : lede)}</p>` : ''}</div></div>${slides ? slides.thumbs : ''}
 <div class="pad">
 ${tipsHigh ? tips : ''}
 ${chips ? `<div class="chips">${chips}</div>` : ''}

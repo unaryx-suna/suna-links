@@ -30,6 +30,7 @@ import { MAPS_HEAD, PAGE_SCRIPT, hasPin } from './_maps.js';
 import { CSS, HEAD_FONTS, esc, tzFor, hoursInfo, km, placeBody, missingBody } from './_placepage.js';
 import { stockFor, isGooglePhoto } from './_stock.js';
 import { creditFor } from './_preview.js';
+import { fetchMedia, mediaLD, MEDIA_CSS, MEDIA_JS } from './_placemedia.js';
 import { hasRealContent, PUBLISHED_TIPS } from './sitemap.js';
 
 const SUPABASE_URL = 'https://voogrbonwmvfwtgzzrxc.supabase.co';
@@ -92,7 +93,7 @@ const SCHEMA_TYPE = {
  * ImageObject carrying it. The page shows no photo of its own, so this is
  * where a place page credits its photographer.
  */
-function placeLD(place, canonical, cover) {
+function placeLD(place, canonical, cover, media = null) {
   const lat = Number(place.latitude); const lng = Number(place.longitude);
   const node = {
     '@context': 'https://schema.org',
@@ -111,6 +112,7 @@ function placeLD(place, canonical, cover) {
   } else if (cover) node.image = cover;
   const text = String(place.description || '').trim();
   if (text) node.description = text;
+  if (media && (media.photos.length || media.video)) mediaLD(node, { cover, photos: media.photos, video: media.video, name: place.name });
   return `<script type="application/ld+json">${JSON.stringify(node).replace(/</g, '\\u003c')}</script>`;
 }
 
@@ -331,13 +333,14 @@ function page({ tags, body, android }) {
   ${tags}
   ${HEAD_FONTS}
   ${MAPS_HEAD}
-  <style>${CSS}</style>
+  <style>${CSS}${body.includes('data-slides') ? MEDIA_CSS : ''}</style>
 </head>
 <body>
 <div class="wrap">
 ${body}
 </div>
 ${PAGE_SCRIPT}
+${body.includes('data-slides') ? `<script>${MEDIA_JS}</script>` : ''}
 <script src="/android.js" data-from="${android}"></script>
 </body>
 </html>`;
@@ -414,17 +417,18 @@ export default async function handler(req, res) {
           latitude: place.latitude, longitude: place.longitude,
         });
         const pinned = hasPin(place.latitude, place.longitude);
-        const [ok, events, walks, tips] = await Promise.all([
+        const [ok, events, walks, tips, media] = await Promise.all([
           imageResolves(candidate),
           pinned ? eventsNear(Number(place.latitude), Number(place.longitude), 1, now) : [],
           pinned ? walksNear(id, Number(place.latitude), Number(place.longitude)) : [],
           // W-223: this place's published tips: shown on the page, and counted by the index gate below.
           rest(`place_hints?landmark_id=eq.${encodeURIComponent(id)}&${PUBLISHED_TIPS}&select=body,attribution&order=id`),
+          fetchMedia(rest, id),   // W-352: Ops's photos and video (I-790's columns); none until they exist
         ]);
         const ownCover = ok ? candidate : null;
         image = ownCover || (stock ? stock.url : null) || OG_FALLBACK;   // OD-web-Q9-10: every page has a preview image
         const tz = tzFor(place.city && place.city.country_code, place.longitude);
-        resolved = { place, ownCover, cityName, tz, events, walks, tips: Array.isArray(tips) ? tips : [], hours: hoursInfo(place.operating_hours, tz, now) };
+        resolved = { place, ownCover, media, cityName, tz, events, walks, tips: Array.isArray(tips) ? tips : [], hours: hoursInfo(place.operating_hours, tz, now) };
 
         // Only a page with real content of its own asks to be indexed. This
         // mirrors the sitemap's gate, and it is the half that matters: the
@@ -470,7 +474,7 @@ export default async function handler(req, res) {
     image ? `<meta property="og:image:alt" content="${escapeHtml(title)}">` : '',
     image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : '',
     indexable ? '' : `<meta name="robots" content="noindex,follow">`,
-    resolved && canonical ? placeLD(resolved.place, canonical, resolved.ownCover) : '',
+    resolved && canonical ? placeLD(resolved.place, canonical, resolved.ownCover, resolved.media) : '',
     // The app gets the full UUID, never a percent-encoded slug from the path (W-59).
     id && resolved ? `<meta name="suna:place" content="${escapeHtml(id)}">` : '',
   ].filter(Boolean).join('\n  ');
@@ -480,7 +484,7 @@ export default async function handler(req, res) {
   if (resolved) {
     body = placeBody({
       place: resolved.place, cityName: resolved.cityName, tz: resolved.tz, hours: resolved.hours,
-      cover: resolved.ownCover || image, stock: !resolved.ownCover && Boolean(image), events: resolved.events, walks: resolved.walks, tips: resolved.tips,
+      cover: resolved.ownCover || image, stock: !resolved.ownCover && Boolean(image), media: resolved.media, coverCredit: resolved.ownCover ? creditFor(resolved.place) : '', events: resolved.events, walks: resolved.walks, tips: resolved.tips,
       store, scheme: `suna://place?id=${encodeURIComponent(id)}`, offer, booking, now,
     });
   } else {
